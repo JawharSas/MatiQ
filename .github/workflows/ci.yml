@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Rules engine + mobile app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Rules engine
+        run: |
+          npm run typecheck --workspace @matiq/rules-engine
+          npm test --workspace @matiq/rules-engine
+      - name: Mobile typecheck + unit tests
+        run: |
+          npm run typecheck --workspace @matiq/mobile
+          npm test --workspace @matiq/mobile
+      - name: Mobile bundle check (Metro + Hermes)
+        working-directory: apps/mobile
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+          EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+        run: npx expo export --platform android --output-dir ${{ runner.temp }}/bundle
+
+  database:
+    name: Database security tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations and run RLS / privilege tests
+        run: ./scripts/test-db-local.sh
+
+  edge-functions:
+    name: Edge Functions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: node scripts/sync-shared.mjs
+      - run: deno lint --config supabase/functions/deno.json supabase/functions/
+      - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts scripts/rotate-api-key-kek.ts
+      - run: deno test --config supabase/functions/deno.json --allow-env supabase/functions/
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source=/repo --no-banner --redact

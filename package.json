@@ -1,0 +1,26 @@
+{
+  "name": "matiq",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MatIQ: AI Martial Arts Analyzer & Social Hub (monorepo)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm --workspace @matiq/mobile run start",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "sync:shared": "node scripts/sync-shared.mjs",
+    "functions:check": "npm run sync:shared && deno check --config supabase/functions/deno.json supabase/functions/*/index.ts",
+    "functions:test": "npm run sync:shared && deno test --config supabase/functions/deno.json --allow-env supabase/functions/",
+    "functions:serve": "npm run sync:shared && supabase functions serve --env-file supabase/functions/.env",
+    "functions:deploy": "npm run sync:shared && supabase functions deploy",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "secrets:scan": "gitleaks detect --no-banner --redact"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

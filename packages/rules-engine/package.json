@@ -1,0 +1,21 @@
+{
+  "name": "@matiq/rules-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic BJJ, wrestling and MMA scoring shared by the MatIQ app and edge functions.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --test --experimental-strip-types 'test/*.test.ts'",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~6.0.3"
+  }
+}

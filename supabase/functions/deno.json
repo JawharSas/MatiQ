@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
+  },
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.3",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.132.1",
+    "@anthropic-ai/sdk/": "npm:/@anthropic-ai/sdk@0.132.1/",
+    "zod": "npm:zod@4.6.5"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "fmt": {
+    "lineWidth": 130,
+    "singleQuote": true
+  }
+}

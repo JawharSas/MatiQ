@@ -1,0 +1,52 @@
+{
+  "name": "@matiq/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild --clean",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
+    "bundle:check": "expo export --platform android --output-dir .expo-export-check && rm -rf .expo-export-check",
+    "doctor": "npx expo-doctor"
+  },
+  "dependencies": {
+    "@matiq/rules-engine": "*",
+    "@supabase/supabase-js": "2.117.3",
+    "@tanstack/react-query": "5.104.1",
+    "expo": "~58.0.17",
+    "expo-build-properties": "~58.0.11",
+    "expo-constants": "~58.0.13",
+    "expo-crypto": "~58.0.7",
+    "expo-dev-client": "~58.0.14",
+    "expo-file-system": "~58.0.10",
+    "expo-image-picker": "~58.0.10",
+    "expo-linking": "~58.0.14",
+    "expo-local-authentication": "~58.0.2",
+    "expo-router": "~58.0.25",
+    "expo-screen-capture": "~58.0.6",
+    "expo-secure-store": "~58.0.2",
+    "expo-splash-screen": "~58.0.11",
+    "expo-status-bar": "~58.0.4",
+    "expo-video": "~58.0.12",
+    "expo-video-thumbnails": "~58.0.2",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-mmkv": "4.3.2",
+    "react-native-nitro-image": "0.15.2",
+    "react-native-nitro-modules": "0.37.1",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-ssl-public-key-pinning": "1.2.6",
+    "react-native-vision-camera": "5.2.3",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  }
+}
