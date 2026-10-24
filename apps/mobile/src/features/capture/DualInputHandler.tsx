@@ -93,6 +93,60 @@ export function DualInputHandler() {
 
   const fail = (error: unknown) => setPhase({ kind: 'failed', message: errorMessage(error) });
 
+  /**
+   * Samples frames from a video file (when they were not sampled live) and
+   * uploads the video, in parallel, reporting combined progress.
+   */
+  const processVideoFile = async (
+    cleanSetup: MatchSetup,
+    matchId: string,
+    video: { uri: string; durationMs: number; mimeType: PickedVideo['mimeType'] },
+    { sampleFrames }: { sampleFrames: boolean },
+  ) => {
+    const queue = queueRef.current!;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let extraction = sampleFrames ? 0 : 1;
+    let videoProgress = cleanSetup.uploadVideo ? 0 : 1;
+    const step = [sampleFrames ? 'Sampling frames' : null, cleanSetup.uploadVideo ? 'uploading video' : null]
+      .filter(Boolean)
+      .join(' and ');
+    const report = () =>
+      setPhase({
+        kind: 'processing',
+        step: step.charAt(0).toUpperCase() + step.slice(1),
+        progress: (extraction + videoProgress) / 2,
+      });
+    if (step) report();
+
+    await Promise.all([
+      sampleFrames
+        ? extractFrames(video.uri, {
+            durationMs: video.durationMs,
+            maxFrames: MAX_FRAMES,
+            onFrame: (frame) => queue.enqueue(frame),
+            onProgress: (fraction) => {
+              extraction = fraction;
+              report();
+            },
+            uploadPressure: () => queue.pressure,
+            signal: controller.signal,
+          })
+        : Promise.resolve(),
+      cleanSetup.uploadVideo
+        ? uploadVideo(userId, matchId, video.uri, {
+            mimeType: video.mimeType,
+            signal: controller.signal,
+            onProgress: (fraction) => {
+              videoProgress = fraction;
+              report();
+            },
+          })
+        : Promise.resolve(),
+    ]);
+  };
+
   // Live mode ----------------------------------------------------------------
   const onLiveFinished = async (result: LiveCaptureResult) => {
     const matchId = matchIdRef.current;
@@ -100,13 +154,14 @@ export function DualInputHandler() {
     if (!matchId || !cleanSetup) return;
     try {
       await finalizeDuration(matchId, result.durationMs);
-      if (cleanSetup.uploadVideo) {
-        setPhase({ kind: 'processing', step: 'Uploading video', progress: 0 });
-        await uploadVideo(userId, matchId, result.videoUri, {
-          mimeType: 'video/mp4',
-          onProgress: (progress) => setPhase({ kind: 'processing', step: 'Uploading video', progress }),
-        });
-      }
+      // Plans without the live analysis stream (needed to keep 60 FPS on
+      // some devices) sample the recorded file instead.
+      await processVideoFile(
+        cleanSetup,
+        matchId,
+        { uri: result.videoUri, durationMs: result.durationMs, mimeType: 'video/mp4' },
+        { sampleFrames: !result.liveSampled },
+      );
       deleteLocalFile(result.videoUri);
       await finishSession(cleanSetup, matchId);
     } catch (error) {
@@ -118,45 +173,10 @@ export function DualInputHandler() {
   const onVideoPicked = async (video: PickedVideo) => {
     const cleanSetup = validSetup();
     if (!cleanSetup) return;
-    const controller = new AbortController();
-    abortRef.current = controller;
     try {
       setPhase({ kind: 'processing', step: 'Preparing' });
       const matchId = await openSession(cleanSetup, video.durationMs);
-      const queue = queueRef.current!;
-
-      let extraction = 0;
-      let videoProgress = cleanSetup.uploadVideo ? 0 : 1;
-      const report = () =>
-        setPhase({
-          kind: 'processing',
-          step: cleanSetup.uploadVideo ? 'Sampling frames and uploading video' : 'Sampling frames',
-          progress: (extraction + videoProgress) / 2,
-        });
-
-      await Promise.all([
-        extractFrames(video.uri, {
-          durationMs: video.durationMs,
-          maxFrames: MAX_FRAMES,
-          onFrame: (frame) => queue.enqueue(frame),
-          onProgress: (fraction) => {
-            extraction = fraction;
-            report();
-          },
-          uploadPressure: () => queue.pressure,
-          signal: controller.signal,
-        }),
-        cleanSetup.uploadVideo
-          ? uploadVideo(userId, matchId, video.uri, {
-              mimeType: video.mimeType,
-              signal: controller.signal,
-              onProgress: (fraction) => {
-                videoProgress = fraction;
-                report();
-              },
-            })
-          : Promise.resolve(),
-      ]);
+      await processVideoFile(cleanSetup, matchId, video, { sampleFrames: true });
       await finishSession(cleanSetup, matchId);
     } catch (error) {
       fail(error);

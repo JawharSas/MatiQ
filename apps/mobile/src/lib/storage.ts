@@ -15,6 +15,7 @@ import { getOrCreateDeviceKey } from './secure-store';
 const KEY_NAME = 'matiq.mmkv.key.v1';
 const STORE_ID = 'matiq.secure.v1';
 const CACHE_PREFIX = 'cache:';
+const PREFERENCE_PREFIX = 'pref:';
 
 let instance: MMKV | null = null;
 let opening: Promise<MMKV> | null = null;
@@ -66,6 +67,16 @@ export function readCache<T>(key: string, maxAgeMs = 24 * 60 * 60 * 1000): T | u
 
 export function writeCache<T>(key: string, data: T): void {
   instance?.set(CACHE_PREFIX + key, JSON.stringify({ savedAt: Date.now(), data } satisfies CacheEntry<T>));
+}
+
+/** Device-local UI preference (survives sign-out; never holds personal data). */
+export function readPreference<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const value = instance?.getString(PREFERENCE_PREFIX + key);
+  return value !== undefined && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+export function writePreference(key: string, value: string): void {
+  instance?.set(PREFERENCE_PREFIX + key, value);
 }
 
 /** Removes every cached screen (called on sign-out and account switch). */

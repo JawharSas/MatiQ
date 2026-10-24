@@ -92,18 +92,42 @@ rulebooks consistently. MatIQ therefore splits the job:
 3. Raw events are stored next to the scorecard, so matches can be re-scored
    when rules change without paying for another AI call.
 
-## Capture and performance
+## Capture and performance (30-60 FPS)
+
+Recording targets **60 FPS** and never drops below **30 FPS**. The frame rate
+and output combination are chosen per device before the session starts:
+
+```mermaid
+flowchart TD
+  P["Preference: Auto / 60 / 30<br/>(persisted per device)"] --> A
+  A{"preview + video + analysis stream<br/>at 60 FPS supported?"} -- yes --> L60["60 FPS, live AI sampling"]
+  A -- no --> B{"preview + video<br/>at 60 FPS?"}
+  B -- yes --> R60["60 FPS, sample frames from the file after recording"]
+  B -- no --> C{"three streams at 30 FPS?"}
+  C -- yes --> L30["30 FPS, live AI sampling"]
+  C -- no --> R30["30 FPS, sample after recording"]
+```
+
+`useCapturePlan` asks VisionCamera to negotiate each candidate
+(`resolveConstraints`) and verifies it (`isSessionConfigSupported`), so a
+recording never starts in a configuration the hardware cannot sustain.
 
 | Concern | Approach |
 |---|---|
-| 60 FPS UI | Preview and H.264/HEVC encoding stay native (VisionCamera 5, Nitro/JSI). JS never touches full frames. |
-| AI payload sampling | A timer grabs a preview snapshot at 1 FPS (planSampling stretches the interval to stay within a 240-frame budget). Resize, raw-pixel read and JPEG encode run natively on background threads. |
-| Frame pruning | A 16-px luminance signature per frame; near-identical frames are dropped, with a keyframe at least every 4 s (`FramePruner`). |
-| Memory / heat | Snapshots are skipped while the previous one is processing and halved when the upload queue fills; native image buffers are disposed immediately; frames are capped at 640 px on the long side. |
-| Ring buffer | `FrameUploadQueue` holds at most 120 pending frames; overflow evicts the oldest (and deletes its file) instead of growing without bound. |
-| Progressive upload | Frames upload in batches of 8 while recording continues, so Stop -> analysis is quick. |
+| Preview / recording at 60 FPS | Fully native (VisionCamera 5, Nitro/JSI): buffers go straight to the preview layer and the hardware encoder. JS never touches full-rate frames. |
+| Session constraints | Priority order: `fps` > recording resolution > stabilization off > 8-bit SDR > binned sensor readout. Each later constraint removes a common reason devices fall back to 30 FPS (stabilization crop/latency, HDR bandwidth, full-sensor readout). Low-light boost is disabled because it lowers the frame rate to lengthen exposure. |
+| AI sampling | A worklet on the frame output's own thread (`frame-thread-sampler.ts`). Per frame it only counts (live FPS measurement) and disposes the buffer; about once per second it converts, downscales to 640 px, prunes static frames (16-px luminance signature) and encodes a JPEG asynchronously. Only a file path reaches JS. |
+| Buffer pool | Every frame is disposed exactly once in a `finally`; an undisposed frame would stall the whole camera pipeline, preview included. |
+| Analysis stream cost | Preview-sized buffers (`enablePreviewSizedOutputBuffers`), `dropFramesWhileBusy`, deferred start so preview comes up first. |
+| React re-renders | `<Camera>` props (outputs, constraints, callbacks) are memoized on the plan. Recording clock and stats flow through an external store that only the HUD subscribes to, so the camera subtree does not re-render while recording. |
+| Backpressure | The JS side doubles the sampling interval when the upload queue is more than 75% full; the queue itself is a 120-frame ring buffer. |
+| Thermal pressure | An iOS system-pressure interruption stops and saves the take, and the HUD suggests 30 FPS. |
+| Bit rate | 14 Mbps for Auto/60, 9 Mbps for 30 FPS (1080p; platform default codec, which is HEVC on most iPhones). |
 | Large videos | Streamed from disk by the OS uploader (`expo-file-system` `File.upload`, background session on iOS) to a short-lived signed URL. |
-| Gallery uploads | `expo-video-thumbnails` decodes one frame at a time, then the same native processing path; extraction yields to the UI between frames and pauses under upload backpressure. |
+| Gallery uploads / record-only plans | `expo-video-thumbnails` decodes one frame at a time from the file, then the same pruning and JPEG path; sampling and the video upload run in parallel. |
+
+The HUD shows the negotiated FPS before the first frame arrives and the
+measured, delivered FPS once the analysis stream is running.
 
 ## Data model
 

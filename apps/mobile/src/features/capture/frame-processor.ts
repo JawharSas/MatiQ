@@ -1,5 +1,6 @@
 /**
- * Native frame processing shared by live recording and gallery uploads.
+ * Native frame processing for gallery uploads and post-recording sampling
+ * (live recording uses the frame-thread sampler, frame-thread-sampler.ts).
  *
  * All pixel work (resize, raw pixel read, JPEG encode) runs in native code on
  * background threads through react-native-nitro-image's async methods; the JS
@@ -24,6 +25,7 @@ export interface SampledFrame {
 }
 
 export function toFileUri(path: string): string {
+  'worklet';
   return path.startsWith('file://') ? path : `file://${path}`;
 }
 

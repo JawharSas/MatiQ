@@ -12,9 +12,10 @@ with privacy enforced in the database.
 
 ## Highlights
 
-- **Dual input**: hardware-encoded 1080p/30 FPS live recording, or MP4/MOV
-  import from the gallery. Both produce 1-2 FPS, motion-pruned frames that
-  upload progressively through a bounded ring-buffer queue.
+- **Dual input**: hardware-encoded 1080p live recording at 60 FPS (30 FPS
+  minimum, chosen per device), or MP4/MOV import from the gallery. AI frames
+  are sampled on the camera's own thread at about 1 FPS, motion-pruned and
+  uploaded progressively through a bounded ring-buffer queue.
 - **AI analysis**: Claude (structured outputs) detects discipline-specific
   events; the shared rules engine turns them into points, advantages,
   projected round scores, phases and highlights.
@@ -114,7 +115,7 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 | Command | What it checks |
 |---|---|
 | `npm test --workspace @matiq/rules-engine` | 27 scoring tests (IBJJF, folkstyle, freestyle, MMA rounds) |
-| `npm test --workspace @matiq/mobile` | frame sampling, pruning and ring buffer |
+| `npm test --workspace @matiq/mobile` | capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer |
 | `npm run typecheck` | TypeScript across the workspaces |
 | `supabase test db` | 58 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage |
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |

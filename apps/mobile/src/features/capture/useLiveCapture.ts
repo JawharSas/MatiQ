@@ -1,110 +1,153 @@
 /**
- * Live capture: hardware-encoded 1080p/30 FPS recording plus 1-2 FPS frame
- * sampling for analysis.
+ * Live capture at 30-60 FPS with live AI frame sampling.
  *
  * Threading model:
- *  - Preview and video encoding never touch JS: VisionCamera streams frames
- *    from the camera straight into the native preview and the hardware
- *    encoder (AVAssetWriter / MediaCodec), keeping the UI thread at 60 FPS.
- *  - Sampling grabs a preview snapshot on a timer. Snapshot, resize, pixel
- *    read and JPEG encode all run natively in the background; JS only
- *    receives a file path and a 16-px signature.
- *  - Backpressure: a tick is skipped while the previous snapshot is still
- *    being processed, and every other tick is skipped when the upload queue
- *    is filling up, so slow devices degrade gracefully instead of piling up
- *    work (heat, memory).
+ *  - Preview and recording are fully native: VisionCamera 5 (Nitro/JSI)
+ *    streams camera buffers straight into the preview layer and the hardware
+ *    encoder (AVCaptureMovieFileOutput / CameraX VideoCapture). JS never
+ *    touches full-rate frames.
+ *  - AI sampling runs as a worklet on the frame output's own thread
+ *    (frame-thread-sampler.ts): it measures the real delivered FPS and
+ *    converts ~1 frame/s to a small JPEG. The UI thread and JS thread are not
+ *    involved per frame.
+ *  - The output combination and frame rate come from a per-device probe
+ *    (useCapturePlan). Devices that cannot add the analysis stream at 60 FPS
+ *    record preview + video only and are sampled from the file afterwards.
+ *  - Nothing in here triggers React re-renders while recording; HUD values
+ *    flow through the telemetry store.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { type CameraRef, CommonResolutions, type Recorder, useVideoOutput } from 'react-native-vision-camera';
-import { processFrame, type SampledFrame, toFileUri } from './frame-processor';
-import { FramePruner, planSampling } from './frame-sampling';
+import {
+  type CameraSessionConfig,
+  CommonResolutions,
+  type InterruptionReason,
+  type Recorder,
+  useCameraDevice,
+  useFrameOutput,
+  useVideoOutput,
+} from 'react-native-vision-camera';
+import { bitRateFor, captureConstraints, type CapturePlan, type FpsPreference } from './capture-plan';
+import { createTelemetryStore } from './capture-telemetry';
+import { type SampledFrame, toFileUri } from './frame-processor';
+import { planSampling } from './frame-sampling';
+import { createFrameSampler, createSamplerControls, type FrameStats } from './frame-thread-sampler';
+import { useCapturePlan } from './useCapturePlan';
 
 export type LiveCaptureState = 'idle' | 'recording' | 'finishing';
 
 export interface LiveCaptureResult {
   videoUri: string;
   durationMs: number;
-  stats: { sampled: number; kept: number; pruned: number; skippedTicks: number };
+  plan: CapturePlan;
+  /** false: frames still need to be sampled from `videoUri`. */
+  liveSampled: boolean;
+  stats: { kept: number; pruned: number; failed: number };
 }
 
 export interface LiveCaptureOptions {
   maxDurationMs: number;
   maxFrames: number;
   enableAudio: boolean;
+  fpsPreference: FpsPreference;
   onFrame: (frame: SampledFrame) => void;
   /** 0..1 fill level of the upload queue, used for backpressure. */
   uploadPressure: () => number;
-  /** Called when the recording stopped on its own (max duration / file size). */
+  /** Recording stopped on its own (max duration / file size). */
   onAutoStop?: () => void;
-  /** Called when the app leaves the foreground mid-recording. */
-  onInterrupted?: () => void;
+  /** App left the foreground or the OS interrupted the camera mid-recording. */
+  onInterrupted?: (reason: InterruptionReason | 'background') => void;
 }
 
-/** ~8 Mbps keeps 1080p sparring footage sharp at roughly 60 MB/minute. */
-const TARGET_BITRATE = 8_000_000;
-
 export function useLiveCapture(options: LiveCaptureOptions) {
-  const cameraRef = useRef<CameraRef>(null);
-  const videoOutput = useVideoOutput({
-    targetResolution: CommonResolutions.FHD_16_9,
-    targetBitRate: TARGET_BITRATE,
-    enableAudio: options.enableAudio,
-    fileType: 'mp4',
-  });
-
-  const [state, setState] = useState<LiveCaptureState>('idle');
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [keptFrames, setKeptFrames] = useState(0);
-
   const optionsRef = useRef(options);
   useEffect(() => {
     optionsRef.current = options;
   });
+
+  const device = useCameraDevice('back');
+  const telemetry = useMemo(() => createTelemetryStore(), []);
+
+  const videoOutput = useVideoOutput({
+    targetResolution: CommonResolutions.FHD_16_9,
+    targetBitRate: bitRateFor(options.fpsPreference),
+    enableAudio: options.enableAudio,
+    fileType: 'mp4',
+  });
+
+  // Live sampling: shared controls + worklet on the frame output thread.
+  const baseIntervalMs = planSampling(options.maxDurationMs, options.maxFrames, 1).intervalMs;
+  const controls = useMemo(() => createSamplerControls(baseIntervalMs), [baseIntervalMs]);
+
+  const onSample = useCallback(
+    (t: number, uri: string, motion: number) => {
+      optionsRef.current.onFrame({ t, uri, motion });
+      // Halve the sampling rate while the upload queue is backing up.
+      const backedUp = optionsRef.current.uploadPressure() > 0.75;
+      controls.intervalMs.setBlocking(backedUp ? baseIntervalMs * 2 : baseIntervalMs);
+    },
+    [controls, baseIntervalMs],
+  );
+  const onStats = useCallback(
+    (stats: FrameStats) =>
+      telemetry.set({
+        measuredFps: Math.round(stats.fps),
+        keptFrames: stats.kept,
+        prunedFrames: stats.pruned,
+        failedFrames: stats.failed,
+      }),
+    [telemetry],
+  );
+  const onFrame = useMemo(() => createFrameSampler(controls, onSample, onStats), [controls, onSample, onStats]);
+
+  const frameOutput = useFrameOutput({
+    // Analysis only needs small frames; preview-sized buffers keep memory
+    // bandwidth low and leave headroom for 60 FPS recording.
+    targetResolution: CommonResolutions.HD_16_9,
+    enablePreviewSizedOutputBuffers: true,
+    dropFramesWhileBusy: true,
+    allowDeferredStart: true,
+    onFrame,
+  });
+
+  const planState = useCapturePlan(device, videoOutput, frameOutput, options.fpsPreference);
+  const plan = planState.plan;
+  useEffect(() => {
+    telemetry.set({
+      plan,
+      configuredFps: null,
+      measuredFps: null,
+      warning: planState.degraded ? 'Could not probe camera capabilities; using 30 FPS.' : null,
+    });
+  }, [telemetry, plan, planState.degraded]);
+
+  // Stable props for <Camera>: identity only changes with the plan.
+  const outputs = useMemo(
+    () => (plan === null ? [] : plan.liveSampling ? [videoOutput, frameOutput] : [videoOutput]),
+    [plan, videoOutput, frameOutput],
+  );
+  const constraints = useMemo(() => (plan === null ? [] : captureConstraints(plan.fps, videoOutput)), [plan, videoOutput]);
+  const onSessionConfigSelected = useCallback(
+    (config: CameraSessionConfig) => telemetry.set({ configuredFps: config.selectedFPS ?? null }),
+    [telemetry],
+  );
+
+  // Recording ------------------------------------------------------------------
+  const [state, setState] = useState<LiveCaptureState>('idle');
   const recorderRef = useRef<Recorder | null>(null);
-  const startedAtRef = useRef(0);
-  const timersRef = useRef<ReturnType<typeof setInterval>[]>([]);
   const finishedRef = useRef<Promise<string> | null>(null);
-  const statsRef = useRef({ sampled: 0, skippedTicks: 0, tick: 0, pruner: new FramePruner(), inFlight: false });
+  const startedAtRef = useRef(0);
 
-  const clearTimers = () => {
-    for (const timer of timersRef.current) clearInterval(timer);
-    timersRef.current = [];
-  };
-
-  const sample = useCallback(async () => {
-    const stats = statsRef.current;
-    stats.tick++;
-    const camera = cameraRef.current;
-    const pressure = optionsRef.current.uploadPressure();
-    if (stats.inFlight || !camera || (pressure > 0.75 && stats.tick % 2 === 0)) {
-      stats.skippedTicks++;
-      return;
-    }
-    stats.inFlight = true;
-    try {
-      const t = Date.now() - startedAtRef.current;
-      const snapshot = await camera.takeSnapshot();
-      stats.sampled++;
-      const frame = await processFrame(snapshot, t, stats.pruner);
-      if (frame) {
-        optionsRef.current.onFrame(frame);
-        setKeptFrames(stats.pruner.kept);
-      }
-    } catch {
-      // A dropped sample is acceptable; the recording itself is unaffected.
-      stats.skippedTicks++;
-    } finally {
-      stats.inFlight = false;
-    }
-  }, []);
+  const resetClock = useCallback(() => {
+    controls.recordingStartedAt.setBlocking(0);
+    telemetry.set({ recordingStartedAt: 0 });
+  }, [controls, telemetry]);
 
   const start = useCallback(async () => {
-    if (recorderRef.current) return;
-    const { intervalMs } = planSampling(optionsRef.current.maxDurationMs, optionsRef.current.maxFrames, 1);
-    statsRef.current = { sampled: 0, skippedTicks: 0, tick: 0, pruner: new FramePruner(), inFlight: false };
-    setKeptFrames(0);
+    if (recorderRef.current || !plan) return;
+    controls.intervalMs.setBlocking(baseIntervalMs);
+    telemetry.set({ keptFrames: 0, prunedFrames: 0, failedFrames: 0, warning: null });
 
     const recorder = await videoOutput.createRecorder({ maxDuration: optionsRef.current.maxDurationMs / 1000 });
     recorderRef.current = recorder;
@@ -117,58 +160,82 @@ export function useLiveCapture(options: LiveCaptureOptions) {
           },
           (error) => reject(error),
         )
+        .then(() => {
+          // Sample timestamps are relative to the moment recording really started.
+          const startedAt = Date.now();
+          startedAtRef.current = startedAt;
+          controls.recordingStartedAt.setBlocking(startedAt);
+          telemetry.set({ recordingStartedAt: startedAt });
+        })
         .catch(reject);
     });
-    startedAtRef.current = Date.now();
     setState('recording');
-
-    void sample();
-    timersRef.current.push(setInterval(() => void sample(), intervalMs));
-    timersRef.current.push(setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 500));
-  }, [sample, videoOutput]);
+  }, [plan, controls, baseIntervalMs, telemetry, videoOutput]);
 
   const stop = useCallback(async (): Promise<LiveCaptureResult | null> => {
     const recorder = recorderRef.current;
-    if (!recorder || !finishedRef.current) return null;
+    const finished = finishedRef.current;
+    if (!recorder || !finished || !plan) return null;
     setState('finishing');
-    clearTimers();
-    const durationMs = Date.now() - startedAtRef.current;
+    const durationMs = Date.now() - (startedAtRef.current || Date.now());
+    resetClock();
     try {
       if (recorder.isRecording) await recorder.stopRecording();
-      const filePath = await finishedRef.current;
-      const { sampled, skippedTicks, pruner } = statsRef.current;
+      const filePath = await finished;
+      const { keptFrames, prunedFrames, failedFrames } = telemetry.get();
       return {
         videoUri: toFileUri(filePath),
         durationMs,
-        stats: { sampled, kept: pruner.kept, pruned: pruner.pruned, skippedTicks },
+        plan,
+        liveSampled: plan.liveSampling,
+        stats: { kept: keptFrames, pruned: prunedFrames, failed: failedFrames },
       };
     } finally {
       recorderRef.current = null;
       finishedRef.current = null;
       setState('idle');
     }
-  }, []);
+  }, [plan, resetClock, telemetry]);
 
   const cancel = useCallback(async () => {
-    clearTimers();
     const recorder = recorderRef.current;
     recorderRef.current = null;
     finishedRef.current = null;
+    resetClock();
     setState('idle');
     if (recorder?.isRecording) await recorder.cancelRecording();
-  }, []);
+  }, [resetClock]);
 
-  // The OS suspends the camera in the background: let the screen finish the
-  // take cleanly instead of losing it.
+  const onInterruptionStarted = useCallback(
+    (reason: InterruptionReason) => {
+      if (reason === 'video-device-not-available-due-to-system-pressure') {
+        telemetry.set({ warning: 'The camera is overheating. Recording was stopped; try 30 FPS.' });
+      }
+      if (recorderRef.current) optionsRef.current.onInterrupted?.(reason);
+    },
+    [telemetry],
+  );
+
+  // The OS suspends the camera in the background: finish the take cleanly.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next !== 'active' && recorderRef.current) optionsRef.current.onInterrupted?.();
+      if (next !== 'active' && recorderRef.current) optionsRef.current.onInterrupted?.('background');
     });
-    return () => {
-      subscription.remove();
-      clearTimers();
-    };
+    return () => subscription.remove();
   }, []);
 
-  return { cameraRef, videoOutput, state, elapsedMs, keptFrames, start, stop, cancel };
+  return {
+    device,
+    plan,
+    probing: planState.probing,
+    outputs,
+    constraints,
+    telemetry,
+    state,
+    start,
+    stop,
+    cancel,
+    onSessionConfigSelected,
+    onInterruptionStarted,
+  };
 }
