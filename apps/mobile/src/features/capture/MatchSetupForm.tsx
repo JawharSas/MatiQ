@@ -8,8 +8,9 @@ const DISCIPLINES = [
   { value: 'mma', label: 'MMA' },
 ] as const;
 
-const VARIANT_LABELS: Record<string, string> = {
+export const VARIANT_LABELS: Record<string, string> = {
   ibjjf: 'IBJJF points',
+  ibjjf_reversals: 'IBJJF + reversals',
   submission_only: 'Sub only',
   folkstyle: 'Folkstyle',
   freestyle: 'Freestyle',
@@ -26,8 +27,8 @@ export function defaultSetup(discipline: Discipline = 'bjj'): MatchSetup {
     discipline,
     variant: variantsFor(discipline)[0] ?? 'ibjjf',
     title: '',
-    athleteALabel: 'Me',
-    athleteBLabel: 'Opponent',
+    athleteALabel: 'Fighter 1',
+    athleteBLabel: 'Fighter 2',
     keySource: 'platform',
     uploadVideo: true,
     ...(discipline === 'mma' ? { roundDurationMs: 300_000 } : {}),
@@ -38,26 +39,38 @@ export function MatchSetupForm({
   value,
   onChange,
   hasOwnKey,
+  rulesetLocked = false,
 }: {
   value: MatchSetup;
   onChange: (next: MatchSetup) => void;
   hasOwnKey: boolean;
+  /** Ranked matches fix the discipline and ruleset agreed in the challenge. */
+  rulesetLocked?: boolean;
 }) {
   const set = <K extends keyof MatchSetup>(key: K, next: MatchSetup[K]) => onChange({ ...value, [key]: next });
 
   return (
     <Card>
       <Heading>Match setup</Heading>
-      <Segmented
-        options={DISCIPLINES}
-        value={value.discipline}
-        onChange={(discipline) => onChange({ ...defaultSetup(discipline), title: value.title, uploadVideo: value.uploadVideo })}
-      />
-      <Segmented
-        options={variantsFor(value.discipline).map((variant) => ({ value: variant, label: VARIANT_LABELS[variant] ?? variant }))}
-        value={value.variant}
-        onChange={(variant) => set('variant', variant)}
-      />
+      {rulesetLocked ? (
+        <Caption>
+          {DISCIPLINES.find((option) => option.value === value.discipline)?.label} · {VARIANT_LABELS[value.variant] ?? value.variant} (set by
+          the ranked challenge)
+        </Caption>
+      ) : (
+        <>
+          <Segmented
+            options={DISCIPLINES}
+            value={value.discipline}
+            onChange={(discipline) => onChange({ ...defaultSetup(discipline), title: value.title, uploadVideo: value.uploadVideo })}
+          />
+          <Segmented
+            options={variantsFor(value.discipline).map((variant) => ({ value: variant, label: VARIANT_LABELS[variant] ?? variant }))}
+            value={value.variant}
+            onChange={(variant) => set('variant', variant)}
+          />
+        </>
+      )}
       {value.discipline === 'mma' ? (
         <Segmented
           options={ROUND_LENGTHS}
@@ -66,16 +79,16 @@ export function MatchSetupForm({
         />
       ) : null}
       <TextField label="Title (optional)" value={value.title} onChangeText={(text) => set('title', text)} maxLength={80} />
-      <TextField label="You" value={value.athleteALabel} onChangeText={(text) => set('athleteALabel', text)} maxLength={40} />
+      <TextField label="Fighter 1 (you)" value={value.athleteALabel} onChangeText={(text) => set('athleteALabel', text)} maxLength={40} />
       <TextField
-        label="How to recognise you (e.g. white gi, black shorts)"
+        label="How to recognise Fighter 1 (e.g. white gi, black shorts)"
         value={value.athleteAHint ?? ''}
         onChangeText={(text) => set('athleteAHint', text || undefined)}
         maxLength={80}
       />
-      <TextField label="Opponent" value={value.athleteBLabel} onChangeText={(text) => set('athleteBLabel', text)} maxLength={40} />
+      <TextField label="Fighter 2 (opponent)" value={value.athleteBLabel} onChangeText={(text) => set('athleteBLabel', text)} maxLength={40} />
       <TextField
-        label="How to recognise your opponent"
+        label="How to recognise Fighter 2"
         value={value.athleteBHint ?? ''}
         onChangeText={(text) => set('athleteBHint', text || undefined)}
         maxLength={80}

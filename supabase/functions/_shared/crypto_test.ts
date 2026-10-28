@@ -1,7 +1,6 @@
 // deno test --allow-env supabase/functions/
 import { decryptSecret, DecryptionError, encryptSecret, fingerprintSecret, fromBase64, rotateRecord, toBase64 } from './crypto.ts';
 import { redact } from './log.ts';
-import { chunk, subsample } from '../analyze-match/pipeline.ts';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -75,11 +74,4 @@ Deno.test('log redaction masks credentials', () => {
   const line = redact(`{"apiKey":"${SECRET}","note":"Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlLXZhbHVl"}`);
   assert(!line.includes('test-key'), 'api key leaked');
   assert(!line.includes('eyJzdWIi'), 'jwt leaked');
-});
-
-Deno.test('subsample keeps both ends and the requested size', () => {
-  const items = Array.from({ length: 1000 }, (_, i) => i);
-  const sampled = subsample(items, 240);
-  assert(sampled.length === 240 && sampled[0] === 0 && sampled[239] === 999, 'bad subsample');
-  assert(chunk(sampled, 20).length === 12, 'bad chunking');
 });

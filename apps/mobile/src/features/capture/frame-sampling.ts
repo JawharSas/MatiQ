@@ -1,6 +1,7 @@
 /**
  * Pure (platform-independent) parts of the frame pipeline, unit-tested with
- * `node --test`:
+ * `node --test`. Functions marked 'worklet' also run on the camera's frame
+ * thread (react-native-worklets); in Node the directive is a no-op string.
  *
  *  - adaptive sampling interval (1-2 FPS, capped by a frame budget)
  *  - a tiny luminance signature per frame and a motion score between frames
@@ -45,6 +46,7 @@ const CHANNEL_OFFSETS: Record<string, { bytes: number; r: number; g: number; b: 
  * Row stride is derived from the buffer so padded rows are handled.
  */
 export function lumaSignature(pixels: Uint8Array, width: number, height: number, pixelFormat: string): Uint8Array {
+  'worklet';
   const layout = CHANNEL_OFFSETS[pixelFormat] ?? CHANNEL_OFFSETS.RGBA!;
   const stride = height > 0 ? Math.floor(pixels.byteLength / height) : 0;
   const signature = new Uint8Array(width * height);
@@ -63,6 +65,7 @@ export function lumaSignature(pixels: Uint8Array, width: number, height: number,
 
 /** Mean absolute luminance difference in [0, 1]. */
 export function motionScore(previous: Uint8Array | null, next: Uint8Array): number {
+  'worklet';
   if (!previous || previous.length !== next.length || next.length === 0) return 1;
   let total = 0;
   for (let i = 0; i < next.length; i++) total += Math.abs((next[i] ?? 0) - (previous[i] ?? 0));
@@ -78,29 +81,62 @@ export interface PruneOptions {
 
 export const DEFAULT_PRUNE: PruneOptions = { motionThreshold: 0.015, keyframeIntervalMs: 4000 };
 
-/** Decides which sampled frames are worth sending to the AI. */
+/** Mutable pruning state; a plain object so it can live on a worklet runtime. */
+export interface PruneState {
+  lastSignature: Uint8Array | null;
+  lastKeptT: number;
+  kept: number;
+  pruned: number;
+}
+
+export function createPruneState(): PruneState {
+  'worklet';
+  return { lastSignature: null, lastKeptT: Number.NEGATIVE_INFINITY, kept: 0, pruned: 0 };
+}
+
+/**
+ * Keeps a frame when it differs enough from the last kept frame, or when no
+ * frame was kept for `keyframeIntervalMs` (so static stretches still get
+ * periodic coverage). Updates `state` in place.
+ */
+export function decidePrune(
+  state: PruneState,
+  t: number,
+  signature: Uint8Array,
+  options: PruneOptions,
+): { keep: boolean; motion: number } {
+  'worklet';
+  const motion = motionScore(state.lastSignature, signature);
+  const keep = motion >= options.motionThreshold || t - state.lastKeptT >= options.keyframeIntervalMs;
+  if (keep) {
+    state.lastSignature = signature;
+    state.lastKeptT = t;
+    state.kept++;
+  } else {
+    state.pruned++;
+  }
+  return { keep, motion };
+}
+
+/** JS-thread wrapper around decidePrune (used for gallery / post-recording sampling). */
 export class FramePruner {
-  private lastSignature: Uint8Array | null = null;
-  private lastKeptT = Number.NEGATIVE_INFINITY;
   private readonly options: PruneOptions;
-  kept = 0;
-  pruned = 0;
+  private readonly state: PruneState = createPruneState();
 
   constructor(options: PruneOptions = DEFAULT_PRUNE) {
     this.options = options;
   }
 
+  get kept(): number {
+    return this.state.kept;
+  }
+
+  get pruned(): number {
+    return this.state.pruned;
+  }
+
   shouldKeep(t: number, signature: Uint8Array): { keep: boolean; motion: number } {
-    const motion = motionScore(this.lastSignature, signature);
-    const keep = motion >= this.options.motionThreshold || t - this.lastKeptT >= this.options.keyframeIntervalMs;
-    if (keep) {
-      this.lastSignature = signature;
-      this.lastKeptT = t;
-      this.kept++;
-    } else {
-      this.pruned++;
-    }
-    return { keep, motion };
+    return decidePrune(this.state, t, signature, this.options);
   }
 }
 

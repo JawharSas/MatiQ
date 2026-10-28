@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
 import { initSupabase } from '@/lib/supabase';
+import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
@@ -72,9 +73,10 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, initializing } = useAuth();
-  if (initializing) return <Loading />;
+  const { session, initializing, mfaPending } = useAuth();
+  if (initializing || (session && mfaPending === null)) return <Loading />;
   const signedIn = Boolean(session);
+  const challenge = signedIn && mfaPending === true;
 
   return (
     <Stack
@@ -85,10 +87,15 @@ function RootNavigator() {
         headerTintColor: colors.text,
       }}
     >
-      <Stack.Protected guard={!signedIn}>
+      {/* Explicit redirects: the root stack has no anchor, so without them a
+          guarded URL (e.g. "/" while signed out) would land on a bare group. */}
+      <Stack.Protected guard={!signedIn} redirectTo={challenge ? '/mfa' : '/'}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn}>
+      <Stack.Protected guard={challenge} redirectTo={signedIn ? '/' : '/sign-in'}>
+        <Stack.Screen name="mfa" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && !challenge} redirectTo={challenge ? '/mfa' : '/sign-in'}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />

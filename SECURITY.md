@@ -22,4 +22,4 @@ a rooted/jailbroken device with the victim's unlocked phone.
 ## Design references
 
 - [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md) - threat model, controls, deployment hardening.
-- [supabase/tests/database/01_security.test.sql](supabase/tests/database/01_security.test.sql) - executable checks for every privacy and privilege rule.
+- [supabase/tests/database/](supabase/tests/database/) - executable checks for every privacy and privilege rule, live-analysis claiming and two-factor enforcement.

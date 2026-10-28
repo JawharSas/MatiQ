@@ -5,12 +5,14 @@
  *   used for `svc_*` RPCs and storage operations whose authorization has
  *   already been checked in code.
  * - `authenticateRequest()` validates the caller's JWT with the Auth server
- *   (so revoked sessions are rejected, not just expired ones).
+ *   (so revoked sessions are rejected, not just expired ones) and requires an
+ *   aal2 session from users who enabled two-factor authentication.
  */
 
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { env } from './env.ts';
 import { HttpError } from './http.ts';
+import { jwtAal, requiresStepUp } from './mfa.ts';
 
 let cachedAdmin: SupabaseClient | null = null;
 
@@ -33,5 +35,8 @@ export async function authenticateRequest(req: Request): Promise<User> {
   const { data, error } = await adminClient().auth.getUser(match[1]);
   if (error || !data.user) throw new HttpError(401, 'unauthorized', 'Invalid or expired session');
   if (data.user.role !== 'authenticated') throw new HttpError(403, 'forbidden');
+  if (requiresStepUp(data.user.factors, jwtAal(match[1]))) {
+    throw new HttpError(403, 'mfa_required', 'Complete two-factor verification first');
+  }
   return data.user;
 }

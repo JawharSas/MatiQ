@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -61,6 +62,7 @@ export default function SettingsScreen() {
     <Screen>
       <Card>
         <Heading>Security</Heading>
+        <Button label="Two-factor authentication" variant="secondary" onPress={() => router.push('/settings/two-factor')} />
         <Button label="API keys (bring your own key)" variant="secondary" onPress={() => router.push('/settings/api-keys')} />
         <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
         <Button label="Sign out of all devices" variant="secondary" onPress={() => void signOut({ everywhere: true })} />
@@ -78,6 +80,10 @@ export default function SettingsScreen() {
         <TextField label="Confirmation" value={confirmText} onChangeText={setConfirmText} autoCapitalize="characters" />
         <Button label="Delete my account" variant="danger" disabled={confirmText !== 'DELETE MY ACCOUNT'} loading={deleting} onPress={deleteAccount} />
       </Card>
+      <Caption>
+        MatIQ {Constants.expoConfig?.version ?? ''}
+        {typeof Constants.expoConfig?.extra?.releaseLabel === 'string' ? ` · ${Constants.expoConfig.extra.releaseLabel}` : ''}
+      </Caption>
       <ErrorText>{error}</ErrorText>
     </Screen>
   );

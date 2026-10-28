@@ -132,7 +132,10 @@ export function useProfile(userId: string) {
   });
 }
 
-export async function updateProfile(userId: string, patch: { display_name?: string; bio?: string; visibility?: Visibility }) {
+export async function updateProfile(
+  userId: string,
+  patch: { display_name?: string; bio?: string; visibility?: Visibility; avatar_path?: string | null },
+) {
   const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
   if (error) throw fromPostgrest(error);
 }

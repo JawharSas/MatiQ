@@ -13,16 +13,23 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
+/** Marketing version and release channel ("Pre-Beta V1.2.9"). */
+const APP_VERSION = '1.2.9';
+const RELEASE_LABEL = 'Pre-Beta';
+/** Monotonic build number for local / CI builds: 1.2.9 -> 10209 (EAS manages its own remotely). */
+const BUILD_NUMBER = APP_VERSION.split('.').reduce((total, part) => total * 100 + Number(part), 0);
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'MatIQ',
   slug: 'matiq',
   scheme: 'matiq',
-  version: '1.0.0',
+  version: APP_VERSION,
   orientation: 'portrait',
   userInterfaceStyle: 'dark',
   ios: {
     bundleIdentifier: 'app.matiq.mobile',
+    buildNumber: String(BUILD_NUMBER),
     supportsTablet: false,
     infoPlist: {
       NSCameraUsageDescription: 'MatIQ uses the camera to record your sparring rounds for analysis.',
@@ -35,6 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: 'app.matiq.mobile',
+    versionCode: BUILD_NUMBER,
     allowBackup: false,
     permissions: ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
     blockedPermissions: ['android.permission.READ_PHONE_STATE', 'android.permission.SYSTEM_ALERT_WINDOW'],
@@ -68,11 +76,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
   ],
+  // Web is only the browser UI preview (sample data, see src/preview/README.md).
+  web: { bundler: 'metro', output: 'single' },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
   },
   extra: {
     isProduction: IS_PRODUCTION,
+    releaseLabel: RELEASE_LABEL,
   },
 });

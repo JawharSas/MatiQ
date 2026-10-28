@@ -1,0 +1,17 @@
+# Secret scanning (CI "Secret scan" job). Keeps every default gitleaks rule
+# and only allows known, deliberately fake test values, matched exactly so a
+# real credential in the same files is still caught.
+
+title = "MatIQ gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials in tests"
+regexes = [
+  # supabase/functions/_shared/crypto_test.ts: a JWT-shaped bearer token
+  # ({"alg":"HS256"}.{"sub":"1234567890"}.signature-value) that the log
+  # redaction test must mask.
+  '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.c2lnbmF0dXJlLXZhbHVl$''',
+]

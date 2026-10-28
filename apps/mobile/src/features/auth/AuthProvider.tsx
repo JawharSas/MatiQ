@@ -4,10 +4,16 @@ import { createContext, type ReactNode, use, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { clearCache } from '@/lib/storage';
 import { recordPendingConsent } from '@/features/legal/consent';
+import { needsMfaChallenge } from './mfa';
 
 interface AuthState {
   session: Session | null;
   initializing: boolean;
+  /**
+   * The session must complete a two-factor challenge (null while checking).
+   * UX only: the server refuses aal1 sessions of users with 2FA anyway.
+   */
+  mfaPending: boolean | null;
   /** UX hint only: every owner RPC re-checks the role server side. */
   isOwner: boolean;
   signOut(options?: { everywhere?: boolean }): Promise<void>;
@@ -20,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
+  const [mfaPending, setMfaPending] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -50,9 +57,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  const userId = session?.user.id;
+  // Re-evaluated whenever the token changes (sign-in, refresh, MFA verified).
+  // The previous value is kept meanwhile, so token refreshes don't flash.
+  const accessToken = session?.access_token;
   useEffect(() => {
-    if (!userId) return;
+    if (!accessToken) {
+      setMfaPending(null);
+      return;
+    }
+    let cancelled = false;
+    void needsMfaChallenge().then((pending) => {
+      if (!cancelled) setMfaPending(pending);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  // Per token, because the owner role can depend on the session's aal.
+  useEffect(() => {
+    if (!accessToken || mfaPending !== false) return;
     let cancelled = false;
     supabase.rpc('am_i_owner').then(({ data }) => {
       if (!cancelled) setIsOwner(data === true);
@@ -60,13 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [accessToken, mfaPending]);
 
   const signOut = async ({ everywhere = false } = {}) => {
     await supabase.auth.signOut({ scope: everywhere ? 'global' : 'local' });
   };
 
-  return <AuthContext value={{ session, initializing, isOwner, signOut }}>{children}</AuthContext>;
+  return <AuthContext value={{ session, initializing, mfaPending, isOwner, signOut }}>{children}</AuthContext>;
 }
 
 export function useAuth(): AuthState {

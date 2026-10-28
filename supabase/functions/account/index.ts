@@ -44,8 +44,25 @@ async function exportData(ctx: RequestContext): Promise<Response> {
     return data;
   };
 
-  const [profile, entitlements, legal, matches, analyses, posts, likes, blocks, usage, friendsLow, friendsHigh, keys] =
-    await Promise.all([
+  const [
+    profile,
+    entitlements,
+    legal,
+    matches,
+    analyses,
+    posts,
+    likes,
+    blocks,
+    usage,
+    friendsLow,
+    friendsHigh,
+    keys,
+    ratings,
+    ratingHistory,
+    titles,
+    rankedAsChallenger,
+    rankedAsOpponent,
+  ] = await Promise.all([
       query('profiles', 'id'),
       query('user_entitlements', 'user_id'),
       query('legal_acceptances', 'user_id'),
@@ -58,6 +75,11 @@ async function exportData(ctx: RequestContext): Promise<Response> {
       query('friendships', 'user_low'),
       query('friendships', 'user_high'),
       db.rpc('svc_list_api_keys', { p_user_id: uid }).then(({ data }) => data ?? []),
+      query('ranked_ratings', 'user_id'),
+      query('rating_history', 'user_id'),
+      query('user_titles', 'user_id'),
+      query('ranked_matches', 'challenger_id'),
+      query('ranked_matches', 'opponent_id'),
     ]);
 
   ctx.log.info('data export generated');
@@ -77,6 +99,12 @@ async function exportData(ctx: RequestContext): Promise<Response> {
       usage,
       // Metadata only - stored API keys are never exported in any form.
       apiKeys: keys,
+      ranked: {
+        ratings,
+        history: ratingHistory,
+        titles,
+        matches: [...(rankedAsChallenger ?? []), ...(rankedAsOpponent ?? [])],
+      },
     },
     200,
     { 'Content-Disposition': 'attachment; filename="matiq-export.json"' },

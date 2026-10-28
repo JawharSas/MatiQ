@@ -3,6 +3,7 @@ import { Link } from 'expo-router';
 import { useDeferredValue, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { type FriendEntry, searchProfiles, useFriendAction, useFriends } from '@/features/social/api';
+import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { Button, Caption, Card, ErrorText, Heading, Screen, TextField } from '@/ui/components';
 import { font, spacing } from '@/ui/theme';
@@ -28,7 +29,13 @@ export default function FriendsScreen() {
     <Screen>
       <TextField label="Find athletes" value={query} onChangeText={setQuery} autoCapitalize="none" maxLength={40} placeholder="username or name" />
       {results.data?.map((profile) => (
-        <ProfileLink key={profile.user_id} id={profile.user_id} name={profile.display_name} username={profile.username} />
+        <ProfileLink
+          key={profile.user_id}
+          id={profile.user_id}
+          name={profile.display_name}
+          username={profile.username}
+          avatarPath={profile.avatar_path}
+        />
       ))}
       {friends.error ? <ErrorText>{errorMessage(friends.error)}</ErrorText> : null}
       {action.error ? <ErrorText>{errorMessage(action.error)}</ErrorText> : null}
@@ -39,7 +46,7 @@ export default function FriendsScreen() {
             <Heading>{group.title}</Heading>
             {group.entries.map((entry) => (
               <View key={entry.user_id} style={{ gap: spacing.sm }}>
-                <ProfileLink id={entry.user_id} name={entry.display_name} username={entry.username} />
+                <ProfileLink id={entry.user_id} name={entry.display_name} username={entry.username} avatarPath={entry.avatar_path} />
                 {entry.direction === 'incoming' ? (
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                     <View style={{ flex: 1 }}>
@@ -60,12 +67,15 @@ export default function FriendsScreen() {
   );
 }
 
-function ProfileLink({ id, name, username }: { id: string; name: string; username: string }) {
+function ProfileLink({ id, name, username, avatarPath }: { id: string; name: string; username: string; avatarPath: string | null }) {
   return (
     <Link href={{ pathname: '/user/[id]', params: { id } }} asChild>
-      <Pressable accessibilityRole="link" style={{ paddingVertical: spacing.xs }}>
-        <Text style={font.body}>{name}</Text>
-        <Caption>@{username}</Caption>
+      <Pressable accessibilityRole="link" style={{ paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <Avatar path={avatarPath} name={name} />
+        <View>
+          <Text style={font.body}>{name}</Text>
+          <Caption>@{username}</Caption>
+        </View>
       </Pressable>
     </Link>
   );

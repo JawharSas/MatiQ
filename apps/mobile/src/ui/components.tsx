@@ -40,6 +40,11 @@ export function Body({ children, muted = false }: { children: ReactNode; muted?:
   return <Text style={[font.body, muted && { color: colors.textMuted }]}>{children}</Text>;
 }
 
+/** Inline text that reads as a link (use inside expo-router <Link>). */
+export function LinkText({ children }: { children: ReactNode }) {
+  return <Text style={[font.body, { color: colors.accent, textDecorationLine: 'underline' }]}>{children}</Text>;
+}
+
 export function Caption({ children }: { children: ReactNode }) {
   return <Text style={font.caption}>{children}</Text>;
 }
@@ -67,6 +72,8 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      // Named explicitly so the spinner state keeps the label for screen readers.
+      accessibilityLabel={label}
       accessibilityState={{ disabled: inactive, busy: loading }}
       onPress={onPress}
       disabled={inactive}
@@ -94,6 +101,7 @@ export function TextField({ label, error, ...props }: TextInputProps & { label: 
       <TextInput
         placeholderTextColor={colors.textMuted}
         autoCorrect={false}
+        accessibilityLabel={label}
         {...props}
         style={[styles.input, props.multiline && styles.inputMultiline, error ? { borderColor: colors.danger } : null]}
       />

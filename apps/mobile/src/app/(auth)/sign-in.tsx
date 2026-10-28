@@ -1,9 +1,11 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { StyleSheet, Text } from 'react-native';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { emailSchema } from '@/lib/validation';
-import { Body, Button, Caption, Card, ErrorText, Screen, TextField, Title } from '@/ui/components';
+import { Body, Button, Caption, Card, ErrorText, Screen, TextField } from '@/ui/components';
+import { colors } from '@/ui/theme';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -34,7 +36,9 @@ export default function SignInScreen() {
 
   return (
     <Screen>
-      <Title>MatIQ</Title>
+      <Text style={styles.wordmark} accessibilityRole="header">
+        Mat<Text style={{ color: colors.accent }}>IQ</Text>
+      </Text>
       <Body muted>AI analysis for BJJ, wrestling and MMA.</Body>
       <Card>
         <TextField
@@ -65,3 +69,7 @@ export default function SignInScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  wordmark: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginTop: 24 },
+});

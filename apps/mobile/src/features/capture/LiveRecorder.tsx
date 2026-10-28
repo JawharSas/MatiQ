@@ -1,20 +1,33 @@
 import { useIsFocused } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraPermission, useMicrophonePermission } from 'react-native-vision-camera';
-import { formatClock } from '@matiq/rules-engine';
-import { Body, Button, Card } from '@/ui/components';
+import { errorMessage } from '@/lib/errors';
+import { readPreference, writePreference } from '@/lib/storage';
+import { Body, Button, Card, Segmented } from '@/ui/components';
 import { colors, radius, spacing } from '@/ui/theme';
+import type { CapturePlan, FpsPreference } from './capture-plan';
+import { CaptureHud } from './CaptureHud';
 import type { SampledFrame } from './frame-processor';
+import { type LiveMatchInfo, LiveScoreboard } from './LiveScoreboard';
 import { type LiveCaptureResult, useLiveCapture } from './useLiveCapture';
+
+const FPS_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: '60', label: '60 FPS' },
+  { value: '30', label: '30 FPS' },
+] as const;
+const FPS_VALUES = FPS_OPTIONS.map((option) => option.value);
 
 interface LiveRecorderProps {
   maxDurationMs: number;
   maxFrames: number;
   onFrame: (frame: SampledFrame) => void;
   uploadPressure: () => number;
-  /** Called before recording starts (create the draft match here). */
-  onBeforeStart: () => Promise<void>;
+  /** Called before recording starts with the chosen plan (create the draft / live session here). */
+  onBeforeStart: (plan: CapturePlan) => Promise<void>;
+  /** Set while a live analysis runs, to show the provisional score. */
+  liveMatch?: LiveMatchInfo | null;
   onFinished: (result: LiveCaptureResult) => void;
   onCancel: () => void;
 }
@@ -25,12 +38,14 @@ export function LiveRecorder(props: LiveRecorderProps) {
   const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const [error, setError] = useState<string | null>(null);
+  const [fpsPreference, setFpsPreference] = useState<FpsPreference>(() => readPreference('capture-fps', FPS_VALUES, 'auto'));
   const stopRef = useRef<() => void>(() => undefined);
 
   const capture = useLiveCapture({
     maxDurationMs: props.maxDurationMs,
     maxFrames: props.maxFrames,
     enableAudio: microphone.hasPermission,
+    fpsPreference,
     onFrame: props.onFrame,
     uploadPressure: props.uploadPressure,
     onAutoStop: () => stopRef.current(),
@@ -55,13 +70,21 @@ export function LiveRecorder(props: LiveRecorderProps) {
   });
 
   const begin = async () => {
+    if (!capture.plan) return;
     setError(null);
     try {
-      await props.onBeforeStart();
+      await props.onBeforeStart(capture.plan);
       await capture.start();
-    } catch {
-      setError('Could not start recording. Check your connection and try again.');
+    } catch (caught) {
+      setError(errorMessage(caught));
     }
+  };
+
+  const onCameraError = useCallback(() => setError('The camera stopped unexpectedly.'), []);
+
+  const choosePreference = (next: FpsPreference) => {
+    setFpsPreference(next);
+    writePreference('capture-fps', next);
   };
 
   if (!camera.hasPermission) {
@@ -80,67 +103,66 @@ export function LiveRecorder(props: LiveRecorderProps) {
     );
   }
 
+  if (!capture.device) {
+    return (
+      <Card>
+        <Body>No rear camera is available on this device.</Body>
+        <Button label="Back" variant="secondary" onPress={props.onCancel} />
+      </Card>
+    );
+  }
+
   const recording = capture.state === 'recording';
-  const remaining = Math.max(0, props.maxDurationMs - capture.elapsedMs);
+  const idle = capture.state === 'idle';
 
   return (
-    <View style={styles.container}>
-      <Camera
-        ref={capture.cameraRef}
-        style={StyleSheet.absoluteFill}
-        device="back"
-        isActive={isFocused && appActive}
-        outputs={[capture.videoOutput]}
-        constraints={[{ fps: 30 }]}
-        enableNativeZoomGesture
-        resizeMode="cover"
-      />
-      <View style={styles.hud} pointerEvents="box-none">
-        <View style={styles.badge}>
-          {recording ? <View style={styles.dot} /> : null}
-          <Text style={styles.badgeText}>
-            {recording ? `${formatClock(capture.elapsedMs)} · ${capture.keptFrames} frames` : 'Ready'}
-          </Text>
-        </View>
-        {recording && remaining < 30_000 ? <Text style={styles.warning}>{Math.ceil(remaining / 1000)}s left</Text> : null}
-      </View>
-      <View style={styles.controls}>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={recording ? 'Stop recording' : 'Start recording'}
-          disabled={capture.state === 'finishing'}
-          onPress={recording ? () => void finish() : () => void begin()}
-          style={styles.shutter}
-        >
-          <View style={recording ? styles.stopIcon : styles.recordIcon} />
-        </Pressable>
-        {!recording ? (
-          <Pressable accessibilityRole="button" onPress={props.onCancel} style={styles.cancel}>
-            <Text style={styles.badgeText}>Cancel</Text>
-          </Pressable>
+    <View style={styles.stack}>
+      {idle ? <Segmented options={FPS_OPTIONS} value={fpsPreference} onChange={choosePreference} /> : null}
+      <View style={styles.container}>
+        {capture.plan ? (
+          <Camera
+            style={StyleSheet.absoluteFill}
+            device={capture.device}
+            isActive={isFocused && appActive}
+            outputs={capture.outputs}
+            constraints={capture.constraints}
+            onSessionConfigSelected={capture.onSessionConfigSelected}
+            onInterruptionStarted={capture.onInterruptionStarted}
+            onError={onCameraError}
+            // Low-light boost lengthens exposure by dropping the frame rate.
+            enableLowLightBoost={false}
+            enableSmoothAutoFocus
+            enableNativeZoomGesture
+            resizeMode="cover"
+          />
         ) : null}
+        <CaptureHud telemetry={capture.telemetry} maxDurationMs={props.maxDurationMs} />
+        {recording && props.liveMatch ? <LiveScoreboard match={props.liveMatch} /> : null}
+        <View style={styles.controls}>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={recording ? 'Stop recording' : 'Start recording'}
+            disabled={capture.state === 'finishing' || capture.probing || !capture.plan}
+            onPress={recording ? () => void finish() : () => void begin()}
+            style={[styles.shutter, (capture.probing || !capture.plan) && { opacity: 0.4 }]}
+          >
+            <View style={recording ? styles.stopIcon : styles.recordIcon} />
+          </Pressable>
+          {idle ? (
+            <Pressable accessibilityRole="button" onPress={props.onCancel} style={styles.cancel}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  stack: { gap: spacing.md },
   container: { flex: 1, minHeight: 520, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#000' },
-  hud: { position: 'absolute', top: spacing.lg, left: spacing.lg, right: spacing.lg, gap: spacing.sm },
-  badge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  badgeText: { color: colors.text, fontVariant: ['tabular-nums'], fontWeight: '600' },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
-  warning: { color: colors.warning, fontWeight: '700' },
   controls: { position: 'absolute', bottom: spacing.xl, left: 0, right: 0, alignItems: 'center', gap: spacing.md },
   shutter: {
     width: 76,
@@ -154,5 +176,6 @@ const styles = StyleSheet.create({
   recordIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.danger },
   stopIcon: { width: 28, height: 28, borderRadius: 4, backgroundColor: colors.danger },
   cancel: { padding: spacing.sm },
+  cancelText: { color: colors.text, fontWeight: '600' },
   error: { color: colors.danger, backgroundColor: 'rgba(0,0,0,0.6)', padding: spacing.sm, borderRadius: radius.sm },
 });

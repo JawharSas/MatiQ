@@ -33,6 +33,8 @@ node_modules/
 .expo-shared/
 .expo-export-check/
 dist/
+dist-preview/
+preview-screenshots/
 web-build/
 expo-env.d.ts
 !apps/mobile/src/types/expo-env.d.ts

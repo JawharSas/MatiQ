@@ -131,3 +131,54 @@ describe('bjj / submission_only', () => {
     assert.equal(card.result.method, 'draw');
   });
 });
+
+describe('bjj / ibjjf_reversals', () => {
+  const reversalMatch = [
+    { type: 'position', position: 'mount', athlete: 'B', t: 0, endT: s(20), confidence: 0.9 },
+    { type: 'reversal', athlete: 'A', t: s(20), confidence: 0.9 },
+    { type: 'position', position: 'side_control', athlete: 'A', t: s(20), endT: s(40), confidence: 0.9 },
+  ];
+
+  it('scores a stabilised reversal from under mount at 2 points', () => {
+    const card = bjj(reversalMatch, 'ibjjf_reversals');
+    assert.equal(card.totals.A.points, 2);
+    assert.ok(card.scoreLog.some((line) => line.label === 'Reversal (+2)' && line.athlete === 'A'));
+    // B still scored the mount.
+    assert.equal(card.totals.B.points, 4);
+  });
+
+  it('does not score reversals under plain IBJJF rules', () => {
+    const card = bjj(reversalMatch, 'ibjjf');
+    assert.equal(card.totals.A.points, 0);
+    assert.equal(card.stats.reversals.A, 1);
+  });
+
+  it('turns an unstabilised reversal into an advantage', () => {
+    const card = bjj(
+      [
+        { type: 'position', position: 'mount', athlete: 'B', t: 0, endT: s(20), confidence: 0.9 },
+        { type: 'reversal', athlete: 'A', t: s(20), confidence: 0.9 },
+        { type: 'position', position: 'scramble', t: s(20), endT: s(21), confidence: 0.9 },
+        { type: 'position', position: 'mount', athlete: 'B', t: s(21), endT: s(40), confidence: 0.9 },
+      ],
+      'ibjjf_reversals',
+    );
+    assert.equal(card.totals.A.points, 0);
+    assert.equal(card.totals.A.advantages, 1);
+  });
+
+  it('ignores a reversal reported for the same action as a sweep', () => {
+    const card = bjj(
+      [
+        { type: 'position', position: 'closed_guard', athlete: 'A', t: 0, endT: s(30), confidence: 0.9 },
+        { type: 'sweep', athlete: 'A', t: s(30), confidence: 0.9 },
+        { type: 'reversal', athlete: 'A', t: s(31), confidence: 0.9 },
+        { type: 'position', position: 'mount', athlete: 'A', t: s(30), endT: s(60), confidence: 0.9 },
+      ],
+      'ibjjf_reversals',
+    );
+    // Sweep 2 + mount 4; the reversal is the same action as the sweep.
+    assert.equal(card.totals.A.points, 6);
+    assert.ok(!card.scoreLog.some((line) => line.label.startsWith('Reversal')));
+  });
+});

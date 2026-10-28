@@ -4,13 +4,17 @@ import { useState } from 'react';
 import { acceptCurrentVersions, missingAcceptances } from '@/features/legal/consent';
 import { LEGAL_DOCUMENTS } from '@/features/legal/documents';
 import { errorMessage } from '@/lib/errors';
-import { Body, Button, Card, ErrorText, Loading, Screen, Title } from '@/ui/components';
+import { Body, Button, Card, ErrorText, LinkText, Loading, Screen, Title } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
 /**
  * Signed-in area. Before anything else, the user must have accepted the
  * current Terms and Privacy Policy versions (re-prompted when they change).
  */
+// Deep links into a stack screen (a shared match, a ranked match) keep the
+// tabs underneath, so Back always has somewhere to go.
+export const unstable_settings = { anchor: '(tabs)' };
+
 export default function AppLayout() {
   const consent = useQuery({ queryKey: ['consent'], queryFn: missingAcceptances, staleTime: Infinity });
 
@@ -32,7 +36,12 @@ export default function AppLayout() {
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/api-keys" options={{ title: 'API keys' }} />
+      <Stack.Screen name="settings/two-factor" options={{ title: 'Two-factor authentication' }} />
       <Stack.Screen name="admin" options={{ title: 'Owner panel' }} />
+      <Stack.Screen name="ranked/opponents" options={{ title: 'Opponents' }} />
+      <Stack.Screen name="ranked/leaderboard" options={{ title: 'Ladder' }} />
+      <Stack.Screen name="ranked/titles" options={{ title: 'Titles' }} />
+      <Stack.Screen name="ranked/match/[id]" options={{ title: 'Ranked match' }} />
     </Stack>
   );
 }
@@ -62,7 +71,9 @@ function ConsentGate({ missing }: { missing: ('terms' | 'privacy')[] }) {
         <Card key={id}>
           <Body>{LEGAL_DOCUMENTS[id].summary}</Body>
           <Link href={{ pathname: '/legal/[doc]', params: { doc: id } }}>
-            <Body>Read the {LEGAL_DOCUMENTS[id].title} (version {LEGAL_DOCUMENTS[id].version})</Body>
+            <LinkText>
+              Read the {LEGAL_DOCUMENTS[id].title} (version {LEGAL_DOCUMENTS[id].version})
+            </LinkText>
           </Link>
         </Card>
       ))}

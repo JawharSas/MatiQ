@@ -2,6 +2,7 @@ import { formatClock } from '@matiq/rules-engine';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import type { MatchStatus } from '@/features/analysis/useMatch';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { errorMessage, fromPostgrest } from '@/lib/errors';
 import { readCache, writeCache } from '@/lib/storage';
@@ -13,15 +14,16 @@ interface MatchListItem {
   id: string;
   discipline: 'bjj' | 'wrestling' | 'mma';
   title: string;
-  status: 'draft' | 'queued' | 'processing' | 'completed' | 'failed';
+  status: MatchStatus;
   duration_ms: number;
   recorded_at: string;
   athlete_a_label: string;
   athlete_b_label: string;
 }
 
-const STATUS_LABELS: Record<MatchListItem['status'], string> = {
+const STATUS_LABELS: Record<MatchStatus, string> = {
   draft: 'Draft',
+  live: 'Live',
   queued: 'Queued',
   processing: 'Analysing…',
   completed: 'Analysed',

@@ -11,7 +11,7 @@ import { env } from '@/config/env';
 
 export const LEGAL_VERSIONS = {
   terms: '2026-10-23',
-  privacy: '2026-10-23',
+  privacy: '2026-10-28',
 } as const;
 
 export type LegalDocumentId = keyof typeof LEGAL_VERSIONS;
@@ -48,10 +48,11 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'What we collect',
       paragraphs: [
-        'Account data: email address, username, display name, optional bio and avatar.',
+        'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata.',
         'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes.',
         'Social data: friend requests, friendships, blocks, posts and likes.',
-        'Usage and security data: number of analyses per month, rate-limit counters, and security logs needed to prevent abuse.',
+        'Ranked play: challenges, confirmed results, ratings, rating history and titles.',
+        'Usage and security data: number of analyses per month, rate-limit counters, security logs needed to prevent abuse and, if you turn on two-factor authentication, your authenticator enrollment.',
         'Optional API keys you choose to store for "bring your own key" analysis (encrypted, see below).',
       ],
     },
@@ -66,7 +67,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'AI processing',
       paragraphs: [
-        'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. Frames are deleted from our storage after a successful analysis.',
+        'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. With live analysis, this happens in small batches while you record so the app can show a provisional score. Frames are deleted from our storage after a successful analysis.',
         'We only use AI providers whose commercial terms prohibit using customer content to train their models. When you analyse with your own API key, your provider account and its terms apply to that request.',
       ],
     },
@@ -81,6 +82,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       paragraphs: [
         'New accounts are Private. Private accounts: posts, shared scorecards and highlights are visible only to friends you approve. Public accounts: shared posts are visible to all signed-in MatIQ users, unless you mark a post Friends only.',
         'Your matches, videos and analyses stay visible only to you unless you share them in a post. Your profile card (username, display name, avatar, bio) is visible to signed-in users so friends can find you. Blocking a user hides your profile and content from them.',
+        'Ranked matches: when you record a ranked match, your opponent in that match can watch the recording and its scorecard so they can confirm or dispute the result. Your ranked ratings, record and titles follow your account privacy (everyone for Public accounts, friends only for Private accounts). If a ranked result is disputed, the MatIQ owner may watch that recording to resolve the dispute. This access ends when the dispute is resolved, and the decision is recorded in an audit log.',
       ],
     },
     {
@@ -93,7 +95,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'Retention and deletion',
       paragraphs: [
-        'We keep your data while your account is active. You can delete individual matches and posts at any time. Deleting your account (Settings > Delete account) permanently removes your profile, matches, videos, analyses, posts and stored API keys. Encrypted backups expire on our provider\'s backup schedule.',
+        'We keep your data while your account is active. You can delete individual matches and posts at any time. Deleting your account (Settings > Delete account) permanently removes your profile, matches, videos, analyses, posts, ranked ratings, titles and stored API keys. Rating changes your past opponents received stay in their own history, without a link to you. Encrypted backups expire on our provider\'s backup schedule.',
       ],
     },
     {
