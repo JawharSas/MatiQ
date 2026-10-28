@@ -130,6 +130,8 @@ jobs:
         with:
           name: android-apk
           path: apk
+      - name: Install ImageMagick (screenshot previews in the log)
+        run: command -v convert || (sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends imagemagick)
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -142,6 +144,8 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/android-launch-test.sh apk emulator

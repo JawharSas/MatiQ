@@ -18,9 +18,14 @@ ui_dump() {
 }
 
 wait_for_text() { # <text> <seconds>
-  local deadline=$((SECONDS + $2))
+  local deadline=$((SECONDS + $2)) last_status=0
   while [ $SECONDS -lt $deadline ]; do
-    if ui_dump && grep -q "text=\"$1\"" "$out/ui.xml"; then return 0; fi
+    if ui_dump; then
+      grep -q "text=\"$1\"" "$out/ui.xml" && return 0
+      # A slow CI emulator can show "<app> isn't responding" for the launcher.
+      if grep -q 'text="Wait"' "$out/ui.xml"; then echo "  dismissing a system 'not responding' dialog"; tap_text "Wait" || true; fi
+    fi
+    if [ $((SECONDS - last_status)) -ge 15 ]; then status_line; last_status=$SECONDS; fi
     sleep 2
   done
   return 1
@@ -49,22 +54,34 @@ visible_text() {
   grep -o 'text="[^"]\+"' "$out/ui.xml" | sed 's/^text="//; s/"$//' | head -n 40
 }
 
+status_line() { # what is in front, and is MatIQ alive
+  local focus pid
+  focus=$(adb shell dumpsys window 2> /dev/null | grep -m 1 -o 'mCurrentFocus=[^ ]* [^ ]* [^}]*' || true)
+  pid=$(adb shell pidof "$pkg" 2> /dev/null || true)
+  echo "  [$((SECONDS - started))s] ${focus:-no focus} | MatIQ pid: ${pid:-not running}"
+}
+
 crashed() {
   adb logcat -d > "$out/logcat.txt"
   grep -E "FATAL EXCEPTION|ReactNativeJS.*(Error|Exception)" "$out/logcat.txt" | head -n 20
 }
+
+started=$SECONDS
+# System "not responding" dialogs for other apps would cover MatIQ on a slow emulator.
+adb shell settings put global hide_error_dialogs 1 || true
 
 echo "Installing $(basename "$apk")"
 adb install -r -g "$apk"
 adb logcat -c
 
 echo "Opening MatIQ"
-adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > /dev/null
-sleep 3
+adb shell am start -W -n "$pkg/.MainActivity" | grep -E 'Status|TotalTime|WaitTime' || true
+sleep 5
 shot splash
+status_line
 
 status=0
-if wait_for_text "Sign in" 120; then
+if wait_for_text "Sign in" 180; then
   echo "Sign-in screen is showing:"
   visible_text
   shot sign-in
@@ -77,10 +94,13 @@ if wait_for_text "Sign in" 120; then
     status=1
   fi
 else
-  echo "::error::The sign-in screen did not appear within 2 minutes"
+  echo "::error::The sign-in screen did not appear within 3 minutes"
   ui_dump || true
+  echo "Visible text:"
   visible_text || true
   shot stuck
+  echo "React Native log:"
+  adb logcat -d -s ReactNative:V ReactNativeJS:V AndroidRuntime:E expo:V | tail -n 60 || true
   status=1
 fi
 
