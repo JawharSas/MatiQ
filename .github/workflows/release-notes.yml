@@ -1,7 +1,9 @@
 name: Release notes
 
 # Replaces the notes of a published GitHub release with
-# release-notes/<version>.md from the chosen branch, without rebuilding.
+# release-notes/<version>.md from the chosen branch, without rebuilding, and
+# removes any file that is not meant for players (only the APK, its
+# checksums and the screenshot pack belong on a release).
 # Actions -> Release notes -> Run workflow, e.g. with v1.2.9-pre-beta.
 
 on:
@@ -32,3 +34,9 @@ jobs:
           notes="release-notes/${base}.md"
           test -s "$notes" || { echo "::error::$notes not found"; exit 1; }
           gh release edit "$TAG" --notes-file "$notes"
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
+            case "$name" in
+              MatIQ-*-android.apk | MatIQ-*-ui-screenshots.zip | SHA256SUMS.txt) ;;
+              *) echo "Removing $name"; gh release delete-asset "$TAG" "$name" --yes ;;
+            esac
+          done
