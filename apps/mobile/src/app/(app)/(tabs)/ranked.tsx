@@ -1,7 +1,8 @@
 import { type Discipline, newFighterState, tierFor } from '@matiq/rules-engine';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { type PersonRow, rankedActions, type RatingRow, useRankedAction, useRankedMatches, usePeople, useRatings } from '@/features/ranked/api';
 import { DISCIPLINE_LABELS, DISCIPLINE_OPTIONS, ProgressBar, TierBadge } from '@/features/ranked/components';
@@ -9,7 +10,22 @@ import { describeRanked, type RankedMatchRow, type RankedView } from '@/features
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { readPreference, writePreference } from '@/lib/storage';
-import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, Segmented } from '@/ui/components';
+import {
+  Badge,
+  Body,
+  Button,
+  Caption,
+  Card,
+  EmptyState,
+  ErrorText,
+  ListGroup,
+  ListRow,
+  Loading,
+  Screen,
+  SectionHeader,
+  Segmented,
+  StatTile,
+} from '@/ui/components';
 import { colors, font, spacing } from '@/ui/theme';
 
 const DISCIPLINE_VALUES = DISCIPLINE_OPTIONS.map((option) => option.value);
@@ -54,37 +70,53 @@ export default function RankedScreen() {
     <Screen>
       <Segmented options={DISCIPLINE_OPTIONS} value={discipline} onChange={choose} />
       <Standing discipline={discipline} rating={rating} />
-      <Card>
-        <Button label="Find an opponent" onPress={() => router.push({ pathname: '/ranked/opponents', params: { discipline } })} />
-        <View style={styles.row}>
-          <View style={styles.fill}>
-            <Button label="Leaderboard" variant="secondary" onPress={() => router.push({ pathname: '/ranked/leaderboard', params: { discipline } })} />
-          </View>
-          <View style={styles.fill}>
-            <Button label="Titles" variant="secondary" onPress={() => router.push({ pathname: '/ranked/titles', params: { discipline } })} />
-          </View>
-        </View>
-        <Caption>
-          Ranked results count once both fighters confirm. A loss or draw confirms itself after 72 hours without a dispute; a win
-          you recorded only counts when your opponent confirms it.
-        </Caption>
-      </Card>
+      <Button
+        label="Find an opponent"
+        icon="search"
+        onPress={() => router.push({ pathname: '/ranked/opponents', params: { discipline } })}
+      />
+      <ListGroup>
+        <ListRow
+          icon="podium"
+          title="Leaderboard"
+          subtitle="Global and friends ladders"
+          onPress={() => router.push({ pathname: '/ranked/leaderboard', params: { discipline } })}
+        />
+        <ListRow
+          icon="ribbon"
+          tone="warning"
+          title="Titles"
+          subtitle="Earned from your fight stats"
+          onPress={() => router.push({ pathname: '/ranked/titles', params: { discipline } })}
+        />
+      </ListGroup>
       <ErrorText>{matches.error ? errorMessage(matches.error) : settle.error ? errorMessage(settle.error) : null}</ErrorText>
+
       {needsMe.length > 0 ? (
-        <Card>
-          <Heading>Needs you</Heading>
-          {needsMe.map(({ row, view }) => (
+        <>
+          <SectionHeader title="Needs you" action={<Badge label={String(needsMe.length)} tone="accent" />} />
+          <ListGroup>
+            {needsMe.map(({ row, view }) => (
+              <RankedItem key={row.id} row={row} view={view} person={people.data?.get(view.opponentId)} />
+            ))}
+          </ListGroup>
+        </>
+      ) : null}
+
+      <SectionHeader title="Ranked matches" />
+      {rest.length === 0 ? (
+        <EmptyState icon="trophy-outline" title="No ranked matches yet" body="Challenge a training partner to get your first rating." />
+      ) : (
+        <ListGroup>
+          {rest.map(({ row, view }) => (
             <RankedItem key={row.id} row={row} view={view} person={people.data?.get(view.opponentId)} />
           ))}
-        </Card>
-      ) : null}
-      <Card>
-        <Heading>Ranked matches</Heading>
-        {rest.length === 0 ? <Caption>No other ranked matches yet. Challenge a training partner to get started.</Caption> : null}
-        {rest.map(({ row, view }) => (
-          <RankedItem key={row.id} row={row} view={view} person={people.data?.get(view.opponentId)} />
-        ))}
-      </Card>
+        </ListGroup>
+      )}
+      <Caption>
+        Results count once both fighters confirm. A loss or draw confirms itself after 72 hours without a dispute; a win you
+        recorded only counts when your opponent confirms it.
+      </Caption>
     </Screen>
   );
 }
@@ -95,24 +127,28 @@ function Standing({ discipline, rating }: { discipline: Discipline; rating: Rati
   const games = rating?.games ?? 0;
   const standing = tierFor(current, games);
   return (
-    <Card>
-      <Caption>{DISCIPLINE_LABELS[discipline]} rating</Caption>
+    <Card style={styles.standing}>
       <View style={styles.standingRow}>
-        <Text style={styles.rating}>{current}</Text>
+        <View style={{ gap: 2 }}>
+          <Text style={[font.overline, { color: colors.textMuted, textTransform: 'uppercase' }]}>{DISCIPLINE_LABELS[discipline]} rating</Text>
+          <Text style={styles.rating}>{current}</Text>
+        </View>
         <TierBadge rating={current} games={games} />
       </View>
       {standing.nextAt !== null ? (
-        <>
+        <View style={{ gap: 6 }}>
           <ProgressBar value={standing.progress} />
           <Caption>Next division at {standing.nextAt}</Caption>
-        </>
+        </View>
       ) : (
         <Caption>Top tier reached</Caption>
       )}
       {standing.placement ? <Body muted>{standing.placementRemaining} placement match(es) left: ratings move faster until then.</Body> : null}
-      <Caption>
-        {rating ? `${rating.wins}-${rating.losses}-${rating.draws} · streak ${rating.current_streak} · peak ${rating.peak_rating}` : 'No ranked matches yet'}
-      </Caption>
+      <View style={styles.stats}>
+        <StatTile label="Record" value={rating ? `${rating.wins}-${rating.losses}-${rating.draws}` : '0-0-0'} />
+        <StatTile label="Streak" value={rating?.current_streak ?? 0} tone={rating && rating.current_streak > 0 ? 'success' : undefined} />
+        <StatTile label="Peak" value={rating?.peak_rating ?? current} />
+      </View>
     </Card>
   );
 }
@@ -125,58 +161,86 @@ function RankedItem({ row, view, person }: { row: RankedMatchRow; view: RankedVi
   const busy = respond.isPending || cancel.isPending;
   const error = respond.error ?? cancel.error;
   const open = () => router.push({ pathname: '/ranked/match/[id]', params: { id: row.id } });
+  const opensDetails = !view.canConfirm && ['waiting', 'disputed', 'confirmed', 'analysing'].includes(view.stage);
+  const resultColor =
+    view.stage === 'confirmed' && view.myDelta !== null ? (view.myDelta >= 0 ? colors.success : colors.danger) : colors.textMuted;
+  const hasActions = view.canAccept || view.canRecord || view.canConfirm || view.canCancel;
 
-  return (
-    <View style={styles.item}>
+  const content = (
+    <>
       <View style={styles.itemHeader}>
-        <Avatar path={person?.avatar_path} name={name} size={36} />
+        <Avatar path={person?.avatar_path} name={name} size={40} />
         <View style={styles.fill}>
-          <Text style={font.body} numberOfLines={1}>
-            {name} · {DISCIPLINE_LABELS[row.discipline]}
+          <Text style={styles.itemName} numberOfLines={1}>
+            {name} <Text style={styles.itemDiscipline}>· {DISCIPLINE_LABELS[row.discipline]}</Text>
           </Text>
-          <Text style={[font.caption, view.stage === 'confirmed' && view.myDelta !== null && { color: view.myDelta >= 0 ? colors.success : colors.danger }]}>
-            {view.label}
-          </Text>
+          <Text style={[font.caption, { color: resultColor, fontWeight: view.stage === 'confirmed' ? '700' : '400' }]}>{view.label}</Text>
         </View>
+        {opensDetails ? <Ionicons name="chevron-forward" size={18} color={colors.textFaint} /> : null}
       </View>
-      {row.message && view.stage === 'incoming' ? <Caption>“{row.message}”</Caption> : null}
-      <View style={styles.row}>
-        {view.canAccept ? (
-          <>
+      {row.message && view.stage === 'incoming' ? (
+        <View style={styles.quote}>
+          <Text style={[font.caption, { color: colors.text }]}>“{row.message}”</Text>
+        </View>
+      ) : null}
+      {hasActions ? (
+        <View style={styles.row}>
+          {view.canAccept ? (
+            <>
+              <View style={styles.fill}>
+                <Button label="Accept" size="sm" icon="checkmark" disabled={busy} onPress={() => respond.mutate([row.id, true])} />
+              </View>
+              <View style={styles.fill}>
+                <Button label="Decline" size="sm" variant="secondary" disabled={busy} onPress={() => respond.mutate([row.id, false])} />
+              </View>
+            </>
+          ) : null}
+          {view.canRecord ? (
             <View style={styles.fill}>
-              <Button label="Accept" disabled={busy} onPress={() => respond.mutate([row.id, true])} />
+              <Button label="Record it" size="sm" icon="videocam" onPress={() => router.push({ pathname: '/record', params: { ranked: row.id } })} />
             </View>
+          ) : null}
+          {view.canConfirm ? (
             <View style={styles.fill}>
-              <Button label="Decline" variant="secondary" disabled={busy} onPress={() => respond.mutate([row.id, false])} />
+              <Button label="Review result" size="sm" icon="checkmark-done" onPress={open} />
             </View>
-          </>
-        ) : null}
-        {view.canRecord ? (
-          <View style={styles.fill}>
-            <Button label="Record it" onPress={() => router.push({ pathname: '/record', params: { ranked: row.id } })} />
-          </View>
-        ) : null}
-        {view.canConfirm || view.stage === 'waiting' || view.stage === 'disputed' || view.stage === 'confirmed' || view.stage === 'analysing' ? (
-          <View style={styles.fill}>
-            <Button label={view.canConfirm ? 'Review result' : 'Details'} variant={view.canConfirm ? 'primary' : 'secondary'} onPress={open} />
-          </View>
-        ) : null}
-        {view.canCancel ? (
-          <View style={styles.fill}>
-            <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => cancel.mutate([row.id])} />
-          </View>
-        ) : null}
-      </View>
+          ) : null}
+          {view.canCancel ? (
+            <View style={styles.fill}>
+              <Button label="Cancel" size="sm" variant="secondary" disabled={busy} onPress={() => cancel.mutate([row.id])} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       <ErrorText>{error ? errorMessage(error) : null}</ErrorText>
-    </View>
+    </>
+  );
+
+  // Only rows that open the match are pressable: a disabled wrapper would
+  // also disable the Accept / Record buttons inside it for assistive tech.
+  if (!opensDetails) return <View style={styles.item}>{content}</View>;
+  return (
+    <Pressable
+      onPress={open}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, ${DISCIPLINE_LABELS[row.discipline]}, ${view.label}`}
+      style={({ pressed }) => [styles.item, pressed && { backgroundColor: colors.surfaceRaised }]}
+    >
+      {content}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm },
   fill: { flex: 1 },
+  standing: { gap: 14 },
   standingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rating: { fontSize: 44, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-  item: { gap: spacing.sm, paddingVertical: spacing.xs },
+  rating: { fontSize: 52, lineHeight: 58, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], letterSpacing: -1.5 },
+  stats: { flexDirection: 'row', gap: spacing.sm },
+  item: { gap: spacing.md, paddingHorizontal: 14, paddingVertical: 14 },
   itemHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  itemName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  itemDiscipline: { fontWeight: '500', color: colors.textMuted },
+  quote: { backgroundColor: colors.surfaceRaised, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
 });

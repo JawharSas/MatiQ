@@ -16,7 +16,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { useStoredKeys } from '@/features/api-keys/api';
 import { linkRankedMatch } from '@/features/ranked/api';
@@ -24,7 +24,8 @@ import { type RankedRecording, rankedSetup } from '@/features/ranked/recording';
 import { remainingAnalyses, useMyUsage } from '@/features/usage/useMyUsage';
 import { errorMessage } from '@/lib/errors';
 import { matchSetupSchema } from '@/lib/validation';
-import { Body, Button, Caption, Card, ErrorText, Heading, Segmented } from '@/ui/components';
+import { Body, Button, Caption, Card, ErrorText, Heading, IconTile, Segmented } from '@/ui/components';
+import { font } from '@/ui/theme';
 import { LiveRecorder } from './LiveRecorder';
 import { defaultSetup, MatchSetupForm } from './MatchSetupForm';
 import {
@@ -318,17 +319,24 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
       ) : null}
       <MatchSetupForm value={setup} onChange={setSetup} hasOwnKey={(keys.data?.length ?? 0) > 0} rulesetLocked={ranked !== null} />
       <Card>
-        <Caption>
-          {remaining === 'unlimited'
-            ? 'Unlimited analyses'
-            : remaining === null
-              ? 'Checking your analysis quota…'
-              : `${remaining} of ${usage.data?.monthly_limit ?? 0} analyses left this month`}
-        </Caption>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <IconTile icon="flash" tone={outOfQuota ? 'danger' : 'accent'} />
+          <View style={{ flex: 1 }}>
+            <Text style={font.heading}>
+              {remaining === 'unlimited'
+                ? 'Unlimited analyses'
+                : remaining === null
+                  ? 'Checking your quota…'
+                  : `${remaining} of ${usage.data?.monthly_limit ?? 0} analyses left`}
+            </Text>
+            <Caption>{remaining === 'unlimited' ? 'No monthly limit on this account' : 'Resets at the start of each month'}</Caption>
+          </View>
+        </View>
         {phase.kind === 'failed' ? <ErrorText>{phase.message}</ErrorText> : null}
         {usage.data?.is_suspended ? <ErrorText>This account is suspended.</ErrorText> : null}
         <Button
           label={mode === 'live' ? 'Open camera' : 'Choose a video'}
+          icon={mode === 'live' ? 'videocam' : 'cloud-upload'}
           disabled={outOfQuota || usage.data?.is_suspended === true}
           onPress={() => setPhase({ kind: 'capture' })}
         />

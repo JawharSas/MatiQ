@@ -12,6 +12,15 @@ pre-release channels are named in the release title.
   mark (`npm run brand:assets`).
 - Sign-in welcome with the logo, tagline and highlights; logo in the Feed
   header, on sign-up and on two-factor sign-in.
+- Redesigned throughout: deeper borderless surfaces, a type scale with
+  section labels, softer tinted accents, 52 pt buttons with icons, inputs
+  with a focus ring and a calmer segmented control.
+- Feed posts as fight cards (corner colours, big score, winner trophy,
+  heart likes, highlight pill); Profile with a header, badges and a grouped
+  account menu; Settings as grouped lists with icons; Ranked with a rating
+  hero, stat tiles, compact actions and tappable match rows; Analyze with
+  sport tiles and corner-coloured fighter sections; the match dashboard with
+  a fight-result header and time pills on highlights.
 - Match list with sport icons and coloured status badges.
 - No bright line under headers; switches use the MatIQ colours; the dark
   background now covers the whole window on Android (no white flashes).

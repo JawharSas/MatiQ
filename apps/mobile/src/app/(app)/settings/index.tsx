@@ -2,11 +2,12 @@ import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Share } from 'react-native';
+import { Alert, Share, StyleSheet, Text } from 'react-native';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { fromFunctionError, errorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
-import { Body, Button, Caption, Card, ErrorText, Heading, Screen, TextField } from '@/ui/components';
+import { Button, Caption, Card, ErrorText, Heading, ListGroup, ListRow, Screen, SectionHeader, TextField } from '@/ui/components';
+import { font } from '@/ui/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -60,31 +61,82 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <Card>
-        <Heading>Security</Heading>
-        <Button label="Two-factor authentication" variant="secondary" onPress={() => router.push('/settings/two-factor')} />
-        <Button label="API keys (bring your own key)" variant="secondary" onPress={() => router.push('/settings/api-keys')} />
-        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
-        <Button label="Sign out of all devices" variant="secondary" onPress={() => void signOut({ everywhere: true })} />
-      </Card>
-      <Card>
-        <Heading>Privacy & legal</Heading>
-        <Body muted>Your data, profile and videos are never sold or shared with data brokers.</Body>
-        <Button label="Privacy Policy" variant="secondary" onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })} />
-        <Button label="Terms of Service" variant="secondary" onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })} />
-        <Button label="Export my data" variant="secondary" onPress={() => void exportData()} loading={exporting} />
-      </Card>
+      <SectionHeader title="Security" />
+      <ListGroup>
+        <ListRow
+          icon="shield-checkmark"
+          title="Two-factor authentication"
+          subtitle="Require a code from your authenticator app"
+          onPress={() => router.push('/settings/two-factor')}
+        />
+        <ListRow
+          icon="key"
+          title="API keys"
+          subtitle="Use your own AI provider key"
+          onPress={() => router.push('/settings/api-keys')}
+        />
+      </ListGroup>
+
+      <SectionHeader title="Privacy and data" />
+      <ListGroup>
+        <ListRow
+          icon="document-text"
+          tone="blue"
+          title="Privacy Policy"
+          onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'privacy' } })}
+        />
+        <ListRow
+          icon="reader"
+          tone="blue"
+          title="Terms of Service"
+          onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}
+        />
+        <ListRow
+          icon="download"
+          tone="blue"
+          title="Export my data"
+          subtitle="A copy of everything MatIQ stores about you"
+          value={exporting ? 'Preparing…' : undefined}
+          onPress={exporting ? undefined : () => void exportData()}
+        />
+      </ListGroup>
+      <Caption>Your data, profile and videos are never sold or shared with data brokers.</Caption>
+
+      <SectionHeader title="Session" />
+      <ListGroup>
+        <ListRow icon="log-out" tone="neutral" title="Sign out" onPress={() => void signOut()} />
+        <ListRow
+          icon="phone-portrait"
+          tone="neutral"
+          title="Sign out of all devices"
+          onPress={() => void signOut({ everywhere: true })}
+        />
+      </ListGroup>
+
+      <ErrorText>{error}</ErrorText>
+
+      <SectionHeader title="Danger zone" />
       <Card>
         <Heading>Delete account</Heading>
-        <Caption>Type DELETE MY ACCOUNT to enable deletion.</Caption>
+        <Caption>Permanently removes your profile, matches, videos and posts. Type DELETE MY ACCOUNT to continue.</Caption>
         <TextField label="Confirmation" value={confirmText} onChangeText={setConfirmText} autoCapitalize="characters" />
-        <Button label="Delete my account" variant="danger" disabled={confirmText !== 'DELETE MY ACCOUNT'} loading={deleting} onPress={deleteAccount} />
+        <Button
+          label="Delete my account"
+          variant="danger"
+          icon="trash"
+          disabled={confirmText !== 'DELETE MY ACCOUNT'}
+          loading={deleting}
+          onPress={deleteAccount}
+        />
       </Card>
-      <Caption>
+      <Text style={styles.version}>
         MatIQ {Constants.expoConfig?.version ?? ''}
         {typeof Constants.expoConfig?.extra?.releaseLabel === 'string' ? ` · ${Constants.expoConfig.extra.releaseLabel}` : ''}
-      </Caption>
-      <ErrorText>{error}</ErrorText>
+      </Text>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  version: { ...font.caption, textAlign: 'center', color: font.overline.color },
+});

@@ -3,7 +3,8 @@ import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useRef, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Body, Caption, Card, Heading, Segmented } from '@/ui/components';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Badge, Body, Caption, Card, Heading, Segmented } from '@/ui/components';
 import { athleteColor, colors, font, radius, spacing } from '@/ui/theme';
 import { highlightText, withNames } from './labels';
 import { statRows } from './stat-rows';
@@ -123,26 +124,32 @@ type Names = { A: string; B: string };
 function ScoreHeader({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
   const { result, totals } = scorecard;
   const winner = result.winner ? names[result.winner] : null;
+  const method = `${METHOD_LABELS[result.method] ?? result.method}${result.at !== undefined ? ` · ${formatClock(result.at)}` : ''}`;
   return (
-    <Card>
-      <Caption>{METHOD_LABELS[result.method] ?? result.method}{result.at !== undefined ? ` · ${formatClock(result.at)}` : ''}</Caption>
-      <Text style={font.title}>{winner ? `${winner} wins` : 'Draw'}</Text>
+    <Card style={styles.scoreCard}>
+      <Badge label={method} tone={winner ? 'accent' : 'neutral'} icon={result.method === 'submission' ? 'flash' : 'stopwatch-outline'} />
+      <View style={styles.resultRow}>
+        {winner ? <Ionicons name="trophy" size={22} color={colors.warning} /> : null}
+        <Text style={font.title}>{winner ? `${winner} wins` : 'Draw'}</Text>
+      </View>
       <View style={styles.scoreRow}>
-        {(['A', 'B'] as const).map((athlete) => (
-          <View key={athlete} style={styles.scoreCell}>
-            <Text style={[styles.athleteName, { color: athleteColor(athlete) }]} numberOfLines={1}>
-              {names[athlete]}
-            </Text>
-            <Text style={styles.points}>{totals[athlete].points}</Text>
-            {scorecard.discipline === 'bjj' ? (
-              <Caption>
-                Adv {totals[athlete].advantages} · Pen {totals[athlete].penalties}
-              </Caption>
-            ) : (
-              <Caption>Penalties {totals[athlete].penalties}</Caption>
-            )}
-          </View>
-        ))}
+        {(['A', 'B'] as const).map((athlete, index) => {
+          const lost = result.winner !== null && result.winner !== undefined && result.winner !== athlete;
+          return (
+            <View key={athlete} style={[styles.scoreCell, index === 1 && { alignItems: 'flex-end' }]}>
+              <View style={[styles.cornerBar, { backgroundColor: athleteColor(athlete) }, lost && { opacity: 0.35 }]} />
+              <Text style={[styles.athleteName, lost && { color: colors.textMuted }]} numberOfLines={1}>
+                {names[athlete]}
+              </Text>
+              <Text style={[styles.points, { color: lost ? colors.textMuted : athleteColor(athlete) }]}>{totals[athlete].points}</Text>
+              <Text style={font.caption}>
+                {scorecard.discipline === 'bjj'
+                  ? `Adv ${totals[athlete].advantages} · Pen ${totals[athlete].penalties}`
+                  : `Penalties ${totals[athlete].penalties}`}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </Card>
   );
@@ -231,14 +238,16 @@ function HighlightList({ highlights, names, onPlay }: { highlights: Highlight[];
           onPress={() => onPlay?.(highlight)}
           accessibilityRole={onPlay ? 'button' : 'text'}
           accessibilityHint={onPlay ? 'Plays this moment' : undefined}
-          style={styles.listRow}
+          style={({ pressed }) => [styles.listRow, pressed && { opacity: 0.7 }]}
         >
-          <Text style={font.mono}>{formatClock(highlight.t)}</Text>
+          <View style={styles.timePill}>
+            <Text style={styles.timePillText}>{formatClock(highlight.t)}</Text>
+          </View>
           <Text style={[font.body, styles.fill]}>
-            {highlight.athlete ? <Text style={{ color: athleteColor(highlight.athlete) }}>{names[highlight.athlete]} </Text> : null}
+            {highlight.athlete ? <Text style={{ color: athleteColor(highlight.athlete), fontWeight: '700' }}>{names[highlight.athlete]} </Text> : null}
             {highlightText(highlight.label, highlight.athlete, names)}
           </Text>
-          {onPlay ? <Text style={styles.play}>▶</Text> : null}
+          {onPlay ? <Ionicons name="play-circle" size={24} color={colors.accent} /> : null}
         </Pressable>
       ))}
     </Card>
@@ -370,16 +379,21 @@ const styles = StyleSheet.create({
   stack: { gap: spacing.lg },
   fill: { flex: 1 },
   video: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.lg, backgroundColor: '#000' },
-  scoreRow: { flexDirection: 'row', gap: spacing.lg },
-  scoreCell: { flex: 1, gap: spacing.xs },
-  athleteName: { fontSize: 15, fontWeight: '700' },
-  points: { fontSize: 44, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  scoreCard: { gap: 14 },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  scoreRow: { flexDirection: 'row', gap: spacing.lg, backgroundColor: colors.surfaceRaised, borderRadius: 16, padding: 14 },
+  scoreCell: { flex: 1, gap: 4 },
+  cornerBar: { width: 28, height: 4, borderRadius: 2 },
+  athleteName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  points: { fontSize: 48, lineHeight: 54, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], letterSpacing: -1 },
   timeline: { height: 28, borderRadius: radius.sm, backgroundColor: colors.surfaceRaised, overflow: 'hidden' },
   phase: { position: 'absolute', top: 6, bottom: 6, opacity: 0.85 },
   marker: { position: 'absolute', top: 0, bottom: 0, width: 3, marginLeft: -1, backgroundColor: colors.accent },
   timelineLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   legend: { gap: 2 },
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 36 },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 },
+  timePill: { backgroundColor: colors.surfaceRaised, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, minWidth: 52, alignItems: 'center' },
+  timePillText: { ...font.mono, color: colors.text, fontWeight: '700' },
   statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   statRow: { gap: spacing.xs },
   statValues: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -389,7 +403,6 @@ const styles = StyleSheet.create({
   barA: { backgroundColor: colors.athleteA },
   barB: { backgroundColor: colors.athleteB },
   roundRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
-  play: { color: colors.accent, fontSize: 14 },
   section: { gap: spacing.sm, marginTop: spacing.sm },
   breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   breakdownMiddle: { flex: 1, gap: 4, alignItems: 'center' },

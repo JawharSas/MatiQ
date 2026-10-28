@@ -1,7 +1,8 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatClock } from '@matiq/rules-engine';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Caption, Card } from '@/ui/components';
+import { Badge, Card } from '@/ui/components';
 import { athleteColor, colors, font, spacing } from '@/ui/theme';
 import { type FeedItem, useToggleLike } from './api';
 import { Avatar } from './Avatar';
@@ -17,101 +18,149 @@ function timeAgo(iso: string): string {
   return `${Math.round(hours / 24)}d`;
 }
 
+function methodLabel(method: string): string {
+  const words = method.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function PostCard({ post }: { post: FeedItem }) {
   const like = useToggleLike();
-  const names = { A: post.athlete_a_label ?? 'A', B: post.athlete_b_label ?? 'B' };
-  const winner = post.result?.winner ? names[post.result.winner] : null;
+  const names = { A: post.athlete_a_label ?? 'Fighter 1', B: post.athlete_b_label ?? 'Fighter 2' };
+  const winner = post.result?.winner ?? null;
 
   return (
     <Card>
-      <View style={styles.header}>
-        <Link href={{ pathname: '/user/[id]', params: { id: post.author_id } }} asChild>
-          <Pressable accessibilityRole="link" style={styles.author}>
-            <Avatar path={post.avatar_path} name={post.display_name} />
-            <View>
-              <Text style={font.heading}>{post.display_name}</Text>
-              <Caption>
-                @{post.username} · {timeAgo(post.created_at)}
-                {post.friends_only ? ' · Friends' : ''}
-              </Caption>
-            </View>
-          </Pressable>
-        </Link>
-      </View>
+      <Link href={{ pathname: '/user/[id]', params: { id: post.author_id } }} asChild>
+        <Pressable accessibilityRole="link" style={styles.author}>
+          <Avatar path={post.avatar_path} name={post.display_name} size={44} />
+          <View style={styles.fill}>
+            <Text style={styles.name}>{post.display_name}</Text>
+            <Text style={font.caption}>
+              @{post.username} · {timeAgo(post.created_at)}
+            </Text>
+          </View>
+          {post.friends_only ? <Badge label="Friends" icon="people" /> : null}
+        </Pressable>
+      </Link>
 
       {/* User text is rendered as plain text - never as HTML or markdown. */}
-      {post.body ? <Text style={font.body}>{post.body}</Text> : null}
+      {post.body ? <Text style={styles.body}>{post.body}</Text> : null}
 
       {post.match_id && post.result && post.totals ? (
         <Link href={{ pathname: '/match/[id]', params: { id: post.match_id } }} asChild>
-          <Pressable accessibilityRole="link" style={styles.scorecard}>
-            <Caption>
-              {post.discipline ? DISCIPLINE_LABELS[post.discipline] : ''} {post.match_title ? `· ${post.match_title}` : ''}
-            </Caption>
-            <View style={styles.scoreRow}>
-              <Text style={[styles.score, { color: athleteColor('A') }]}>
-                {names.A} {post.totals.A.points}
-              </Text>
-              <Text style={font.caption}>vs</Text>
-              <Text style={[styles.score, { color: athleteColor('B') }]}>
-                {post.totals.B.points} {names.B}
-              </Text>
+          <Pressable accessibilityRole="link" style={({ pressed }) => [styles.fightCard, pressed && { opacity: 0.85 }]}>
+            <View style={styles.fightMeta}>
+              {post.discipline ? <Badge label={DISCIPLINE_LABELS[post.discipline]} tone="accent" /> : null}
+              {post.match_title ? (
+                <Text style={[font.caption, styles.fill]} numberOfLines={1}>
+                  {post.match_title}
+                </Text>
+              ) : (
+                <View style={styles.fill} />
+              )}
+              <Text style={styles.method}>{winner ? methodLabel(post.result.method) : 'Draw'}</Text>
             </View>
-            <Caption>
-              {winner ? `${winner} won` : 'Draw'} · {post.result.method.replace(/_/g, ' ')}
-              {post.highlight_start_ms !== null ? ` · highlight at ${formatClock(post.highlight_start_ms)}` : ''}
-            </Caption>
+            <View style={styles.fighters}>
+              <Fighter name={names.A} corner="A" won={winner === 'A'} lost={winner === 'B'} />
+              <View style={styles.scores}>
+                <Text style={[styles.score, { color: winner === 'B' ? colors.textMuted : athleteColor('A') }]}>
+                  {post.totals.A.points}
+                </Text>
+                <Text style={styles.scoreDivider}>:</Text>
+                <Text style={[styles.score, { color: winner === 'A' ? colors.textMuted : athleteColor('B') }]}>
+                  {post.totals.B.points}
+                </Text>
+              </View>
+              <Fighter name={names.B} corner="B" won={winner === 'B'} lost={winner === 'A'} />
+            </View>
           </Pressable>
         </Link>
       ) : null}
 
-      {post.match_id && post.has_video && post.highlight_start_ms !== null ? (
-        <Link
-          href={{
-            pathname: '/match/[id]',
-            params: {
-              id: post.match_id,
-              t: String(post.highlight_start_ms),
-              ...(post.highlight_end_ms !== null ? { end: String(post.highlight_end_ms) } : {}),
-            },
-          }}
-          asChild
+      <View style={styles.actions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: post.liked_by_me }}
+          accessibilityLabel={post.liked_by_me ? 'Unlike' : 'Like'}
+          onPress={() => like.mutate({ postId: post.post_id, liked: post.liked_by_me })}
+          style={styles.like}
+          hitSlop={8}
         >
-          <Pressable accessibilityRole="link" accessibilityLabel="Play highlight" style={styles.playHighlight}>
-            <Text style={styles.playHighlightText}>▶ Play highlight</Text>
-          </Pressable>
-        </Link>
-      ) : null}
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ selected: post.liked_by_me }}
-        accessibilityLabel={post.liked_by_me ? 'Unlike' : 'Like'}
-        onPress={() => like.mutate({ postId: post.post_id, liked: post.liked_by_me })}
-        style={styles.like}
-      >
-        <Text style={{ color: post.liked_by_me ? colors.accent : colors.textMuted, fontWeight: '600' }}>
-          {post.liked_by_me ? '♥' : '♡'} {post.like_count}
-        </Text>
-      </Pressable>
+          <Ionicons name={post.liked_by_me ? 'heart' : 'heart-outline'} size={22} color={post.liked_by_me ? colors.accent : colors.textMuted} />
+          <Text style={[styles.likeCount, post.liked_by_me && { color: colors.accent }]}>{post.like_count}</Text>
+        </Pressable>
+        {post.match_id && post.has_video && post.highlight_start_ms !== null ? (
+          <Link
+            href={{
+              pathname: '/match/[id]',
+              params: {
+                id: post.match_id,
+                t: String(post.highlight_start_ms),
+                ...(post.highlight_end_ms !== null ? { end: String(post.highlight_end_ms) } : {}),
+              },
+            }}
+            asChild
+          >
+            <Pressable accessibilityRole="link" accessibilityLabel="Play highlight" style={styles.playHighlight}>
+              <Ionicons name="play" size={14} color={colors.accent} />
+              <Text style={styles.playHighlightText}>Highlight · {formatClock(post.highlight_start_ms)}</Text>
+            </Pressable>
+          </Link>
+        ) : null}
+      </View>
     </Card>
   );
 }
 
+function Fighter({ name, corner, won, lost }: { name: string; corner: 'A' | 'B'; won: boolean; lost: boolean }) {
+  const alignRight = corner === 'B';
+  return (
+    <View style={[styles.fighter, alignRight && { alignItems: 'flex-end' }]}>
+      <View style={[styles.cornerBar, { backgroundColor: athleteColor(corner) }, lost && { opacity: 0.35 }]} />
+      <Text style={[styles.fighterName, lost && { color: colors.textMuted }]} numberOfLines={1}>
+        {name}
+      </Text>
+      {won ? (
+        <View style={styles.won}>
+          <Ionicons name="trophy" size={12} color={colors.warning} />
+          <Text style={styles.wonText}>WIN</Text>
+        </View>
+      ) : (
+        <Text style={styles.wonPlaceholder}> </Text>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between' },
+  fill: { flex: 1 },
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  scorecard: { backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: spacing.md, gap: spacing.xs },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  score: { fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  like: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
+  name: { fontSize: 15, fontWeight: '700', color: colors.text },
+  body: { ...font.body, fontSize: 15.5, lineHeight: 23 },
+  fightCard: { backgroundColor: colors.surfaceRaised, borderRadius: 16, padding: 14, gap: 12 },
+  fightMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  method: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  fighters: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  fighter: { flex: 1, gap: 4 },
+  cornerBar: { width: 28, height: 4, borderRadius: 2 },
+  fighterName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  won: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  wonText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.warning },
+  wonPlaceholder: { fontSize: 11 },
+  scores: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  score: { fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
+  scoreDivider: { fontSize: 22, fontWeight: '700', color: colors.textFaint },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  like: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs },
+  likeCount: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
   playHighlight: {
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.accentSoft,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
   },
-  playHighlightText: { color: colors.accent, fontWeight: '700' },
+  playHighlightText: { color: colors.accent, fontWeight: '700', fontSize: 13 },
 });
