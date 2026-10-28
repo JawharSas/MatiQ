@@ -1,9 +1,12 @@
 import { formatClock, type Highlight, type Phase, type Scorecard } from '@matiq/rules-engine';
+import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Body, Caption, Card, Heading } from '@/ui/components';
+import { useRef, useState } from 'react';
+import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Body, Caption, Card, Heading, Segmented } from '@/ui/components';
 import { athleteColor, colors, font, radius, spacing } from '@/ui/theme';
 import { statRows } from './stat-rows';
+import { type AthleteFilter, type BreakdownSection, type Clip, filterByAthlete, techniqueBreakdown } from './technique-breakdown';
 import type { MatchDetail } from './useMatch';
 
 const METHOD_LABELS: Record<string, string> = {
@@ -20,35 +23,78 @@ const METHOD_LABELS: Record<string, string> = {
   draw: 'Draw',
 };
 
-export function MatchDashboard({ match, videoUrl }: { match: MatchDetail; videoUrl: string | null | undefined }) {
+interface MatchDashboardProps {
+  match: MatchDetail;
+  videoUrl: string | null | undefined;
+  /** Highlight to play once the video is ready (e.g. opened from a feed post). */
+  initialClip?: Clip | null;
+}
+
+export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardProps) {
   const scorecard = match.analysis?.scorecard;
+  const [filter, setFilter] = useState<AthleteFilter>('both');
+  const [clip, setClip] = useState<Clip | null>(null);
+  // Played once, when the player first becomes ready.
+  const pendingClip = useRef(initialClip ?? null);
   const player = useVideoPlayer(videoUrl ?? null, (instance) => {
     instance.loop = false;
+    instance.timeUpdateEventInterval = 0.25;
   });
+
+  const playClip = (next: Clip | null, from: number) => {
+    if (!videoUrl) return;
+    setClip(next);
+    player.currentTime = from / 1000;
+    player.play();
+  };
+
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status !== 'readyToPlay' || !pendingClip.current) return;
+    const first = pendingClip.current;
+    pendingClip.current = null;
+    playClip(first, first.start);
+  });
+  useEventListener(player, 'timeUpdate', ({ currentTime }) => {
+    if (clip && currentTime * 1000 >= clip.end) {
+      player.pause();
+      setClip(null);
+    }
+  });
+
   if (!scorecard) return null;
 
   const names = { A: match.athlete_a_label, B: match.athlete_b_label };
-  const seek = (ms: number) => {
-    if (!videoUrl) return;
-    player.currentTime = ms / 1000;
-    player.play();
-  };
+  const seek = videoUrl ? (ms: number) => playClip(null, ms) : undefined;
+  const playHighlight = videoUrl ? (highlight: Highlight) => playClip({ start: highlight.start, end: highlight.end }, highlight.start) : undefined;
+  const highlights = filterByAthlete(scorecard.highlights, filter);
+  const filterOptions = [
+    { value: 'both', label: 'Both' },
+    { value: 'A', label: names.A },
+    { value: 'B', label: names.B },
+  ] as const;
 
   return (
     <View style={styles.stack}>
       {videoUrl ? <VideoView player={player} style={styles.video} contentFit="contain" nativeControls /> : null}
+      {clip ? (
+        <Caption>
+          Playing highlight {formatClock(clip.start)}–{formatClock(clip.end)}
+        </Caption>
+      ) : null}
       <ScoreHeader scorecard={scorecard} names={names} />
-      <PhaseTimeline phases={scorecard.phases} highlights={scorecard.highlights} durationMs={scorecard.durationMs} onSeek={seek} />
-      <HighlightList highlights={scorecard.highlights} names={names} onSeek={videoUrl ? seek : undefined} />
+      <Segmented options={filterOptions} value={filter} onChange={setFilter} />
+      <PhaseTimeline phases={scorecard.phases} highlights={highlights} durationMs={scorecard.durationMs} onSeek={seek} onPlay={playHighlight} />
+      <HighlightList highlights={highlights} names={names} onPlay={playHighlight} />
       {scorecard.rounds ? <RoundsTable scorecard={scorecard} names={names} /> : null}
       <StatsPanel scorecard={scorecard} names={names} />
+      <TechniqueBreakdown sections={techniqueBreakdown(scorecard)} names={names} filter={filter} />
       {match.analysis?.coaching_summary ? (
         <Card>
           <Heading>Coach's notes</Heading>
           <Body>{match.analysis.coaching_summary}</Body>
         </Card>
       ) : null}
-      <ScoreLog scorecard={scorecard} names={names} onSeek={videoUrl ? seek : undefined} />
+      <ScoreLog scorecard={scorecard} names={names} filter={filter} onSeek={seek} />
       {scorecard.warnings.length > 0 ? (
         <Card>
           <Heading>About this analysis</Heading>
@@ -99,20 +145,33 @@ function PhaseTimeline({
   highlights,
   durationMs,
   onSeek,
+  onPlay,
 }: {
   phases: Phase[];
   highlights: Highlight[];
   durationMs: number;
-  onSeek: (ms: number) => void;
+  onSeek?: (ms: number) => void;
+  onPlay?: (highlight: Highlight) => void;
 }) {
+  const [width, setWidth] = useState(0);
   if (durationMs <= 0) return null;
+  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
   return (
     <Card>
       <Heading>Timeline</Heading>
-      <View style={styles.timeline} accessibilityLabel="Match phases timeline">
+      <Pressable
+        onLayout={onLayout}
+        disabled={!onSeek || width === 0}
+        // Phases ignore touches, so locationX is relative to the bar itself.
+        onPress={(event) => onSeek?.(Math.round((Math.min(Math.max(event.nativeEvent.locationX, 0), width) / width) * durationMs))}
+        accessibilityLabel="Match phases timeline"
+        accessibilityHint={onSeek ? 'Tap to jump to that moment in the video' : undefined}
+        style={styles.timeline}
+      >
         {phases.map((phase) => (
           <View
             key={`${phase.start}-${phase.kind}`}
+            pointerEvents="none"
             style={[
               styles.phase,
               {
@@ -128,12 +187,13 @@ function PhaseTimeline({
             key={`marker-${highlight.t}`}
             accessibilityRole="button"
             accessibilityLabel={`${highlight.label} at ${formatClock(highlight.t)}`}
-            onPress={() => onSeek(highlight.start)}
+            disabled={!onPlay}
+            onPress={() => onPlay?.(highlight)}
             hitSlop={12}
             style={[styles.marker, { left: `${(highlight.t / durationMs) * 100}%` }]}
           />
         ))}
-      </View>
+      </Pressable>
       <View style={styles.timelineLabels}>
         <Caption>0:00</Caption>
         <Caption>{formatClock(durationMs)}</Caption>
@@ -149,7 +209,7 @@ function PhaseTimeline({
   );
 }
 
-function HighlightList({ highlights, names, onSeek }: { highlights: Highlight[]; names: Names; onSeek?: (ms: number) => void }) {
+function HighlightList({ highlights, names, onPlay }: { highlights: Highlight[]; names: Names; onPlay?: (highlight: Highlight) => void }) {
   if (highlights.length === 0) return null;
   return (
     <Card>
@@ -157,9 +217,10 @@ function HighlightList({ highlights, names, onSeek }: { highlights: Highlight[];
       {highlights.map((highlight) => (
         <Pressable
           key={`highlight-${highlight.t}`}
-          disabled={!onSeek}
-          onPress={() => onSeek?.(highlight.start)}
-          accessibilityRole={onSeek ? 'button' : 'text'}
+          disabled={!onPlay}
+          onPress={() => onPlay?.(highlight)}
+          accessibilityRole={onPlay ? 'button' : 'text'}
+          accessibilityHint={onPlay ? 'Plays this moment' : undefined}
           style={styles.listRow}
         >
           <Text style={font.mono}>{formatClock(highlight.t)}</Text>
@@ -167,8 +228,49 @@ function HighlightList({ highlights, names, onSeek }: { highlights: Highlight[];
             {highlight.athlete ? <Text style={{ color: athleteColor(highlight.athlete) }}>{names[highlight.athlete]} </Text> : null}
             {highlight.label}
           </Text>
+          {onPlay ? <Text style={styles.play}>▶</Text> : null}
         </Pressable>
       ))}
+    </Card>
+  );
+}
+
+const formatValue = (unit: BreakdownSection['unit'], value: number) => (unit === 'ms' ? formatClock(value) : String(value));
+
+function TechniqueBreakdown({ sections, names, filter }: { sections: BreakdownSection[]; names: Names; filter: AthleteFilter }) {
+  if (sections.length === 0) return null;
+  return (
+    <Card>
+      <View style={styles.statHeader}>
+        <Text style={[font.caption, { color: colors.athleteA }]}>{names.A}</Text>
+        <Heading>Technique breakdown</Heading>
+        <Text style={[font.caption, { color: colors.athleteB }]}>{names.B}</Text>
+      </View>
+      {sections.map((section) => {
+        const max = Math.max(1, ...section.items.map((item) => Math.max(item.a, item.b)));
+        return (
+          <View key={section.title} style={styles.section}>
+            <Text style={font.caption}>{section.title.toUpperCase()}</Text>
+            {section.items.map((item) => (
+              <View key={item.label} style={styles.breakdownRow} accessibilityLabel={`${item.label}: ${names.A} ${formatValue(section.unit, item.a)}, ${names.B} ${formatValue(section.unit, item.b)}`}>
+                <Text style={[font.body, styles.statA, filter === 'B' && styles.dimmed]}>{formatValue(section.unit, item.a)}</Text>
+                <View style={styles.breakdownMiddle}>
+                  <Caption>{item.label}</Caption>
+                  <View style={styles.breakdownBars}>
+                    <View style={styles.halfBarA}>
+                      <View style={[styles.barA, styles.halfFill, { width: `${(item.a / max) * 100}%` }, filter === 'B' && styles.dimmed]} />
+                    </View>
+                    <View style={styles.halfBarB}>
+                      <View style={[styles.barB, styles.halfFill, { width: `${(item.b / max) * 100}%` }, filter === 'A' && styles.dimmed]} />
+                    </View>
+                  </View>
+                </View>
+                <Text style={[font.body, styles.statB, filter === 'A' && styles.dimmed]}>{formatValue(section.unit, item.b)}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
     </Card>
   );
 }
@@ -218,8 +320,21 @@ function RoundsTable({ scorecard, names }: { scorecard: Scorecard; names: Names 
   );
 }
 
-function ScoreLog({ scorecard, names, onSeek }: { scorecard: Scorecard; names: Names; onSeek?: (ms: number) => void }) {
-  const lines = scorecard.scoreLog.filter((line) => scorecard.discipline !== 'mma' || line.penalties > 0);
+function ScoreLog({
+  scorecard,
+  names,
+  filter,
+  onSeek,
+}: {
+  scorecard: Scorecard;
+  names: Names;
+  filter: AthleteFilter;
+  onSeek?: (ms: number) => void;
+}) {
+  const lines = filterByAthlete(
+    scorecard.scoreLog.filter((line) => scorecard.discipline !== 'mma' || line.penalties > 0),
+    filter,
+  );
   if (lines.length === 0) return null;
   return (
     <Card>
@@ -228,6 +343,7 @@ function ScoreLog({ scorecard, names, onSeek }: { scorecard: Scorecard; names: N
         <Pressable
           key={`${line.t}-${index}`}
           disabled={!onSeek}
+          // Start a few seconds early so the setup is visible.
           onPress={() => onSeek?.(Math.max(0, line.t - 5000))}
           style={styles.listRow}
         >
@@ -263,4 +379,13 @@ const styles = StyleSheet.create({
   barA: { backgroundColor: colors.athleteA },
   barB: { backgroundColor: colors.athleteB },
   roundRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
+  play: { color: colors.accent, fontSize: 14 },
+  section: { gap: spacing.sm, marginTop: spacing.sm },
+  breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  breakdownMiddle: { flex: 1, gap: 4, alignItems: 'center' },
+  breakdownBars: { flexDirection: 'row', width: '100%', height: 6, gap: 2 },
+  halfBarA: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' },
+  halfBarB: { flex: 1, flexDirection: 'row' },
+  halfFill: { height: 6, borderRadius: 3 },
+  dimmed: { opacity: 0.3 },
 });

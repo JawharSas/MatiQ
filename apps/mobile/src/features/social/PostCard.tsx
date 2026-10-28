@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Caption, Card } from '@/ui/components';
 import { athleteColor, colors, font, spacing } from '@/ui/theme';
 import { type FeedItem, useToggleLike } from './api';
+import { Avatar } from './Avatar';
 
 const DISCIPLINE_LABELS = { bjj: 'BJJ', wrestling: 'Wrestling', mma: 'MMA' } as const;
 
@@ -25,12 +26,15 @@ export function PostCard({ post }: { post: FeedItem }) {
     <Card>
       <View style={styles.header}>
         <Link href={{ pathname: '/user/[id]', params: { id: post.author_id } }} asChild>
-          <Pressable accessibilityRole="link">
-            <Text style={font.heading}>{post.display_name}</Text>
-            <Caption>
-              @{post.username} · {timeAgo(post.created_at)}
-              {post.friends_only ? ' · Friends' : ''}
-            </Caption>
+          <Pressable accessibilityRole="link" style={styles.author}>
+            <Avatar path={post.avatar_path} name={post.display_name} />
+            <View>
+              <Text style={font.heading}>{post.display_name}</Text>
+              <Caption>
+                @{post.username} · {timeAgo(post.created_at)}
+                {post.friends_only ? ' · Friends' : ''}
+              </Caption>
+            </View>
           </Pressable>
         </Link>
       </View>
@@ -61,6 +65,24 @@ export function PostCard({ post }: { post: FeedItem }) {
         </Link>
       ) : null}
 
+      {post.match_id && post.has_video && post.highlight_start_ms !== null ? (
+        <Link
+          href={{
+            pathname: '/match/[id]',
+            params: {
+              id: post.match_id,
+              t: String(post.highlight_start_ms),
+              ...(post.highlight_end_ms !== null ? { end: String(post.highlight_end_ms) } : {}),
+            },
+          }}
+          asChild
+        >
+          <Pressable accessibilityRole="link" accessibilityLabel="Play highlight" style={styles.playHighlight}>
+            <Text style={styles.playHighlightText}>▶ Play highlight</Text>
+          </Pressable>
+        </Link>
+      ) : null}
+
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ selected: post.liked_by_me }}
@@ -78,8 +100,18 @@ export function PostCard({ post }: { post: FeedItem }) {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between' },
+  author: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   scorecard: { backgroundColor: colors.surfaceRaised, borderRadius: 12, padding: spacing.md, gap: spacing.xs },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   score: { fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   like: { alignSelf: 'flex-start', paddingVertical: spacing.xs },
+  playHighlight: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+  },
+  playHighlightText: { color: colors.accent, fontWeight: '700' },
 });

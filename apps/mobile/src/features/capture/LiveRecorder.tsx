@@ -1,13 +1,15 @@
 import { useIsFocused } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraPermission, useMicrophonePermission } from 'react-native-vision-camera';
+import { errorMessage } from '@/lib/errors';
 import { readPreference, writePreference } from '@/lib/storage';
 import { Body, Button, Card, Segmented } from '@/ui/components';
 import { colors, radius, spacing } from '@/ui/theme';
-import type { FpsPreference } from './capture-plan';
+import type { CapturePlan, FpsPreference } from './capture-plan';
 import { CaptureHud } from './CaptureHud';
 import type { SampledFrame } from './frame-processor';
+import { type LiveMatchInfo, LiveScoreboard } from './LiveScoreboard';
 import { type LiveCaptureResult, useLiveCapture } from './useLiveCapture';
 
 const FPS_OPTIONS = [
@@ -22,8 +24,10 @@ interface LiveRecorderProps {
   maxFrames: number;
   onFrame: (frame: SampledFrame) => void;
   uploadPressure: () => number;
-  /** Called before recording starts (create the draft match here). */
-  onBeforeStart: () => Promise<void>;
+  /** Called before recording starts with the chosen plan (create the draft / live session here). */
+  onBeforeStart: (plan: CapturePlan) => Promise<void>;
+  /** Set while a live analysis runs, to show the provisional score. */
+  liveMatch?: LiveMatchInfo | null;
   onFinished: (result: LiveCaptureResult) => void;
   onCancel: () => void;
 }
@@ -66,14 +70,17 @@ export function LiveRecorder(props: LiveRecorderProps) {
   });
 
   const begin = async () => {
+    if (!capture.plan) return;
     setError(null);
     try {
-      await props.onBeforeStart();
+      await props.onBeforeStart(capture.plan);
       await capture.start();
-    } catch {
-      setError('Could not start recording. Check your connection and try again.');
+    } catch (caught) {
+      setError(errorMessage(caught));
     }
   };
+
+  const onCameraError = useCallback(() => setError('The camera stopped unexpectedly.'), []);
 
   const choosePreference = (next: FpsPreference) => {
     setFpsPreference(next);
@@ -121,7 +128,7 @@ export function LiveRecorder(props: LiveRecorderProps) {
             constraints={capture.constraints}
             onSessionConfigSelected={capture.onSessionConfigSelected}
             onInterruptionStarted={capture.onInterruptionStarted}
-            onError={() => setError('The camera stopped unexpectedly.')}
+            onError={onCameraError}
             // Low-light boost lengthens exposure by dropping the frame rate.
             enableLowLightBoost={false}
             enableSmoothAutoFocus
@@ -130,6 +137,7 @@ export function LiveRecorder(props: LiveRecorderProps) {
           />
         ) : null}
         <CaptureHud telemetry={capture.telemetry} maxDurationMs={props.maxDurationMs} />
+        {recording && props.liveMatch ? <LiveScoreboard match={props.liveMatch} /> : null}
         <View style={styles.controls}>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable

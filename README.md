@@ -19,14 +19,28 @@ with privacy enforced in the database.
 - **AI analysis**: Claude (structured outputs) detects discipline-specific
   events; the shared rules engine turns them into points, advantages,
   projected round scores, phases and highlights.
+- **Live analysis**: while recording, frames are analysed in batches of 20
+  and a provisional score appears over the camera after the first batch
+  (typically under a minute); at the end only the frames no batch covered
+  are analysed. One quota unit per match.
+- **Post-match dashboard**: video with a tap-to-seek phase timeline,
+  highlight clips that play and stop on their own, head-to-head stats, a
+  technique breakdown (points by technique, BJJ position time and
+  submissions, wrestling shots, MMA strikes by target and position), an
+  athlete filter, coaching notes and a scoring log. Failed analyses can be
+  retried in one tap.
 - **Security first**: Row Level Security on every table, private-by-default
   accounts, encrypted on-device storage (MMKV AES-256 with a Keychain/Keystore
   key), TLS public-key pinning, AES-256-GCM vault for bring-your-own API keys,
-  rate limits, audited owner actions.
+  rate limits, audited owner actions, and optional TOTP two-factor
+  authentication enforced in the database, Storage, Realtime and Edge
+  Functions (not just the app).
 - **Usage limits + Owner Panel**: atomic monthly quotas, an `is_unlimited`
   switch, per-user limits, suspension, usage overview and audit log.
-- **Social**: friend requests, blocks, likes, and a feed that runs under the
-  caller's RLS so it cannot leak private content.
+- **Social**: profile pictures (re-encoded on device, metadata stripped),
+  friend requests, blocks, likes, and a feed of scorecards and playable video
+  highlights that runs under the caller's RLS so it cannot leak private
+  content.
 - **Data rights**: in-app Privacy Policy and Terms (versioned acceptance
   records), data export and account deletion.
 
@@ -115,11 +129,11 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 | Command | What it checks |
 |---|---|
 | `npm test --workspace @matiq/rules-engine` | 27 scoring tests (IBJJF, folkstyle, freestyle, MMA rounds) |
-| `npm test --workspace @matiq/mobile` | capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer |
+| `npm test --workspace @matiq/mobile` | 28 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input |
 | `npm run typecheck` | TypeScript across the workspaces |
-| `supabase test db` | 58 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage |
+| `supabase test db` | 87 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement |
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |
-| `npm run functions:check` / `npm run functions:test` | Deno type check, vault crypto tests |
+| `npm run functions:check` / `npm run functions:test` | Deno type check; 12 tests for vault crypto, live-batch frame selection and the two-factor claim check |
 | `npm run secrets:scan` | gitleaks secret scan |
 
 ## Configuration

@@ -3,6 +3,7 @@ import { Alert, View } from 'react-native';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { useFeed, useFriendAction, useProfile } from '@/features/social/api';
+import { Avatar } from '@/features/social/Avatar';
 import { PostCard } from '@/features/social/PostCard';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Loading, Screen, Title } from '@/ui/components';
@@ -48,10 +49,15 @@ function UserProfile({ id }: { id: string }) {
   return (
     <Screen>
       <Stack.Screen options={{ title: `@${card.username}` }} />
-      <Title>{card.display_name}</Title>
-      <Caption>
-        @{card.username} · {card.friend_count} friends · {card.visibility === 'public' ? 'Public' : 'Private'}
-      </Caption>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+        <Avatar path={card.avatar_path} name={card.display_name} size={72} />
+        <View style={{ flex: 1 }}>
+          <Title>{card.display_name}</Title>
+          <Caption>
+            @{card.username} · {card.friend_count} friends · {card.visibility === 'public' ? 'Public' : 'Private'}
+          </Caption>
+        </View>
+      </View>
       {card.bio ? <Body>{card.bio}</Body> : null}
 
       {id !== me ? (

@@ -32,6 +32,7 @@ export default function AppLayout() {
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/api-keys" options={{ title: 'API keys' }} />
+      <Stack.Screen name="settings/two-factor" options={{ title: 'Two-factor authentication' }} />
       <Stack.Screen name="admin" options={{ title: 'Owner panel' }} />
     </Stack>
   );

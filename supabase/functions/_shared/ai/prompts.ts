@@ -62,7 +62,8 @@ export interface BatchContext {
   variant: string;
   durationMs: number;
   batchIndex: number;
-  batchCount: number;
+  /** Total segments, or null for live analysis where the total is unknown. */
+  batchCount: number | null;
   athleteA?: string;
   athleteB?: string;
 }
@@ -71,8 +72,10 @@ export function batchIntro(context: BatchContext, firstT: number, lastT: number)
   const describe = (label: string, description?: string) =>
     description ? `<athlete id="${label}">${description}</athlete>` : `<athlete id="${label}">no description provided</athlete>`;
   return [
-    `Ruleset variant: ${context.variant}. Recording length: ${context.durationMs} ms.`,
-    `This is segment ${context.batchIndex + 1} of ${context.batchCount}, covering ${firstT}-${lastT} ms.`,
+    `Ruleset variant: ${context.variant}. Planned recording length: up to ${context.durationMs} ms.`,
+    context.batchCount === null
+      ? `This is live segment ${context.batchIndex + 1} of a recording in progress, covering ${firstT}-${lastT} ms.`
+      : `This is segment ${context.batchIndex + 1} of ${context.batchCount}, covering ${firstT}-${lastT} ms.`,
     'Athlete descriptions:',
     describe('A', context.athleteA),
     describe('B', context.athleteB),

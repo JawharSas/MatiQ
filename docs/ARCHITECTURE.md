@@ -15,7 +15,7 @@ flowchart LR
   subgraph Supabase
     AUTH["Auth<br/>PKCE, rotating refresh tokens, TOTP MFA"]
     API["PostgREST<br/>RLS on every table"]
-    RT["Realtime<br/>matches status"]
+    RT["Realtime<br/>match status, live batches"]
     ST[("Storage<br/>private buckets")]
     EF["Edge Functions (Deno)<br/>analyze-match · api-keys · account"]
     DB[("Postgres<br/>public + private schemas")]
@@ -76,7 +76,49 @@ sequenceDiagram
 
 Failure at any step marks the match `failed` with an error code and refunds
 the reservation; reservations abandoned by a crashed worker are refunded
-automatically after 30 minutes.
+automatically (after 30 minutes, or twice the plan's maximum video length
+plus 15 minutes for long live sessions). The owner can retry a failed
+analysis from the match screen; frames are only deleted after a success.
+
+### Live analysis (provisional score while recording)
+
+When the capture plan samples frames during recording, the same
+`analyze-match` function runs incrementally:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App
+  participant EF as analyze-match
+  participant DB as Postgres (RLS)
+  participant AI as Claude
+  App->>EF: live_start {matchId, keySource, hints}
+  EF->>DB: svc_reserve_analysis + svc_start_live_session (status=live)
+  loop every 20 uploaded frames
+    App->>EF: live_batch {batchIndex, frameTs[]}
+    EF->>DB: svc_claim_live_batch (no overlap, frame budget)
+    EF-->>App: 202
+    EF->>AI: frames of this batch
+    EF->>DB: svc_complete_live_batch (events, observations)
+    DB-->>App: Realtime match_live_batches -> rules engine on device -> provisional score
+  end
+  App->>EF: live_finalize
+  EF->>AI: only frames no completed batch covered
+  EF->>EF: merge all events -> rules engine -> scorecard
+  EF->>DB: svc_save_analysis, svc_end_live_session, commit usage
+```
+
+- **One quota unit per match**, reserved at `live_start`; cancel refunds it.
+- **Each frame is analysed at most once.** A batch claim is rejected if its
+  frames overlap a pending or completed batch, if it would exceed the
+  per-match frame budget, or if the client names frames that are not in
+  storage (the server lists the bucket; clients cannot inject paths).
+- **Provisional scoring runs on the device** with the same rules engine
+  package as the server, so the live number and the final scorecard follow
+  identical rules; the final scorecard additionally covers leftover frames
+  and coaching notes.
+- A match abandoned mid-recording stays `live`; deleting it releases the
+  reservation, and the stale-reservation sweep refunds it otherwise.
 
 ### Why the AI only detects events
 
@@ -91,6 +133,20 @@ rulebooks consistently. MatIQ therefore splits the job:
    phases and highlights deterministically.
 3. Raw events are stored next to the scorecard, so matches can be re-scored
    when rules change without paying for another AI call.
+
+## Post-match dashboard
+
+`MatchDashboard.tsx` renders, from the saved scorecard only (no extra AI
+calls): the video, a phase timeline (tap anywhere to seek; markers play
+their highlight clip and pause at its end), highlights, projected rounds,
+head-to-head stats, a technique breakdown (`technique-breakdown.ts`: points
+by technique from the scoring log, BJJ position time and submission
+attempts by technique, wrestling shots and mat work, MMA strikes by target
+and position, grappling), coaching notes and the scoring log. An athlete
+filter narrows highlights and the scoring log and dims the other athlete in
+the breakdown. Feed posts that feature a highlight link to
+`/match/{id}?t=…&end=…`; the range is clamped to the recording and capped at
+60 s (`resolveClip`), and access to the video is decided by storage RLS.
 
 ## Capture and performance (30-60 FPS)
 
@@ -145,10 +201,13 @@ erDiagram
   AUTH_USERS ||--o{ USAGE_LEDGER : consumes
   AUTH_USERS ||--o{ LEGAL_ACCEPTANCES : accepts
   AUTH_USERS ||--o| USER_API_KEYS : "stores (private schema)"
+  MATCHES ||--o{ MATCH_LIVE_BATCHES : "analysed live in"
+  MATCHES ||--o| LIVE_SESSIONS : "has (private schema)"
 ```
 
 `private` schema (not exposed through the API): `user_api_keys`,
-`rate_limits`, `admin_audit_log`, `app_config`, and every helper used by RLS.
+`rate_limits`, `admin_audit_log`, `app_config`, `live_sessions`, and every
+helper used by RLS.
 
 ## Privacy model
 
@@ -170,6 +229,32 @@ only to their owner. Profile cards (username, display name, avatar, bio) are
 visible to signed-in users who are not blocked, so friend requests work for
 private accounts.
 
+Profile pictures are square-cropped, downscaled to 512 px and re-encoded as
+JPEG on the device before upload (`features/social/avatar.ts`); re-encoding
+writes pixels only, so EXIF data such as GPS location never leaves the
+phone. They live in the private `avatars` bucket under `{user}/` and are
+displayed through one-hour signed URLs; each upload gets a new name and the
+previous file is deleted.
+
+## Two-factor authentication
+
+Users can add an authenticator app (TOTP) in Settings. Supabase Auth issues
+an `aal1` session after the password and `aal2` after a verified code. Once
+a user has a verified factor, `aal1` sessions are refused everywhere, so a
+stolen password alone is not enough:
+
+| Surface | Enforcement |
+|---|---|
+| Data API tables, Realtime | `RESTRICTIVE` policy `(select private.mfa_satisfied())` on every user-data table |
+| `SECURITY DEFINER` RPCs | PostgREST pre-request hook `public.check_request_mfa` (set on the `authenticator` role by the migration) |
+| Storage | `RESTRICTIVE` policy on `storage.objects` |
+| Edge Functions | `authenticateRequest` checks the user's verified factors against the token's `aal` claim |
+
+The app's root navigator shows a code screen while the session is `aal1`
+for such a user; it is a convenience on top of the server rules. Owner Panel
+calls can additionally require `aal2` for every owner
+(`private.app_config.owner_requires_mfa`).
+
 The feed (`get_feed`) is `SECURITY INVOKER`: it runs under the caller's RLS,
 so it cannot return anything the caller could not read directly.
 
@@ -188,6 +273,9 @@ so it cannot return anything the caller could not read directly.
 
 ## Known limits and next steps
 
+- **Two-factor recovery:** there are no recovery codes yet. A user who loses
+  their authenticator is recovered by support after out-of-band identity
+  checks (see the security guide).
 - **Long videos:** analysis runs as a background task inside the Edge
   Function, bounded by the platform's wall-clock limit. The defaults
   (240 frames, 20 per request, 3 concurrent) fit typical rounds. For longer

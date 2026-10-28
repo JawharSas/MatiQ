@@ -10,10 +10,13 @@ the repository safely.
 |---|---|---|
 | API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the repo with gitleaks; a bundle check confirms no secrets compile in. | `apps/mobile/src/config/env.ts`, `.github/workflows/ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table; `anon` has no table access; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 58 automated policy tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Reading other users' data | RLS on every table; `anon` has no table access; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 87 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
+| Stolen or phished password | Optional TOTP two-factor authentication. Once enrolled, `aal1` sessions are refused by restrictive RLS policies (tables, Realtime, Storage), a PostgREST pre-request hook (RPCs) and the Edge Function middleware. | `20261024000300_mfa_enforcement.sql`, `_shared/mfa.ts`, `settings/two-factor.tsx` |
+| Location leaks from photos | Profile pictures are re-encoded on the device (pixels only, no EXIF) before upload; private bucket, one-hour signed URLs. | `features/social/avatar.ts` |
+| Live-analysis abuse (re-analysing frames, injecting paths) | Batches are claimed atomically: no overlapping frames, per-match frame budget, unique batch index, frames resolved against the user's own storage folder. One quota unit per match. | `20261024000200_live_analysis.sql`, `analyze-match/pipeline.ts` |
 | Session theft from device | Tokens in AES-256 MMKV; key in Keychain/Keystore (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`); `allowBackup=false`; short JWT expiry with rotating refresh tokens; sign out of all devices. | `lib/storage.ts`, `lib/secure-store.ts`, `app.config.ts` |
 | Man-in-the-middle | HTTPS only (ATS / `usesCleartextTraffic=false`), SPKI pinning with backup pins and optional expiry, PKCE for email links. | `lib/ssl-pinning.ts`, `auth/callback.tsx` |
 | Malicious input (XSS-style spoofing, oversized payloads, prompt injection) | Zod validation client and server, DB CHECK constraints (length, control chars, bidi overrides), body-size limits, plain-text rendering only, athlete hints stripped of markup and fenced as data in prompts, model output re-validated by the rules engine. | `lib/validation.ts`, `_shared/http.ts`, `_shared/ai/prompts.ts` |
@@ -76,7 +79,7 @@ Then in the dashboard, mirror `supabase/config.toml`:
     protection (available on paid plans).
   - JWT expiry 900 s; refresh token rotation on with a 10 s reuse interval.
   - Redirect URL allow-list: only `matiq://auth/callback` (plus your dev URL).
-  - MFA: enable TOTP.
+  - MFA: enable TOTP (enroll + verify).
   - Disable providers and anonymous sign-ins you do not use.
   - Keep the auth rate limits at least as strict as `config.toml`.
 - **Data API**: exposed schemas = `public` only; max rows = 100.
@@ -84,8 +87,15 @@ Then in the dashboard, mirror `supabase/config.toml`:
   to known IPs, enable Point-in-Time Recovery for production.
 - **Storage**: raise the global upload limit to at least 500 MB if you allow
   long videos (bucket limits are set by the migration).
-- **Realtime**: the migration adds `public.matches` to `supabase_realtime`;
-  Realtime applies RLS, so users only receive their own (or shared) rows.
+- **Realtime**: the migrations add `public.matches` and
+  `public.match_live_batches` to `supabase_realtime`; Realtime applies RLS,
+  so users only receive their own (or shared) rows.
+- **Two-factor pre-request hook**: migration `20261024000300` sets
+  `pgrst.db_pre_request = 'public.check_request_mfa'` on the `authenticator`
+  role. Confirm it took effect with
+  `select rolconfig from pg_roles where rolname = 'authenticator';`. If you
+  already use a pre-request function, call `public.check_request_mfa()` from
+  it instead (PostgREST supports only one).
 - Run the **Security Advisor** and **Performance Advisor** after every
   migration and resolve every finding.
 
@@ -111,8 +121,25 @@ Panel call:
 update private.app_config set owner_requires_mfa = true;
 ```
 
-The app's Owner Panel then needs an `aal2` session (verify the TOTP factor
-with `supabase.auth.mfa.challengeAndVerify` before opening it).
+The app's Owner Panel then needs an `aal2` session. Enrol the factor in the
+app under Settings → Two-factor authentication; every later sign-in of that
+account then asks for a code before the app opens.
+
+### Recovering a user who lost their authenticator
+
+There are no self-service recovery codes. After verifying the person's
+identity out of band (e.g. a reply from the account's email address plus
+details only they would know), remove the factor with the Auth admin API from
+a trusted machine, never from the app:
+
+```ts
+// service-role client, run locally
+const { data } = await admin.auth.admin.mfa.listFactors({ userId });
+await admin.auth.admin.mfa.deleteFactor({ userId, id: data.factors[0].id });
+```
+
+Then ask the user to sign in, set up a new authenticator and review their
+sessions (sign out of all devices).
 
 ## 4. Edge Functions
 
@@ -188,7 +215,7 @@ Panel screens, device authentication before opening them.
 
 | Event | Action |
 |---|---|
-| Suspected account takeover | Owner Panel: suspend the account; user signs out of all devices (`signOut({ scope: 'global' })`) and resets password. |
+| Suspected account takeover | Owner Panel: suspend the account; user signs out of all devices (`signOut({ scope: 'global' })`), resets password and turns on two-factor authentication. |
 | AI provider key leaked | Revoke it at the provider, `supabase secrets set ANTHROPIC_API_KEY=<new>`. |
 | KEK exposed | Rotate (section 4) immediately, then ask users to replace their stored keys. |
 | Service-role key exposed | Rotate the project's API keys / JWT secret in the dashboard, redeploy functions. |
@@ -219,6 +246,7 @@ Then in the GitHub repository settings:
 - [ ] `npm test`, `npm run typecheck`, `npm run functions:check`, database tests all green.
 - [ ] Supabase Security Advisor has no findings.
 - [ ] Owner account bootstrapped, MFA enrolled, `owner_requires_mfa = true`.
+- [ ] `authenticator` role has `pgrst.db_pre_request = public.check_request_mfa`; a test account with 2FA gets `mfa_required` from the Data API with an `aal1` token.
 - [ ] Production secrets set; no secrets in EAS `EXPO_PUBLIC_*` variables.
 - [ ] TLS pins configured with a backup pin.
 - [ ] Privacy Policy and Terms reviewed by counsel; `LEGAL_VERSIONS` bumped when they change.

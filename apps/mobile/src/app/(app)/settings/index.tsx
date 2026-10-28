@@ -61,6 +61,7 @@ export default function SettingsScreen() {
     <Screen>
       <Card>
         <Heading>Security</Heading>
+        <Button label="Two-factor authentication" variant="secondary" onPress={() => router.push('/settings/two-factor')} />
         <Button label="API keys (bring your own key)" variant="secondary" onPress={() => router.push('/settings/api-keys')} />
         <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
         <Button label="Sign out of all devices" variant="secondary" onPress={() => void signOut({ everywhere: true })} />

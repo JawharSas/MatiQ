@@ -4,6 +4,10 @@
  * Both modes feed the same pipeline:
  *   draft match -> SampledFrame stream -> FrameUploadQueue (progressive,
  *   bounded) -> optional native video upload -> analyze-match -> dashboard
+ *
+ * Live recordings with live sampling also run live analysis: uploaded frames
+ * are analysed in batches during the round (provisional score on screen) and
+ * finalize only analyses what is left.
  */
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,6 +33,9 @@ import {
   uploadVideo,
 } from './match-session';
 import { FrameUploadQueue } from './upload-queue';
+import type { CapturePlan } from './capture-plan';
+import { cancelLiveAnalysis, finalizeLiveAnalysis, LiveBatcher, startLiveAnalysis } from './live-analysis';
+import type { LiveMatchInfo } from './LiveScoreboard';
 import type { LiveCaptureResult } from './useLiveCapture';
 import { extractFrames } from './video-frame-extractor';
 import { type PickedVideo, VideoUploader } from './VideoUploader';
@@ -57,6 +64,8 @@ export function DualInputHandler() {
   const matchIdRef = useRef<string | null>(null);
   const queueRef = useRef<FrameUploadQueue | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const batcherRef = useRef<LiveBatcher | null>(null);
+  const [liveMatch, setLiveMatch] = useState<LiveMatchInfo | null>(null);
 
   const maxDurationMs = (usage.data?.max_video_seconds ?? 600) * 1000;
   const remaining = remainingAnalyses(usage.data);
@@ -71,10 +80,15 @@ export function DualInputHandler() {
     return { ...setup, ...parsed.data };
   };
 
-  const openSession = async (cleanSetup: MatchSetup, durationMs: number) => {
+  const openSession = async (cleanSetup: MatchSetup, durationMs: number, { live = false } = {}) => {
     const matchId = await createDraftMatch(cleanSetup, mode, durationMs);
     matchIdRef.current = matchId;
-    queueRef.current = new FrameUploadQueue((frame) => uploadFrame(userId, matchId, frame));
+    const batcher = live ? new LiveBatcher(matchId) : null;
+    batcherRef.current = batcher;
+    queueRef.current = new FrameUploadQueue(async (frame) => {
+      await uploadFrame(userId, matchId, frame);
+      batcher?.onUploaded(frame.t);
+    });
     return matchId;
   };
 
@@ -84,7 +98,13 @@ export function DualInputHandler() {
     if (stats.uploaded < MIN_FRAMES) throw new Error('Not enough frames were uploaded.');
 
     setPhase({ kind: 'processing', step: 'Starting analysis' });
-    await requestAnalysis(matchId, cleanSetup);
+    if (batcherRef.current) {
+      // Live analysis: batches are already running; analyse what is left.
+      await batcherRef.current.settle();
+      await finalizeLiveAnalysis(matchId);
+    } else {
+      await requestAnalysis(matchId, cleanSetup);
+    }
     await queryClient.invalidateQueries({ queryKey: ['my-usage'] });
     await queryClient.invalidateQueries({ queryKey: ['my-matches'] });
     reset();
@@ -187,6 +207,8 @@ export function DualInputHandler() {
     queueRef.current?.clear();
     queueRef.current = null;
     matchIdRef.current = null;
+    batcherRef.current = null;
+    setLiveMatch(null);
     abortRef.current = null;
     setPhase({ kind: 'setup' });
   };
@@ -194,8 +216,37 @@ export function DualInputHandler() {
   const discard = async () => {
     abortRef.current?.abort();
     const matchId = matchIdRef.current;
+    const wasLive = batcherRef.current !== null;
     reset();
-    if (matchId) await discardMatch(userId, matchId).catch(() => undefined);
+    if (!matchId) return;
+    // Refund the live session's quota unit before deleting the match.
+    if (wasLive) await cancelLiveAnalysis(matchId).catch(() => undefined);
+    await discardMatch(userId, matchId).catch(() => undefined);
+  };
+
+  /** Creates the draft (and the live session when frames are sampled live). */
+  const prepareLiveRecording = async (plan: CapturePlan) => {
+    const cleanSetup = validSetup();
+    if (!cleanSetup) throw new Error('invalid setup');
+    // Duration is finalised when recording stops.
+    const matchId = await openSession(cleanSetup, maxDurationMs, { live: plan.liveSampling });
+    if (!plan.liveSampling) return;
+    try {
+      // Reserves the quota unit up front: an exhausted quota stops here,
+      // before the user records a round that could not be analysed.
+      await startLiveAnalysis(matchId, cleanSetup);
+    } catch (error) {
+      reset();
+      await discardMatch(userId, matchId).catch(() => undefined);
+      throw error;
+    }
+    setLiveMatch({
+      id: matchId,
+      discipline: cleanSetup.discipline,
+      variant: cleanSetup.variant,
+      athleteALabel: cleanSetup.athleteALabel,
+      athleteBLabel: cleanSetup.athleteBLabel,
+    });
   };
 
   // Render -------------------------------------------------------------------
@@ -206,12 +257,8 @@ export function DualInputHandler() {
         maxFrames={MAX_FRAMES}
         onFrame={(frame) => queueRef.current?.enqueue(frame)}
         uploadPressure={() => queueRef.current?.pressure ?? 0}
-        onBeforeStart={async () => {
-          const cleanSetup = validSetup();
-          if (!cleanSetup) throw new Error('invalid setup');
-          // Duration is finalised when recording stops.
-          await openSession(cleanSetup, maxDurationMs);
-        }}
+        onBeforeStart={prepareLiveRecording}
+        liveMatch={liveMatch}
         onFinished={(result) => void onLiveFinished(result)}
         onCancel={() => void discard()}
       />
@@ -227,7 +274,7 @@ export function DualInputHandler() {
       <Card>
         <Heading>{phase.step}…</Heading>
         {phase.progress !== undefined ? <Body>{Math.round(phase.progress * 100)}%</Body> : null}
-        <Caption>Keep MatIQ open until the analysis starts. You will be notified when results are ready.</Caption>
+        <Caption>Keep MatIQ open until the analysis starts. Results then appear on the match screen automatically.</Caption>
         <Button label="Cancel" variant="secondary" onPress={() => void discard()} />
       </Card>
     );

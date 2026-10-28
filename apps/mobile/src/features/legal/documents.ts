@@ -11,7 +11,7 @@ import { env } from '@/config/env';
 
 export const LEGAL_VERSIONS = {
   terms: '2026-10-23',
-  privacy: '2026-10-23',
+  privacy: '2026-10-24',
 } as const;
 
 export type LegalDocumentId = keyof typeof LEGAL_VERSIONS;
@@ -48,10 +48,10 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'What we collect',
       paragraphs: [
-        'Account data: email address, username, display name, optional bio and avatar.',
+        'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata.',
         'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes.',
         'Social data: friend requests, friendships, blocks, posts and likes.',
-        'Usage and security data: number of analyses per month, rate-limit counters, and security logs needed to prevent abuse.',
+        'Usage and security data: number of analyses per month, rate-limit counters, security logs needed to prevent abuse and, if you turn on two-factor authentication, your authenticator enrollment.',
         'Optional API keys you choose to store for "bring your own key" analysis (encrypted, see below).',
       ],
     },
@@ -66,7 +66,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'AI processing',
       paragraphs: [
-        'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. Frames are deleted from our storage after a successful analysis.',
+        'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. With live analysis, this happens in small batches while you record so the app can show a provisional score. Frames are deleted from our storage after a successful analysis.',
         'We only use AI providers whose commercial terms prohibit using customer content to train their models. When you analyse with your own API key, your provider account and its terms apply to that request.',
       ],
     },

@@ -107,7 +107,10 @@ export async function uploadVideo(
   if (result.status < 200 || result.status >= 300) throw new AppError('upload_failed', 'The video upload failed');
 }
 
-export async function requestAnalysis(matchId: string, setup: MatchSetup): Promise<AnalysisStarted> {
+export async function requestAnalysis(
+  matchId: string,
+  setup: Pick<MatchSetup, 'keySource' | 'athleteAHint' | 'athleteBHint'>,
+): Promise<AnalysisStarted> {
   const { data, error } = await supabase.functions.invoke<AnalysisStarted>('analyze-match', {
     body: {
       matchId,

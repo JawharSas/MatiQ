@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 import { fromPostgrest } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
-export type MatchStatus = 'draft' | 'queued' | 'processing' | 'completed' | 'failed';
+export type MatchStatus = 'draft' | 'live' | 'queued' | 'processing' | 'completed' | 'failed';
 
 export interface MatchDetail {
   id: string;

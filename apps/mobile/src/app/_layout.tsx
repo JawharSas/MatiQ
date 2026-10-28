@@ -72,9 +72,10 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, initializing } = useAuth();
-  if (initializing) return <Loading />;
+  const { session, initializing, mfaPending } = useAuth();
+  if (initializing || (session && mfaPending === null)) return <Loading />;
   const signedIn = Boolean(session);
+  const challenge = signedIn && mfaPending === true;
 
   return (
     <Stack
@@ -88,7 +89,10 @@ function RootNavigator() {
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={signedIn}>
+      <Stack.Protected guard={challenge}>
+        <Stack.Screen name="mfa" />
+      </Stack.Protected>
+      <Stack.Protected guard={signedIn && !challenge}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />

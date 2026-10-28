@@ -30,6 +30,7 @@ const MESSAGES: Record<string, string> = {
   not_found: 'Not found.',
   validation_failed: 'Some of the details are invalid.',
   owner_account: 'Transfer the owner role before deleting this account.',
+  mfa_required: 'Verify this sign-in with your authenticator app first.',
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",
   P0429: 'Too many requests. Please wait a moment and try again.',
@@ -45,7 +46,9 @@ export function messageFor(code: string | undefined, fallback = 'Something went 
 /** Normalises a PostgREST error ({ code, message }) into an AppError. */
 export function fromPostgrest(error: { code?: string; message: string } | null): AppError | null {
   if (!error) return null;
-  return new AppError(error.code ?? 'unknown', messageFor(error.code));
+  // The two-factor guard raises 42501 with a specific message.
+  const code = error.message === 'mfa_required' ? 'mfa_required' : (error.code ?? 'unknown');
+  return new AppError(code, messageFor(code));
 }
 
 /** Reads the `{ error: { code } }` body returned by MatIQ Edge Functions. */

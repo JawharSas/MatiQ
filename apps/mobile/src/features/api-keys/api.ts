@@ -34,6 +34,6 @@ export async function deleteKey(): Promise<void> {
   if (error) throw await fromFunctionError(error);
 }
 
-export function useStoredKeys() {
-  return useQuery({ queryKey: ['api-keys'], queryFn: listKeys, staleTime: 60_000 });
+export function useStoredKeys(enabled = true) {
+  return useQuery({ queryKey: ['api-keys'], queryFn: listKeys, staleTime: 60_000, enabled });
 }
