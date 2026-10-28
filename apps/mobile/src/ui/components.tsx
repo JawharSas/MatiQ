@@ -134,6 +134,10 @@ export function ToggleRow({
         onValueChange={onValueChange}
         disabled={disabled}
         trackColor={{ true: colors.accent, false: colors.border }}
+        // Explicit on every platform: Android and web otherwise use their own accent colours.
+        thumbColor={value ? colors.text : colors.textMuted}
+        // @ts-expect-error react-native-web only: the "on" knob colour.
+        activeThumbColor={colors.text}
         accessibilityLabel={label}
       />
     </View>

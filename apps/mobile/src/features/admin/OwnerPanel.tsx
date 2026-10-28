@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
 import { colors, font, spacing } from '@/ui/theme';
@@ -224,7 +225,7 @@ function DisputeCard({ dispute }: { dispute: RankedDispute }) {
   return (
     <Card>
       <Text style={font.body}>
-        @{dispute.fighter_a_username ?? 'deleted'} vs @{dispute.fighter_b_username ?? 'deleted'} · {dispute.discipline.toUpperCase()} ({dispute.variant})
+        @{dispute.fighter_a_username ?? 'deleted'} vs @{dispute.fighter_b_username ?? 'deleted'} · {DISCIPLINE_LABELS[dispute.discipline]} ({dispute.variant})
       </Text>
       <Caption>Analysed result: {winner}</Caption>
       <Caption>

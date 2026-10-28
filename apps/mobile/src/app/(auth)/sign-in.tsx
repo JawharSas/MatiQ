@@ -1,11 +1,20 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import type { ComponentProps } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { emailSchema } from '@/lib/validation';
-import { Body, Button, Caption, Card, ErrorText, Screen, TextField } from '@/ui/components';
+import { LogoMark, Wordmark } from '@/ui/brand';
+import { Button, Caption, Card, ErrorText, Screen, TextField } from '@/ui/components';
 import { colors } from '@/ui/theme';
+
+const HIGHLIGHTS: { icon: ComponentProps<typeof Ionicons>['name']; label: string }[] = [
+  { icon: 'pulse', label: 'Live scoring' },
+  { icon: 'trophy', label: 'Ranked ladder' },
+  { icon: 'lock-closed', label: 'Private by default' },
+];
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -36,10 +45,19 @@ export default function SignInScreen() {
 
   return (
     <Screen>
-      <Text style={styles.wordmark} accessibilityRole="header">
-        Mat<Text style={{ color: colors.accent }}>IQ</Text>
-      </Text>
-      <Body muted>AI analysis for BJJ, wrestling and MMA.</Body>
+      <View style={styles.hero}>
+        <LogoMark size={92} />
+        <Wordmark size={40} />
+        <Text style={styles.tagline}>Your AI corner for BJJ, wrestling and MMA.</Text>
+        <View style={styles.highlights}>
+          {HIGHLIGHTS.map((item) => (
+            <View key={item.label} style={styles.highlight}>
+              <Ionicons name={item.icon} size={14} color={colors.accent} />
+              <Text style={styles.highlightText}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
       <Card>
         <TextField
           label="Email"
@@ -71,5 +89,19 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  wordmark: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginTop: 24 },
+  hero: { alignItems: 'center', gap: 10, paddingTop: 32, paddingBottom: 12 },
+  tagline: { color: colors.textMuted, fontSize: 16, lineHeight: 22, textAlign: 'center' },
+  highlights: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 6 },
+  highlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  highlightText: { color: colors.text, fontSize: 12, fontWeight: '600' },
 });

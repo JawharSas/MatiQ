@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useVerifiedFactors, verifyTotp } from '@/features/auth/mfa';
 import { errorMessage } from '@/lib/errors';
+import { LogoMark } from '@/ui/brand';
 import { Body, Button, Card, ErrorText, Loading, Screen, TextField, Title } from '@/ui/components';
 
 /**
@@ -35,6 +36,7 @@ export default function MfaChallengeScreen() {
 
   return (
     <Screen>
+      <LogoMark size={56} />
       <Title>Two-factor verification</Title>
       {factor ? (
         <Card>
