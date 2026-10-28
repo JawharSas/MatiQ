@@ -130,6 +130,15 @@ jobs:
           version="${TAG#v}"; base="${version%%-*}"
           app=$(node -p "require('./apps/mobile/package.json').version")
           [ "$base" = "$app" ] || { echo "::error::Tag $TAG does not match the app version $app"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            # gh only applies --target when it creates the tag: an existing
+            # tag must already point at the commit this run built.
+            existing=$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | awk '{print $1}' | tail -n 1)
+            if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "::error::Tag $TAG already exists on $existing, not on the built commit $GITHUB_SHA. Run the workflow on that tag instead, or delete the tag."
+              exit 1
+            fi
+          fi
       - name: Release notes from CHANGELOG.md
         run: |
           tag="$TAG"
