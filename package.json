@@ -18,7 +18,7 @@
     "functions:deploy": "npm run sync:shared && supabase functions deploy",
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
-    "secrets:scan": "gitleaks detect --no-banner --redact"
+    "secrets:scan": "gitleaks detect --config .gitleaks.toml --no-banner --redact"
   },
   "engines": {
     "node": ">=22.12"
