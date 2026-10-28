@@ -2,13 +2,24 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    target-branch: main
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
       expo:
-        patterns: ['expo', 'expo-*', '@expo/*', 'react-native', 'react', '@types/react']
+        patterns: ['expo', 'expo-*', '@expo/*', '@types/react']
+    ignore:
+      # Expo SDK 58 pins these to the versions its native code is built for;
+      # upgrade them with `npx expo install --fix` instead.
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: react-native
+      # Types follow the Node.js major version CI and the tooling run on (22).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
+    target-branch: main
     schedule:
       interval: monthly

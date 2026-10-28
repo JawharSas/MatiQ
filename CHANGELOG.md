@@ -69,12 +69,17 @@ expect rough edges, and treat scores as a training aid.
   label for screen readers.
 - The two-factor setup key used an iOS-only font.
 
+### Dependencies
+- Expo SDK 58.0.21 and React Native 0.88.1 (React stays at 19.3.0, the
+  version React Native 0.88 is built for); TanStack Query 5.104.5, Zod 4.6.7.
+- Type checking with TypeScript 7.
+
 ### Tooling
 - Browser UI preview with sample data (`npm run preview:web`) and a
   Playwright walkthrough of every screen (`npm run preview:walkthrough`),
   also run in CI.
-- Release workflow: tags `v*` build an installable Android APK and publish
-  the GitHub release.
+- Release workflow: tags `v*` (or a manual run with a tag) build an
+  installable Android APK and publish the GitHub release.
 
 ### Known limitations
 - The Android APK attached to the release is signed with a debug key, for

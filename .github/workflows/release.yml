@@ -3,12 +3,19 @@ name: Release
 # Pushing a tag such as v1.2.9-pre-beta builds an installable Android APK and
 # the browser UI preview screenshots, then publishes a GitHub release
 # ("Pre-Beta V1.2.9", marked as pre-release when the tag has a suffix) with
-# the notes from CHANGELOG.md. Run it manually to build without publishing.
+# the notes from CHANGELOG.md. Run it manually (Actions -> Release -> Run
+# workflow) to build only, or give it a tag to create that tag on the chosen
+# branch and publish the release from the browser.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create and publish, e.g. v1.2.9-pre-beta (empty: build only)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -23,17 +30,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      # Public client config only (see apps/mobile/.env.example). Set them as
-      # repository *variables*; without them the APK opens to a setup screen.
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      # Public client config only (see apps/mobile/.env.example), read from
+      # repository variables or, if saved there instead, Actions secrets.
+      # Without them the APK opens to a setup screen, so the build fails.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
       EXPO_PUBLIC_TLS_PINS: ${{ vars.EXPO_PUBLIC_TLS_PINS }}
       EXPO_PUBLIC_LEGAL_ENTITY: ${{ vars.EXPO_PUBLIC_LEGAL_ENTITY }}
       EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
       APP_VARIANT: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -44,12 +52,30 @@ jobs:
       - run: npm ci
       - name: Check public configuration
         run: |
-          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
-            echo "::warning::EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are not set as repository variables; the APK will show the setup screen."
-          fi
+          for name in EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not set. Add it under Settings -> Secrets and variables -> Actions -> Variables (repository variable)."
+              exit 1
+            fi
+          done
+          case "$EXPO_PUBLIC_SUPABASE_URL" in
+            https://*) echo "Supabase project: ${EXPO_PUBLIC_SUPABASE_URL#https://}" ;;
+            *) echo "::error::EXPO_PUBLIC_SUPABASE_URL must start with https://"; exit 1 ;;
+          esac
       - name: Generate the native Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
+      - name: Install the Android NDK React Native needs
+        # Left to Gradle, several native modules download the NDK at the
+        # same time and corrupt the archive ("Archive is not a ZIP archive").
+        # Gradle still installs the SDK platform and build tools itself.
+        run: |
+          toml=node_modules/react-native/gradle/libs.versions.toml
+          ndk=$(sed -n 's/^ndkVersion *= *"\(.*\)"/\1/p' "$toml")
+          [ -n "$ndk" ] || { echo "::error::Could not read ndkVersion from $toml"; exit 1; }
+          echo "Installing NDK $ndk"
+          (yes 2>/dev/null || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" > /dev/null
+          test -d "$ANDROID_HOME/ndk/$ndk" || { echo "::error::NDK $ndk was not installed"; exit 1; }
       - name: Build the release APK
         working-directory: apps/mobile/android
         # Debug-signed: for sideloading by testers. Store builds use EAS (eas.json).
@@ -70,8 +96,8 @@ jobs:
     name: UI walkthrough screenshots
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -96,19 +122,37 @@ jobs:
   publish:
     name: Publish GitHub release
     needs: [android, ui-preview]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Never interpolate the input into scripts directly.
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           path: assets
           merge-multiple: true
+      - name: Check tag
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9]+(-[a-z0-9]+)*)?$ ]] || { echo "::error::Tag must look like v1.2.9 or v1.2.9-pre-beta"; exit 1; }
+          version="${TAG#v}"; base="${version%%-*}"
+          app=$(node -p "require('./apps/mobile/package.json').version")
+          [ "$base" = "$app" ] || { echo "::error::Tag $TAG does not match the app version $app"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            # gh only applies --target when it creates the tag: an existing
+            # tag must already point at the commit this run built.
+            existing=$(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}" | awk '{print $1}' | tail -n 1)
+            if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
+              echo "::error::Tag $TAG already exists on $existing, not on the built commit $GITHUB_SHA. Run the workflow on that tag instead, or delete the tag."
+              exit 1
+            fi
+          fi
       - name: Release notes from CHANGELOG.md
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="$TAG"
           version="${tag#v}"; base="${version%%-*}"
           awk -v v="$base" '$0 ~ "^## \\[" v "\\]" {found=1; next} found && /^## \[/ {exit} found {print}' CHANGELOG.md > notes.md
           test -s notes.md || { echo "::error::No CHANGELOG.md section for ${base}"; exit 1; }
@@ -116,7 +160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="$TAG"
           version="${tag#v}"; base="${version%%-*}"; channel="${version#"$base"}"
           if [ -n "$channel" ]; then
             # v1.2.9-pre-beta -> "Pre-Beta V1.2.9"
@@ -127,4 +171,10 @@ jobs:
             title="MatIQ V${base}"
             prerelease=""
           fi
-          gh release create "$tag" assets/* --title "$title" --notes-file notes.md $prerelease --verify-tag
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            target="--verify-tag"
+          else
+            # Manual run: gh creates the tag on the commit this run built.
+            target="--target=$GITHUB_SHA"
+          fi
+          gh release create "$tag" assets/* --title "$title" --notes-file notes.md $prerelease "$target"
