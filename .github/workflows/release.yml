@@ -65,16 +65,16 @@ jobs:
       - name: Generate the native Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
-      - name: Install the Android SDK parts React Native needs
+      - name: Install the Android NDK React Native needs
         # Left to Gradle, several native modules download the NDK at the
         # same time and corrupt the archive ("Archive is not a ZIP archive").
+        # Gradle still installs the SDK platform and build tools itself.
         run: |
           toml=node_modules/react-native/gradle/libs.versions.toml
-          get() { sed -n "s/^$1 *= *\"\(.*\)\"/\1/p" "$toml"; }
-          ndk=$(get ndkVersion); compile=$(get compileSdk); tools=$(get buildTools)
-          [ -n "$ndk" ] && [ -n "$compile" ] && [ -n "$tools" ] || { echo "::error::Could not read SDK versions from $toml"; exit 1; }
-          echo "NDK $ndk, platform android-$compile, build-tools $tools"
-          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" "platforms;android-$compile" "build-tools;$tools" > /dev/null
+          ndk=$(sed -n 's/^ndkVersion *= *"\(.*\)"/\1/p' "$toml")
+          [ -n "$ndk" ] || { echo "::error::Could not read ndkVersion from $toml"; exit 1; }
+          echo "Installing NDK $ndk"
+          (yes 2>/dev/null || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" > /dev/null
           test -d "$ANDROID_HOME/ndk/$ndk" || { echo "::error::NDK $ndk was not installed"; exit 1; }
       - name: Build the release APK
         working-directory: apps/mobile/android
