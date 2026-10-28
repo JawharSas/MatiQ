@@ -6,7 +6,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(44);
+select plan(46);
 
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
 begin
@@ -62,6 +62,12 @@ select throws_ok(
   'P0002', null, 'private non-friends cannot be challenged');
 
 select pg_temp.as_user('a1111111-1111-4111-8111-111111111111');
+select throws_ok(
+  $$select public.create_ranked_challenge('b2222222-2222-4222-8222-222222222222', 'wrestling', 'ibjjf')$$,
+  '22023', null, 'a ruleset of another discipline is rejected');
+select throws_ok(
+  $$select public.create_ranked_challenge('b2222222-2222-4222-8222-222222222222', 'bjj', 'freestyle')$$,
+  '22023', null, 'an unknown ruleset for the discipline is rejected');
 select set_config('test.r1', public.create_ranked_challenge('b2222222-2222-4222-8222-222222222222', 'bjj', 'ibjjf', 'Sunday roll?')::text, false);
 select is(
   (select status::text from public.ranked_matches where id = current_setting('test.r1')::uuid),

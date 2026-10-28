@@ -305,7 +305,14 @@ begin
      or private.is_suspended(p_opponent) then
     raise exception 'user not found' using errcode = 'P0002';
   end if;
-  if p_variant is null or p_variant !~ '^[a-z_]{2,32}$' then
+  -- Only the discipline's own rulesets (the rules engine's variantsFor):
+  -- analyze-match rejects any other pair, so such a challenge could be
+  -- accepted but never recorded.
+  if not coalesce(p_variant = any (case p_discipline
+        when 'bjj' then array['ibjjf', 'ibjjf_reversals', 'submission_only']
+        when 'wrestling' then array['folkstyle', 'freestyle']
+        when 'mma' then array['unified']
+      end), false) then
     raise exception 'invalid variant' using errcode = '22023';
   end if;
   perform private.enforce_rate_limit('ranked_challenge:' || me, 20, 86400);

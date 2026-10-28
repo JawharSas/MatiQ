@@ -150,7 +150,7 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 | `npm test --workspace @matiq/rules-engine` | 47 tests: scoring (IBJJF, IBJJF + reversals, folkstyle, freestyle, MMA rounds) and ranking (Elo, tiers, career stats, titles, settlement) |
 | `npm test --workspace @matiq/mobile` | 38 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input, ranked match states, fighter-name labels |
 | `npm run typecheck` | TypeScript across the workspaces |
-| `supabase test db` | 131 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement, ranked lifecycle (confirmation rules, versioned settlement, ladder privacy, disputes, anti-farming) |
+| `supabase test db` | 133 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement, ranked lifecycle (rulesets per discipline, confirmation rules, versioned settlement, ladder privacy, disputes, anti-farming) |
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |
 | `npm run functions:check` / `npm run functions:test` | Deno type check; 15 tests for vault crypto, live-batch frame selection, the two-factor claim check and ranked settlement payloads |
 | `npm run secrets:scan` | gitleaks secret scan |
