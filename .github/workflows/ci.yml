@@ -61,6 +61,29 @@ jobs:
       - name: Apply migrations and run RLS / privilege tests
         run: ./scripts/test-db-local.sh
 
+  ui-preview:
+    name: UI walkthrough (browser preview)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/mobile
+      - run: npm run preview:web
+        working-directory: apps/mobile
+      - run: npm run preview:walkthrough
+        working-directory: apps/mobile
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-preview-screenshots
+          path: apps/mobile/preview-screenshots
+          if-no-files-found: ignore
+
   edge-functions:
     name: Edge Functions
     runs-on: ubuntu-latest

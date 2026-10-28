@@ -1,0 +1,130 @@
+name: Release
+
+# Pushing a tag such as v1.2.9-pre-beta builds an installable Android APK and
+# the browser UI preview screenshots, then publishes a GitHub release
+# ("Pre-Beta V1.2.9", marked as pre-release when the tag has a suffix) with
+# the notes from CHANGELOG.md. Run it manually to build without publishing.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Public client config only (see apps/mobile/.env.example). Set them as
+      # repository *variables*; without them the APK opens to a setup screen.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_TLS_PINS: ${{ vars.EXPO_PUBLIC_TLS_PINS }}
+      EXPO_PUBLIC_LEGAL_ENTITY: ${{ vars.EXPO_PUBLIC_LEGAL_ENTITY }}
+      EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
+      APP_VARIANT: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Check public configuration
+        run: |
+          if [ -z "$EXPO_PUBLIC_SUPABASE_URL" ] || [ -z "$EXPO_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::warning::EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY are not set as repository variables; the APK will show the setup screen."
+          fi
+      - name: Generate the native Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --no-install
+      - name: Build the release APK
+        working-directory: apps/mobile/android
+        # Debug-signed: for sideloading by testers. Store builds use EAS (eas.json).
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a,x86_64
+      - name: Name the APK
+        run: |
+          version=$(node -p "require('./apps/mobile/package.json').version")
+          mkdir -p dist
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "dist/MatIQ-${version}-android.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/
+          if-no-files-found: error
+
+  ui-preview:
+    name: UI walkthrough screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/mobile
+      - run: npm run preview:web
+        working-directory: apps/mobile
+      - run: npm run preview:walkthrough
+        working-directory: apps/mobile
+      - name: Zip screenshots
+        run: |
+          version=$(node -p "require('./apps/mobile/package.json').version")
+          mkdir -p dist
+          (cd apps/mobile/preview-screenshots && zip -q -r "../../../dist/MatIQ-${version}-ui-screenshots.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [android, ui-preview]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"; base="${version%%-*}"
+          awk -v v="$base" '$0 ~ "^## \\[" v "\\]" {found=1; next} found && /^## \[/ {exit} found {print}' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::No CHANGELOG.md section for ${base}"; exit 1; }
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"; base="${version%%-*}"; channel="${version#"$base"}"
+          if [ -n "$channel" ]; then
+            # v1.2.9-pre-beta -> "Pre-Beta V1.2.9"
+            label=$(echo "${channel#-}" | sed -E 's/(^|-)([a-z])/\1\u\2/g')
+            title="${label} V${base}"
+            prerelease="--prerelease"
+          else
+            title="MatIQ V${base}"
+            prerelease=""
+          fi
+          gh release create "$tag" assets/* --title "$title" --notes-file notes.md $prerelease --verify-tag

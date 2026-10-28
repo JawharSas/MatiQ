@@ -50,7 +50,8 @@ function LadderRow({ row, isMe }: { row: LeaderboardRow; isMe: boolean }) {
   const title = row.featured_title ? titleById(row.featured_title) : undefined;
   return (
     <Link href={{ pathname: '/user/[id]', params: { id: row.user_id } }} asChild>
-      <Pressable accessibilityRole="link" style={[styles.row, isMe && styles.me]}>
+      {/* Flattened: Link asChild hands the style to an <a> on web, which rejects arrays. */}
+      <Pressable accessibilityRole="link" style={StyleSheet.flatten([styles.row, isMe && styles.me])}>
         <Text style={styles.position}>{row.ladder_position}</Text>
         <Avatar path={row.avatar_path} name={row.display_name} size={36} />
         <View style={styles.fill}>

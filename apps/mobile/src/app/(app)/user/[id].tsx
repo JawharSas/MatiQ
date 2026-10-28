@@ -55,7 +55,7 @@ function UserProfile({ id }: { id: string }) {
         <View style={{ flex: 1 }}>
           <Title>{card.display_name}</Title>
           <Caption>
-            @{card.username} · {card.friend_count} friends · {card.visibility === 'public' ? 'Public' : 'Private'}
+            @{card.username} · {card.friend_count} {card.friend_count === 1 ? 'friend' : 'friends'} · {card.visibility === 'public' ? 'Public' : 'Private'}
           </Caption>
         </View>
       </View>

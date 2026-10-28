@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
-import { Alert, Linking, Text } from 'react-native';
+import { Alert, Linking, Platform, Text } from 'react-native';
 import { removeFactor, startTotpEnrollment, type TotpEnrollment, useVerifiedFactors, verifyTotp } from '@/features/auth/mfa';
 import { groupSecret } from '@/features/auth/totp';
 import { errorMessage } from '@/lib/errors';
@@ -94,7 +94,7 @@ function EnrollmentCard(props: {
       <Heading>1. Add MatIQ to your authenticator</Heading>
       <Button label="Open authenticator app" variant="secondary" onPress={() => void Linking.openURL(props.enrollment.uri).catch(() => undefined)} />
       <Caption>Or enter this setup key manually (time-based, 6 digits):</Caption>
-      <Text selectable style={[font.body, { fontFamily: 'Menlo', letterSpacing: 1 }]}>
+      <Text selectable style={[font.body, { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), letterSpacing: 1 }]}>
         {groupSecret(props.enrollment.secret)}
       </Text>
       <Heading>2. Enter the code it shows</Heading>

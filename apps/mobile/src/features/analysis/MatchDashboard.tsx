@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Body, Caption, Card, Heading, Segmented } from '@/ui/components';
 import { athleteColor, colors, font, radius, spacing } from '@/ui/theme';
+import { highlightText, withNames } from './labels';
 import { statRows } from './stat-rows';
 import { type AthleteFilter, type BreakdownSection, type Clip, filterByAthlete, techniqueBreakdown } from './technique-breakdown';
 import type { MatchDetail } from './useMatch';
@@ -83,7 +84,14 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
       ) : null}
       <ScoreHeader scorecard={scorecard} names={names} />
       <Segmented options={filterOptions} value={filter} onChange={setFilter} />
-      <PhaseTimeline phases={scorecard.phases} highlights={highlights} durationMs={scorecard.durationMs} onSeek={seek} onPlay={playHighlight} />
+      <PhaseTimeline
+        phases={scorecard.phases}
+        highlights={highlights}
+        names={names}
+        durationMs={scorecard.durationMs}
+        onSeek={seek}
+        onPlay={playHighlight}
+      />
       <HighlightList highlights={highlights} names={names} onPlay={playHighlight} />
       {scorecard.rounds ? <RoundsTable scorecard={scorecard} names={names} /> : null}
       <StatsPanel scorecard={scorecard} names={names} />
@@ -143,12 +151,14 @@ function ScoreHeader({ scorecard, names }: { scorecard: Scorecard; names: Names 
 function PhaseTimeline({
   phases,
   highlights,
+  names,
   durationMs,
   onSeek,
   onPlay,
 }: {
   phases: Phase[];
   highlights: Highlight[];
+  names: Names;
   durationMs: number;
   onSeek?: (ms: number) => void;
   onPlay?: (highlight: Highlight) => void;
@@ -186,7 +196,7 @@ function PhaseTimeline({
           <Pressable
             key={`marker-${highlight.t}`}
             accessibilityRole="button"
-            accessibilityLabel={`${highlight.label} at ${formatClock(highlight.t)}`}
+            accessibilityLabel={`${withNames(highlight.label, names)} at ${formatClock(highlight.t)}`}
             disabled={!onPlay}
             onPress={() => onPlay?.(highlight)}
             hitSlop={12}
@@ -201,7 +211,7 @@ function PhaseTimeline({
       <View style={styles.legend}>
         {phases.slice(0, 6).map((phase) => (
           <Caption key={`legend-${phase.start}`}>
-            {formatClock(phase.start)} {phase.label}
+            {formatClock(phase.start)} {withNames(phase.label, names)}
           </Caption>
         ))}
       </View>
@@ -226,7 +236,7 @@ function HighlightList({ highlights, names, onPlay }: { highlights: Highlight[];
           <Text style={font.mono}>{formatClock(highlight.t)}</Text>
           <Text style={[font.body, styles.fill]}>
             {highlight.athlete ? <Text style={{ color: athleteColor(highlight.athlete) }}>{names[highlight.athlete]} </Text> : null}
-            {highlight.label}
+            {highlightText(highlight.label, highlight.athlete, names)}
           </Text>
           {onPlay ? <Text style={styles.play}>▶</Text> : null}
         </Pressable>
@@ -310,7 +320,7 @@ function RoundsTable({ scorecard, names }: { scorecard: Scorecard; names: Names 
           <Text style={[font.body, { color: colors.athleteA }]}>{round.scores.A}</Text>
           <Text style={font.caption}>–</Text>
           <Text style={[font.body, { color: colors.athleteB }]}>{round.scores.B}</Text>
-          <Caption>{round.rationale}</Caption>
+          <Caption>{withNames(round.rationale, names)}</Caption>
         </View>
       ))}
       <Caption>

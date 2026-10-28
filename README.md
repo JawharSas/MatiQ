@@ -1,5 +1,7 @@
 # MatIQ: AI Martial Arts Analyzer & Social Hub
 
+**Current release: Pre-Beta V1.2.9** ([changelog](CHANGELOG.md))
+
 MatIQ records or imports sparring footage, detects what happened with a
 vision model, and scores it with a deterministic rules engine for
 **Brazilian Jiu-Jitsu**, **wrestling** (folkstyle and freestyle) and **MMA**.
@@ -78,6 +80,7 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md).
 ├── apps/mobile/                     Expo (SDK 58) React Native app
 │   ├── app.config.ts                permissions, R8/cleartext/backup hardening
 │   ├── babel/strip-console.js       removes console.* from release builds
+│   ├── scripts/                     browser UI preview server + Playwright walkthrough
 │   └── src/
 │       ├── app/                     Expo Router screens
 │       │   ├── (auth)/              sign in / sign up (+ consent)
@@ -89,6 +92,7 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md).
 │       │   └── legal/[doc]          Privacy Policy / Terms of Service
 │       ├── config/env.ts            validated public config
 │       ├── lib/                     supabase client, encrypted storage, pinning, validation
+│       ├── preview/                 browser UI preview only: sample data, fake backend, native stubs
 │       └── features/
 │           ├── capture/             dual-input handler, live recorder, uploader, frame pipeline
 │           ├── analysis/            dashboard, technique breakdown, realtime match status
@@ -105,7 +109,8 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md).
 │   └── tests/                       pgTAP security tests (+ Docker-free harness)
 ├── scripts/                         rules-engine sync, local DB tests, KEK rotation
 ├── docs/                            architecture and security/deployment guides
-└── .github/                         CI (tests, type checks, bundle check, secret scan)
+├── CHANGELOG.md                     release notes
+└── .github/                         CI (tests, type checks, UI walkthrough, secret scan) and release workflow
 ```
 
 ## Getting started
@@ -143,12 +148,46 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 | Command | What it checks |
 |---|---|
 | `npm test --workspace @matiq/rules-engine` | 47 tests: scoring (IBJJF, IBJJF + reversals, folkstyle, freestyle, MMA rounds) and ranking (Elo, tiers, career stats, titles, settlement) |
-| `npm test --workspace @matiq/mobile` | 35 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input, ranked match states |
+| `npm test --workspace @matiq/mobile` | 38 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input, ranked match states, fighter-name labels |
 | `npm run typecheck` | TypeScript across the workspaces |
 | `supabase test db` | 131 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement, ranked lifecycle (confirmation rules, versioned settlement, ladder privacy, disputes, anti-farming) |
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |
 | `npm run functions:check` / `npm run functions:test` | Deno type check; 15 tests for vault crypto, live-batch frame selection, the two-factor claim check and ranked settlement payloads |
 | `npm run secrets:scan` | gitleaks secret scan |
+| `npm run preview:web && npm run preview:walkthrough` (in `apps/mobile`) | builds the browser UI preview with sample data and clicks through every screen with Playwright (36 steps, fails on any runtime error, saves screenshots) |
+
+## See the UI without a phone
+
+`apps/mobile` can be built as a browser **UI preview** with sample data
+(an in-memory backend, the real rules engine, a simulated camera). It is
+for design review and QA, not a web version of MatIQ. See
+[apps/mobile/src/preview/README.md](apps/mobile/src/preview/README.md).
+
+```bash
+cd apps/mobile
+npm run preview:web && npm run preview:serve   # http://127.0.0.1:8081
+# sign in with demo@matiq.app / matiq-preview
+```
+
+## Releases
+
+Pushing a version tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
+it builds an installable Android APK (debug-signed, for testers),
+re-runs the UI walkthrough and publishes a GitHub release with the
+changelog section, the APK, its SHA-256 checksum and the screenshots.
+Tags with a suffix are published as pre-releases: `v1.2.9-pre-beta`
+becomes **Pre-Beta V1.2.9**.
+
+```bash
+git tag -a v1.2.9-pre-beta -m "Pre-Beta V1.2.9" && git push origin v1.2.9-pre-beta
+```
+
+Before tagging, set the public client config as repository **variables**
+(Settings → Secrets and variables → Actions → Variables):
+`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and optionally
+`EXPO_PUBLIC_TLS_PINS`, `EXPO_PUBLIC_LEGAL_ENTITY`, `EXPO_PUBLIC_SUPPORT_EMAIL`.
+Store builds (App Store, Play Store) go through EAS with the profiles in
+[`apps/mobile/eas.json`](apps/mobile/eas.json).
 
 ## Where each part lives
 

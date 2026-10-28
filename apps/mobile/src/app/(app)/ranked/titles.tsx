@@ -41,7 +41,10 @@ export default function TitlesScreen() {
               <Text style={font.heading}>{title.name}</Text>
               {unlocked ? <Text style={styles.badge}>{unlocked.is_featured ? '★ Featured' : 'Unlocked'}</Text> : null}
             </View>
-            <Caption>{title.description}</Caption>
+            <Caption>
+              {title.description}
+              {unlocked && !title.disciplines.includes(discipline) ? ` Earned in ${DISCIPLINE_LABELS[unlocked.discipline]}.` : ''}
+            </Caption>
             {unlocked ? (
               <Button
                 label={unlocked.is_featured ? 'Stop featuring' : 'Feature on profile'}
