@@ -173,8 +173,11 @@ npm run preview:web && npm run preview:serve   # http://127.0.0.1:8081
 
 Pushing a version tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml):
 it builds an installable Android APK (debug-signed, for testers),
-re-runs the UI walkthrough and publishes a GitHub release with the APK, its
-SHA-256 checksum and the screenshots. Tags with a suffix are published as
+re-runs the UI walkthrough, installs and opens the APK on an Android 14
+emulator ([`scripts/android-launch-test.sh`](../scripts/android-launch-test.sh):
+sign-in and sign-up must render without a crash; screenshots are uploaded),
+and only then publishes a GitHub release with the APK, its SHA-256 checksum
+and the screenshots. Tags with a suffix are published as
 pre-releases: `v1.2.9-pre-beta` becomes **Pre-Beta V1.2.9**.
 
 The release page is for players, so its text comes from
@@ -201,6 +204,13 @@ Actions secrets with the same names work too. The build stops if the
 Supabase URL or key is missing, since the APK could not connect.
 Store builds (App Store, Play Store) go through EAS with the profiles in
 [`apps/mobile/eas.json`](../apps/mobile/eas.json).
+
+## Brand assets
+
+The app icon, Android adaptive and themed icons, splash image, in-app logo and
+favicon in `apps/mobile/assets/brand/` are rendered from the vector mark in
+[`apps/mobile/scripts/brand-assets.cjs`](../apps/mobile/scripts/brand-assets.cjs).
+Change the mark there and run `npm run brand:assets --workspace @matiq/mobile`.
 
 ## Where each part lives
 

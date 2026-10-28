@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth, useUserId } from '@/features/auth/AuthProvider';
 import { updateProfile, useProfile } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
@@ -10,8 +11,8 @@ import { PrivacyToggle } from '@/features/social/PrivacyToggle';
 import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { firstIssue, profileSchema } from '@/lib/validation';
-import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, Title } from '@/ui/components';
-import { spacing } from '@/ui/theme';
+import { Badge, Body, Button, Caption, Card, ErrorText, ListGroup, ListRow, Loading, Screen, SectionHeader, TextField } from '@/ui/components';
+import { colors, font, spacing } from '@/ui/theme';
 
 export default function ProfileScreen() {
   const userId = useUserId();
@@ -57,59 +58,92 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+      <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Change profile picture"
           disabled={avatarBusy}
           onPress={() => void updateAvatar(false)}
-          style={{ opacity: avatarBusy ? 0.5 : 1 }}
+          style={({ pressed }) => ({ opacity: avatarBusy || pressed ? 0.6 : 1 })}
         >
-          <Avatar path={card.avatar_path} name={card.display_name} size={72} />
+          <Avatar path={card.avatar_path} name={card.display_name} size={84} />
+          <View style={styles.cameraBadge}>
+            <Ionicons name="camera" size={14} color={colors.accentText} />
+          </View>
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Title>{card.display_name}</Title>
-          <Caption>
-            @{card.username} · {card.friend_count} {card.friend_count === 1 ? 'friend' : 'friends'} · {card.visibility === 'public' ? 'Public' : 'Private'} account
-          </Caption>
+        <View style={styles.identity}>
+          <Text style={font.title} numberOfLines={1}>
+            {card.display_name}
+          </Text>
+          <Text style={font.caption}>@{card.username}</Text>
+          <View style={styles.badges}>
+            <Badge
+              label={card.visibility === 'public' ? 'Public' : 'Private'}
+              icon={card.visibility === 'public' ? 'globe-outline' : 'lock-closed'}
+              tone={card.visibility === 'public' ? 'blue' : 'neutral'}
+            />
+            <Badge label={`${card.friend_count} ${card.friend_count === 1 ? 'friend' : 'friends'}`} icon="people" />
+          </View>
         </View>
       </View>
-      {card.avatar_path ? (
-        <Button label="Remove profile picture" variant="secondary" disabled={avatarBusy} onPress={() => void updateAvatar(true)} />
-      ) : (
-        <Caption>Tap the circle to add a profile picture. Location and camera details are removed before upload.</Caption>
-      )}
+
       {!editing ? <ErrorText>{error}</ErrorText> : null}
       {editing ? (
         <Card>
           <TextField label="Display name" value={draft.displayName} onChangeText={(v) => setDraft({ ...draft, displayName: v })} maxLength={50} />
           <TextField label="Bio" value={draft.bio} onChangeText={(v) => setDraft({ ...draft, bio: v })} multiline maxLength={280} />
           <ErrorText>{error}</ErrorText>
-          <Button label="Save" onPress={() => void save()} />
+          <Button label="Save" icon="checkmark" onPress={() => void save()} />
           <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
         </Card>
       ) : (
         <Card>
-          <Body>{card.bio || 'No bio yet.'}</Body>
+          <Body muted={!card.bio}>{card.bio || 'Add a bio: your belt, your style, where you train.'}</Body>
           <Button
             label="Edit profile"
             variant="secondary"
+            icon="create-outline"
             onPress={() => {
               setDraft({ displayName: card.display_name, bio: card.bio });
               setEditing(true);
             }}
           />
+          {card.avatar_path ? (
+            <Button label="Remove profile picture" variant="ghost" icon="trash-outline" disabled={avatarBusy} onPress={() => void updateAvatar(true)} />
+          ) : null}
+          {!card.avatar_path ? <Caption>Tap your picture to add one. Location and camera details are removed before upload.</Caption> : null}
         </Card>
       )}
+
       <RankedSummary userId={userId} emptyText="Challenge a training partner from the Ranked tab to earn a rating and titles." />
       <PrivacyToggle userId={userId} visibility={card.visibility} />
-      <Card>
-        <Heading>Social</Heading>
-        <Button label="Friends & requests" variant="secondary" onPress={() => router.push('/friends')} />
-        <Button label="My posts" variant="secondary" onPress={() => router.push({ pathname: '/user/[id]', params: { id: userId } })} />
-      </Card>
-      <Button label="Settings" variant="secondary" onPress={() => router.push('/settings')} />
-      {isOwner ? <Button label="Owner panel" onPress={() => router.push('/admin')} /> : null}
+
+      <SectionHeader title="Account" />
+      <ListGroup>
+        <ListRow icon="people" title="Friends & requests" onPress={() => router.push('/friends')} />
+        <ListRow icon="images" title="My posts" onPress={() => router.push({ pathname: '/user/[id]', params: { id: userId } })} />
+        <ListRow icon="settings" tone="neutral" title="Settings" onPress={() => router.push('/settings')} />
+        {isOwner ? <ListRow icon="shield-half" tone="warning" title="Owner panel" subtitle="Users, usage, disputes and audit log" onPress={() => router.push('/admin')} /> : null}
+      </ListGroup>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingTop: spacing.sm },
+  identity: { flex: 1, gap: 2 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderWidth: 3,
+    borderColor: colors.background,
+  },
+});

@@ -3,7 +3,7 @@ import { FlatList, RefreshControl, View } from 'react-native';
 import { useFeed } from '@/features/social/api';
 import { PostCard } from '@/features/social/PostCard';
 import { errorMessage } from '@/lib/errors';
-import { Body, Caption, ErrorText, Segmented } from '@/ui/components';
+import { EmptyState, ErrorText, Segmented } from '@/ui/components';
 import { colors, spacing } from '@/ui/theme';
 
 export default function FeedScreen() {
@@ -14,7 +14,7 @@ export default function FeedScreen() {
   return (
     <FlatList
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: spacing.sm, paddingBottom: 40, gap: spacing.lg }}
       data={posts}
       keyExtractor={(post) => post.post_id}
       renderItem={({ item }) => <PostCard post={item} />}
@@ -33,10 +33,11 @@ export default function FeedScreen() {
       }
       ListEmptyComponent={
         feed.isPending ? undefined : (
-          <View style={{ gap: spacing.sm }}>
-            <Body>No posts yet.</Body>
-            <Caption>Analyse a round and share your scorecard, or add friends to see theirs.</Caption>
-          </View>
+          <EmptyState
+            icon="newspaper-outline"
+            title="No posts yet"
+            body="Analyse a round and share your scorecard, or add friends to see theirs."
+          />
         )
       }
       onEndReached={() => {

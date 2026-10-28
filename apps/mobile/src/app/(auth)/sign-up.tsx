@@ -1,10 +1,12 @@
 import * as Linking from 'expo-linking';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { rememberConsentForSignup } from '@/features/legal/consent';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { firstIssue, signUpSchema } from '@/lib/validation';
+import { LogoMark } from '@/ui/brand';
 import { Body, Button, Caption, Card, ErrorText, Screen, TextField, Title, ToggleRow } from '@/ui/components';
 
 export default function SignUpScreen() {
@@ -56,7 +58,10 @@ export default function SignUpScreen() {
   if (sent) {
     return (
       <Screen>
-        <Title>Check your email</Title>
+        <View style={styles.header}>
+          <LogoMark size={44} />
+          <Title>Check your email</Title>
+        </View>
         <Body>We sent a confirmation link to {form.email}. Open it on this device to finish creating your account.</Body>
         <Button label="Back to sign in" variant="secondary" onPress={() => router.replace('/sign-in')} />
       </Screen>
@@ -65,7 +70,10 @@ export default function SignUpScreen() {
 
   return (
     <Screen>
-      <Title>Create your account</Title>
+      <View style={styles.header}>
+        <LogoMark size={44} />
+        <Title>Create your account</Title>
+      </View>
       <Card>
         <TextField label="Email" value={form.email} onChangeText={(v) => update('email', v)} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
         <TextField
@@ -99,3 +107,7 @@ export default function SignUpScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16 },
+});

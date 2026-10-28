@@ -3,6 +3,35 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.3.0] Pre-Beta, 2026-10-28
+
+### Look and feel
+- MatIQ logo: a fighter with both arms raised inside the cage. App icon,
+  Android adaptive and themed (monochrome) icons and a dark splash screen
+  replace the placeholder Android icon; assets are rendered from the vector
+  mark (`npm run brand:assets`).
+- Sign-in welcome with the logo, tagline and highlights; logo in the Feed
+  header, on sign-up and on two-factor sign-in.
+- Redesigned throughout: deeper borderless surfaces, a type scale with
+  section labels, softer tinted accents, 52 pt buttons with icons, inputs
+  with a focus ring and a calmer segmented control.
+- Feed posts as fight cards (corner colours, big score, winner trophy,
+  heart likes, highlight pill); Profile with a header, badges and a grouped
+  account menu; Settings as grouped lists with icons; Ranked with a rating
+  hero, stat tiles, compact actions and tappable match rows; Analyze with
+  sport tiles and corner-coloured fighter sections; the match dashboard with
+  a fight-result header and time pills on highlights.
+- Match list with sport icons and coloured status badges.
+- No bright line under headers; switches use the MatIQ colours; the dark
+  background now covers the whole window on Android (no white flashes).
+
+### Fixed
+- "WRESTLING" was shown in capitals in the match list and Owner Panel.
+
+### Quality
+- Every release is installed and opened on an Android emulator before it
+  is published (sign-in and sign-up must render, no crash).
+
 ## [1.2.9] Pre-Beta, 2026-10-28
 
 First public pre-beta of MatIQ: AI martial arts analysis for BJJ, wrestling

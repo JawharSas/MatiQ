@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
+import { BrandLockup } from '@/ui/brand';
 import { colors } from '@/ui/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -21,6 +22,10 @@ export default function TabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
+        // No bright hairline under the header on a dark screen.
+        headerShadowVisible: false,
+        headerTitleAlign: 'left',
+        headerTitleStyle: { fontSize: 22, fontWeight: '800' },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -34,7 +39,10 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Feed', tabBarIcon: tabIcon('newspaper-outline', 'newspaper') }} />
+      <Tabs.Screen
+        name="index"
+        options={{ title: 'Feed', headerTitle: () => <BrandLockup />, tabBarIcon: tabIcon('newspaper-outline', 'newspaper') }}
+      />
       <Tabs.Screen name="record" options={{ title: 'Analyze', tabBarIcon: tabIcon('videocam-outline', 'videocam') }} />
       <Tabs.Screen name="ranked" options={{ title: 'Ranked', tabBarIcon: tabIcon('trophy-outline', 'trophy') }} />
       <Tabs.Screen name="matches" options={{ title: 'Matches', tabBarIcon: tabIcon('stats-chart-outline', 'stats-chart') }} />

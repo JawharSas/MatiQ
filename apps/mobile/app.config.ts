@@ -13,10 +13,10 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
-/** Marketing version and release channel ("Pre-Beta V1.2.9"). */
-const APP_VERSION = '1.2.9';
+/** Marketing version and release channel ("Pre-Beta V1.3.0"). */
+const APP_VERSION = '1.3.0';
 const RELEASE_LABEL = 'Pre-Beta';
-/** Monotonic build number for local / CI builds: 1.2.9 -> 10209 (EAS manages its own remotely). */
+/** Monotonic build number for local / CI builds: 1.3.0 -> 10300 (EAS manages its own remotely). */
 const BUILD_NUMBER = APP_VERSION.split('.').reduce((total, part) => total * 100 + Number(part), 0);
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -27,6 +27,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   orientation: 'portrait',
   userInterfaceStyle: 'dark',
+  // Brand assets are rendered from the vector mark by scripts/brand-assets.cjs.
+  icon: './assets/brand/icon.png',
+  // Root view colour behind every screen (expo-system-ui): no white flashes.
+  backgroundColor: '#0B0D10',
   ios: {
     bundleIdentifier: 'app.matiq.mobile',
     buildNumber: String(BUILD_NUMBER),
@@ -43,12 +47,27 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'app.matiq.mobile',
     versionCode: BUILD_NUMBER,
+    adaptiveIcon: {
+      foregroundImage: './assets/brand/adaptive-icon.png',
+      backgroundImage: './assets/brand/adaptive-icon-background.png',
+      monochromeImage: './assets/brand/adaptive-icon-monochrome.png',
+      backgroundColor: '#0B0D10',
+    },
     allowBackup: false,
     permissions: ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
     blockedPermissions: ['android.permission.READ_PHONE_STATE', 'android.permission.SYSTEM_ALERT_WINDOW'],
   },
   plugins: [
     'expo-router',
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/brand/splash-icon.png',
+        imageWidth: 180,
+        resizeMode: 'contain',
+        backgroundColor: '#0B0D10',
+      },
+    ],
     'expo-secure-store',
     'expo-video',
     ['expo-local-authentication', { faceIDPermission: 'MatIQ uses Face ID to protect sensitive settings.' }],
@@ -77,7 +96,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   // Web is only the browser UI preview (sample data, see src/preview/README.md).
-  web: { bundler: 'metro', output: 'single' },
+  web: { bundler: 'metro', output: 'single', favicon: './assets/brand/favicon.png' },
   experiments: {
     typedRoutes: true,
     reactCompiler: true,

@@ -1,9 +1,12 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { formatClock } from '@matiq/rules-engine';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import type { ComponentProps } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MatchStatus } from '@/features/analysis/useMatch';
 import { useUserId } from '@/features/auth/AuthProvider';
+import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage, fromPostgrest } from '@/lib/errors';
 import { readCache, writeCache } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
@@ -21,13 +24,19 @@ interface MatchListItem {
   athlete_b_label: string;
 }
 
-const STATUS_LABELS: Record<MatchStatus, string> = {
-  draft: 'Draft',
-  live: 'Live',
-  queued: 'Queued',
-  processing: 'Analysing…',
-  completed: 'Analysed',
-  failed: 'Failed',
+const STATUS: Record<MatchStatus, { label: string; color: string }> = {
+  draft: { label: 'Draft', color: colors.textMuted },
+  live: { label: 'Live', color: colors.accent },
+  queued: { label: 'Queued', color: colors.warning },
+  processing: { label: 'Analysing…', color: colors.warning },
+  completed: { label: 'Analysed', color: colors.success },
+  failed: { label: 'Failed', color: colors.danger },
+};
+
+const DISCIPLINE_ICONS: Record<MatchListItem['discipline'], ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  bjj: 'karate',
+  wrestling: 'kabaddi',
+  mma: 'boxing-glove',
 };
 
 export default function MatchesScreen() {
@@ -58,21 +67,48 @@ export default function MatchesScreen() {
       ListHeaderComponent={matches.error ? <ErrorText>{errorMessage(matches.error)}</ErrorText> : undefined}
       ListEmptyComponent={matches.isPending ? undefined : <Body muted>No matches yet. Record or upload a round from the Analyze tab.</Body>}
       refreshControl={<RefreshControl refreshing={matches.isRefetching} onRefresh={() => void matches.refetch()} tintColor={colors.accent} />}
-      renderItem={({ item }) => (
-        <Link href={{ pathname: '/match/[id]', params: { id: item.id } }} asChild>
-          <Pressable accessibilityRole="link">
-            <Card>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={font.heading}>{item.title || `${item.athlete_a_label} vs ${item.athlete_b_label}`}</Text>
-                <Caption>{STATUS_LABELS[item.status]}</Caption>
-              </View>
-              <Caption>
-                {item.discipline.toUpperCase()} · {formatClock(item.duration_ms)} · {new Date(item.recorded_at).toLocaleDateString()}
-              </Caption>
-            </Card>
-          </Pressable>
-        </Link>
-      )}
+      renderItem={({ item }) => {
+        const title = item.title || `${item.athlete_a_label} vs ${item.athlete_b_label}`;
+        const status = STATUS[item.status];
+        const details = `${DISCIPLINE_LABELS[item.discipline]} · ${formatClock(item.duration_ms)} · ${new Date(item.recorded_at).toLocaleDateString()}`;
+        return (
+          <Link href={{ pathname: '/match/[id]', params: { id: item.id } }} asChild>
+            <Pressable accessibilityRole="link" accessibilityLabel={`${title}, ${details}, ${status.label}`}>
+              <Card>
+                <View style={styles.row}>
+                  <View style={styles.icon}>
+                    <MaterialCommunityIcons name={DISCIPLINE_ICONS[item.discipline]} size={22} color={colors.accent} />
+                  </View>
+                  <View style={styles.text}>
+                    <Text style={font.heading} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    <Caption>{details}</Caption>
+                  </View>
+                  <View style={[styles.status, { borderColor: status.color }]}>
+                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+                  </View>
+                </View>
+              </Card>
+            </Pressable>
+          </Link>
+        );
+      }}
     />
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+  },
+  text: { flex: 1, gap: 2 },
+  status: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+});
