@@ -182,10 +182,16 @@ becomes **Pre-Beta V1.2.9**.
 git tag -a v1.2.9-pre-beta -m "Pre-Beta V1.2.9" && git push origin v1.2.9-pre-beta
 ```
 
-Before tagging, set the public client config as repository **variables**
+Or from the browser: **Actions → Release → Run workflow** on `main` with the
+tag `v1.2.9-pre-beta`; the workflow creates the tag on that commit. Leave the
+tag empty to build the APK without publishing.
+
+Before releasing, set the public client config as repository **variables**
 (Settings → Secrets and variables → Actions → Variables):
 `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and optionally
 `EXPO_PUBLIC_TLS_PINS`, `EXPO_PUBLIC_LEGAL_ENTITY`, `EXPO_PUBLIC_SUPPORT_EMAIL`.
+Actions secrets with the same names work too. The build stops if the
+Supabase URL or key is missing, since the APK could not connect.
 Store builds (App Store, Play Store) go through EAS with the profiles in
 [`apps/mobile/eas.json`](apps/mobile/eas.json).
 
