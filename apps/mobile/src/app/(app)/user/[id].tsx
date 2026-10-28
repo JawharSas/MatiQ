@@ -5,6 +5,7 @@ import { useUserId } from '@/features/auth/AuthProvider';
 import { useFeed, useFriendAction, useProfile } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
 import { PostCard } from '@/features/social/PostCard';
+import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Loading, Screen, Title } from '@/ui/components';
 import { spacing } from '@/ui/theme';
@@ -59,6 +60,7 @@ function UserProfile({ id }: { id: string }) {
         </View>
       </View>
       {card.bio ? <Body>{card.bio}</Body> : null}
+      <RankedSummary userId={id} />
 
       {id !== me ? (
         <Card>

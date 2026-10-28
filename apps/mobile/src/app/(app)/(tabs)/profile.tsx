@@ -7,6 +7,7 @@ import { updateProfile, useProfile } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
 import { changeAvatar, removeAvatar } from '@/features/social/avatar';
 import { PrivacyToggle } from '@/features/social/PrivacyToggle';
+import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { firstIssue, profileSchema } from '@/lib/validation';
 import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, Title } from '@/ui/components';
@@ -100,6 +101,7 @@ export default function ProfileScreen() {
           />
         </Card>
       )}
+      <RankedSummary userId={userId} emptyText="Challenge a training partner from the Ranked tab to earn a rating and titles." />
       <PrivacyToggle userId={userId} visibility={card.visibility} />
       <Card>
         <Heading>Social</Heading>

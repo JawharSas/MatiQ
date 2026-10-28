@@ -3,9 +3,12 @@
 MatIQ records or imports sparring footage, detects what happened with a
 vision model, and scores it with a deterministic rules engine for
 **Brazilian Jiu-Jitsu**, **wrestling** (folkstyle and freestyle) and **MMA**.
-Athletes get a post-match dashboard (timeline, phases, highlights, stats,
-coaching notes) and can share scorecards with friends or the community,
-with privacy enforced in the database.
+Every match is exactly two fighters, Fighter 1 vs Fighter 2. Athletes get a
+post-match dashboard (timeline, phases, highlights, stats, coaching notes),
+can share scorecards with friends or the community, and can climb a ranked
+Elo ladder with opponent-confirmed results, tiers from Bronze / White Belt to
+Grandmaster / Black Belt, and titles earned from their stats. Privacy is
+enforced in the database.
 
 > Your data, profile and videos are stored to run the app and power your
 > analytics. They are never sold or shared with data brokers.
@@ -35,8 +38,17 @@ with privacy enforced in the database.
   rate limits, audited owner actions, and optional TOTP two-factor
   authentication enforced in the database, Storage, Realtime and Edge
   Functions (not just the app).
+- **Ranked ladder**: challenge a training partner, record the match, and both
+  fighters confirm the analysed result before Elo changes (finishes count
+  more, placement matches move faster). Five tiers with three divisions each
+  (Bronze / White Belt up to Grandmaster / Black Belt), matchmaking by
+  rating, global and friends leaderboards, and 16 dynamic titles such as
+  *Submission Wizard*, *Takedown Machine* and *Iron Chin*. Anti-abuse rules:
+  a win you record needs your opponent's confirmation, at most 3 ranked
+  matches per pair per week, disputes go to the Owner Panel.
 - **Usage limits + Owner Panel**: atomic monthly quotas, an `is_unlimited`
-  switch, per-user limits, suspension, usage overview and audit log.
+  switch, per-user limits, suspension, usage overview, ranked dispute
+  resolution and audit log.
 - **Social**: profile pictures (re-encoded on device, metadata stripped),
   friend requests, blocks, likes, and a feed of scorecards and playable video
   highlights that runs under the caller's RLS so it cannot leak private
@@ -49,7 +61,7 @@ with privacy enforced in the database.
 ```mermaid
 flowchart LR
   App["Expo app<br/>VisionCamera · Nitro Image · MMKV"] -- "TLS + pinning, user JWT" --> SB["Supabase<br/>Auth · Postgres+RLS · Storage · Realtime"]
-  App -- "JWT" --> EF["Edge Functions<br/>analyze-match · api-keys · account"]
+  App -- "JWT" --> EF["Edge Functions<br/>analyze-match · ranked · api-keys · account"]
   EF -- "service role" --> SB
   EF --> AI["Claude API"]
   RE["@matiq/rules-engine"] -.-> App
@@ -69,8 +81,9 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md).
 │   └── src/
 │       ├── app/                     Expo Router screens
 │       │   ├── (auth)/              sign in / sign up (+ consent)
-│       │   ├── (app)/(tabs)/        feed · analyze · matches · profile
+│       │   ├── (app)/(tabs)/        feed · analyze · ranked · matches · profile
 │       │   ├── (app)/match/[id]     post-match dashboard
+│       │   ├── (app)/ranked/        opponents (matchmaking), ladder, titles, ranked match
 │       │   ├── (app)/admin          owner panel
 │       │   ├── (app)/settings/      privacy, API keys, export, delete account
 │       │   └── legal/[doc]          Privacy Policy / Terms of Service
@@ -78,15 +91,16 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](docs/SECURITY_AND_DEPLOYMENT.md).
 │       ├── lib/                     supabase client, encrypted storage, pinning, validation
 │       └── features/
 │           ├── capture/             dual-input handler, live recorder, uploader, frame pipeline
-│           ├── analysis/            dashboard, realtime match status
+│           ├── analysis/            dashboard, technique breakdown, realtime match status
+│           ├── ranked/              ranked state machine, ladder data, tier badges, ranked recording
 │           ├── social/              feed, posts, friends, privacy toggle
 │           ├── admin/               owner panel
 │           ├── api-keys/            BYOK client
 │           └── legal/               policy text + consent records
-├── packages/rules-engine/           BJJ / wrestling / MMA scoring (pure TS, tested)
+├── packages/rules-engine/           BJJ / wrestling / MMA scoring + ranked Elo, tiers, titles (pure TS, tested)
 ├── supabase/
 │   ├── config.toml                  hardened local config
-│   ├── migrations/                  schema, RLS, quotas, social, owner panel, storage
+│   ├── migrations/                  schema, RLS, quotas, social, owner panel, storage, live analysis, 2FA, ranked
 │   ├── functions/                   Deno Edge Functions + shared middleware
 │   └── tests/                       pgTAP security tests (+ Docker-free harness)
 ├── scripts/                         rules-engine sync, local DB tests, KEK rotation
@@ -128,13 +142,25 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 
 | Command | What it checks |
 |---|---|
-| `npm test --workspace @matiq/rules-engine` | 27 scoring tests (IBJJF, folkstyle, freestyle, MMA rounds) |
-| `npm test --workspace @matiq/mobile` | 28 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input |
+| `npm test --workspace @matiq/rules-engine` | 47 tests: scoring (IBJJF, IBJJF + reversals, folkstyle, freestyle, MMA rounds) and ranking (Elo, tiers, career stats, titles, settlement) |
+| `npm test --workspace @matiq/mobile` | 35 tests: capture plan selection (60/30 FPS), frame sampling, pruning, ring buffer, technique breakdown, highlight-link clamping, TOTP input, ranked match states |
 | `npm run typecheck` | TypeScript across the workspaces |
-| `supabase test db` | 87 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement |
+| `supabase test db` | 131 pgTAP checks: RLS privacy, blocks, friend graph, privilege escalation, owner panel + MFA, audit log, quotas, storage, live-analysis batch claiming, two-factor enforcement, ranked lifecycle (confirmation rules, versioned settlement, ladder privacy, disputes, anti-farming) |
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |
-| `npm run functions:check` / `npm run functions:test` | Deno type check; 12 tests for vault crypto, live-batch frame selection and the two-factor claim check |
+| `npm run functions:check` / `npm run functions:test` | Deno type check; 15 tests for vault crypto, live-batch frame selection, the two-factor claim check and ranked settlement payloads |
 | `npm run secrets:scan` | gitleaks secret scan |
+
+## Where each part lives
+
+| Deliverable | Files |
+|---|---|
+| Database schema with RLS, Elo and rank tables | [`supabase/migrations/`](supabase/migrations) (ranked: [`20261028000100_ranked.sql`](supabase/migrations/20261028000100_ranked.sql)) |
+| Secure API key vault and proxy | [`supabase/functions/api-keys`](supabase/functions/api-keys), [`_shared/crypto.ts`](supabase/functions/_shared/crypto.ts), [`analyze-match`](supabase/functions/analyze-match) (the proxy: keys never reach the app) |
+| Two-fighter scoring engine | [`packages/rules-engine/src/disciplines`](packages/rules-engine/src/disciplines) (`bjj.ts`, `wrestling.ts`, `mma.ts`) |
+| Ranked Elo and dynamic title calculator | [`packages/rules-engine/src/ranking`](packages/rules-engine/src/ranking), applied by [`supabase/functions/ranked`](supabase/functions/ranked) |
+| Owner Panel | [`apps/mobile/src/features/admin/OwnerPanel.tsx`](apps/mobile/src/features/admin/OwnerPanel.tsx), [`20261023000600_owner_panel.sql`](supabase/migrations/20261023000600_owner_panel.sql) |
+| Dual-input camera and upload | [`apps/mobile/src/features/capture`](apps/mobile/src/features/capture) (`DualInputHandler.tsx`, `LiveRecorder.tsx`, `VideoUploader.tsx`) |
+| Social feed with privacy filters | [`apps/mobile/src/features/social`](apps/mobile/src/features/social), [`20261023000500_social.sql`](supabase/migrations/20261023000500_social.sql) (`get_feed` runs under the caller's RLS) |
 
 ## Configuration
 

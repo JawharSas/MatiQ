@@ -34,6 +34,10 @@ export default function AppLayout() {
       <Stack.Screen name="settings/api-keys" options={{ title: 'API keys' }} />
       <Stack.Screen name="settings/two-factor" options={{ title: 'Two-factor authentication' }} />
       <Stack.Screen name="admin" options={{ title: 'Owner panel' }} />
+      <Stack.Screen name="ranked/opponents" options={{ title: 'Opponents' }} />
+      <Stack.Screen name="ranked/leaderboard" options={{ title: 'Ladder' }} />
+      <Stack.Screen name="ranked/titles" options={{ title: 'Titles' }} />
+      <Stack.Screen name="ranked/match/[id]" options={{ title: 'Ranked match' }} />
     </Stack>
   );
 }

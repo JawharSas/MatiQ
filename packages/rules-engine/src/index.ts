@@ -20,6 +20,7 @@ export { formatClock } from './core/timeline.ts';
 export * from './disciplines/bjj.ts';
 export * from './disciplines/mma.ts';
 export * from './disciplines/wrestling.ts';
+export * from './ranking/index.ts';
 
 export const RULESETS = {
   bjj: bjjRuleset,

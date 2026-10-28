@@ -6,6 +6,10 @@
  *    mount/back control 4), 3-second stabilisation, advantages and the
  *    penalty progression (2nd = opponent advantage, 3rd = opponent 2 points,
  *    4th = disqualification).
+ *  - `ibjjf_reversals`: IBJJF plus 2 points for a stabilised reversal from a
+ *    bottom position other than guard (bottom of mount, side control, back
+ *    or turtle). IBJJF itself only scores reversals that start in guard (as
+ *    sweeps); this house-rules variant is common in local and in-gym events.
  *  - `submission_only`: only submissions decide the match.
  *
  * Point values and timings are data (see IBJJF_POINTS / BJJ_TIMING) and can
@@ -39,7 +43,7 @@ import {
 import { cleanLabel, isAthlete, isRecord, oneOf, parseBase, parseEnd } from '../core/validate.ts';
 
 export const BJJ_VERSION = 'bjj-2026.1';
-export const BJJ_VARIANTS = ['ibjjf', 'submission_only'] as const;
+export const BJJ_VARIANTS = ['ibjjf', 'ibjjf_reversals', 'submission_only'] as const;
 export type BjjVariant = (typeof BJJ_VARIANTS)[number];
 
 export const BJJ_POSITIONS = [
@@ -105,6 +109,9 @@ export const IBJJF_POINTS = {
   back_control: 4,
 } as const;
 type PointKey = keyof typeof IBJJF_POINTS;
+
+/** Reversal value for the `ibjjf_reversals` variant (override key `reversal`). */
+export const BJJ_REVERSAL_POINTS = 2;
 
 export const BJJ_TIMING = {
   /** A position must be held this long to score. */
@@ -219,9 +226,9 @@ function parseEvent(raw: unknown): BjjEvent | null {
   }
 }
 
-function resolvePoints(overrides: Record<string, number>): Record<PointKey, number> {
-  const points: Record<PointKey, number> = { ...IBJJF_POINTS };
-  for (const key of Object.keys(points) as PointKey[]) {
+function resolvePoints(overrides: Record<string, number>): Record<PointKey | 'reversal', number> {
+  const points: Record<PointKey | 'reversal', number> = { ...IBJJF_POINTS, reversal: BJJ_REVERSAL_POINTS };
+  for (const key of Object.keys(points) as (PointKey | 'reversal')[]) {
     const value = overrides[key];
     if (typeof value === 'number' && Number.isFinite(value) && value >= 0) points[key] = value;
   }
@@ -244,7 +251,7 @@ function buildPositionTimeline(events: readonly BjjEvent[], endAt: number): Posi
  * action (e.g. after a takedown the actor must be on top, including inside
  * the opponent's guard).
  */
-function completesAction(type: 'takedown' | 'sweep' | 'guard_pass', actor: Athlete, interval: PositionInterval): boolean {
+function completesAction(type: 'takedown' | 'sweep' | 'guard_pass' | 'reversal', actor: Athlete, interval: PositionInterval): boolean {
   const opponent = opponentOf(actor);
   if (TOP_POSITIONS.has(interval.position)) return interval.holder === actor;
   if (type === 'guard_pass') return interval.position === 'turtle' && interval.holder === opponent;
@@ -343,8 +350,11 @@ function buildPhases(positions: readonly PositionInterval[]): Phase[] {
 function score(events: BjjEvent[], options: ResolvedScoreOptions<BjjVariant>): Scorecard<BjjStats> {
   const warnings: string[] = [];
   const ledger = new ScoreLedger();
-  const scoresPoints = options.variant === 'ibjjf';
+  const scoresPoints = options.variant !== 'submission_only';
+  const scoresReversals = options.variant === 'ibjjf_reversals';
   const points = resolvePoints(options.pointOverrides);
+  // A reversal reported next to a sweep by the same athlete is the same action.
+  const sweepTimes = events.flatMap((event) => (event.type === 'sweep' ? [{ t: event.t, athlete: event.athlete }] : []));
 
   // 1. Terminal events: the first submission, or a 4th-penalty disqualification.
   const submission = events.find((event) => event.type === 'submission');
@@ -392,8 +402,14 @@ function score(events: BjjEvent[], options: ResolvedScoreOptions<BjjVariant>): S
     switch (event.type) {
       case 'takedown':
       case 'sweep':
-      case 'guard_pass': {
+      case 'guard_pass':
+      case 'reversal': {
         if (!scoresPoints) break;
+        if (event.type === 'reversal') {
+          if (!scoresReversals) break;
+          const { t, athlete } = event;
+          if (sweepTimes.some((sweep) => sweep.athlete === athlete && Math.abs(sweep.t - t) <= BJJ_TIMING.actionSlackMs)) break;
+        }
         const window: Interval = {
           start: event.t,
           end: event.t + BJJ_TIMING.stabilizationMs + BJJ_TIMING.actionSlackMs,

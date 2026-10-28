@@ -31,6 +31,10 @@ const MESSAGES: Record<string, string> = {
   validation_failed: 'Some of the details are invalid.',
   owner_account: 'Transfer the owner role before deleting this account.',
   mfa_required: 'Verify this sign-in with your authenticator app first.',
+  not_ready: 'This result is still waiting for confirmation.',
+  busy: 'Ratings are being updated. Try again in a moment.',
+  invalid_scorecard: 'This recording has no usable scorecard.',
+  '22023': "That isn't possible right now. Refresh and try again.",
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",
   P0429: 'Too many requests. Please wait a moment and try again.',

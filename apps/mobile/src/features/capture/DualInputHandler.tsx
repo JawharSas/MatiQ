@@ -8,6 +8,9 @@
  * Live recordings with live sampling also run live analysis: uploaded frames
  * are analysed in batches during the round (provisional score on screen) and
  * finalize only analyses what is left.
+ *
+ * Ranked recordings fix the ruleset agreed in the challenge and link the
+ * draft to the ranked match before any upload; the recorder is Fighter 1.
  */
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -16,6 +19,8 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { useStoredKeys } from '@/features/api-keys/api';
+import { linkRankedMatch } from '@/features/ranked/api';
+import { type RankedRecording, rankedSetup } from '@/features/ranked/recording';
 import { remainingAnalyses, useMyUsage } from '@/features/usage/useMyUsage';
 import { errorMessage } from '@/lib/errors';
 import { matchSetupSchema } from '@/lib/validation';
@@ -51,7 +56,7 @@ type Phase =
   | { kind: 'processing'; step: string; progress?: number }
   | { kind: 'failed'; message: string };
 
-export function DualInputHandler() {
+export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: RankedRecording | null; onExitRanked?: () => void }) {
   const userId = useUserId();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -59,7 +64,7 @@ export function DualInputHandler() {
   const keys = useStoredKeys();
 
   const [mode, setMode] = useState<Mode>('live');
-  const [setup, setSetup] = useState<MatchSetup>(defaultSetup());
+  const [setup, setSetup] = useState<MatchSetup>(() => (ranked ? rankedSetup(ranked) : defaultSetup()));
   const [phase, setPhase] = useState<Phase>({ kind: 'setup' });
   const matchIdRef = useRef<string | null>(null);
   const queueRef = useRef<FrameUploadQueue | null>(null);
@@ -77,11 +82,21 @@ export function DualInputHandler() {
       setPhase({ kind: 'failed', message: 'Check the match details.' });
       return null;
     }
-    return { ...setup, ...parsed.data };
+    const clean = { ...setup, ...parsed.data };
+    // The ranked ruleset can't be changed from the form, but never trust state.
+    return ranked ? { ...clean, discipline: ranked.discipline, variant: ranked.variant } : clean;
   };
 
   const openSession = async (cleanSetup: MatchSetup, durationMs: number, { live = false } = {}) => {
     const matchId = await createDraftMatch(cleanSetup, mode, durationMs);
+    if (ranked) {
+      try {
+        await linkRankedMatch(ranked.id, matchId);
+      } catch (error) {
+        await discardMatch(userId, matchId).catch(() => undefined);
+        throw error;
+      }
+    }
     matchIdRef.current = matchId;
     const batcher = live ? new LiveBatcher(matchId) : null;
     batcherRef.current = batcher;
@@ -107,6 +122,7 @@ export function DualInputHandler() {
     }
     await queryClient.invalidateQueries({ queryKey: ['my-usage'] });
     await queryClient.invalidateQueries({ queryKey: ['my-matches'] });
+    if (ranked) await queryClient.invalidateQueries({ queryKey: ['ranked'] });
     reset();
     router.push({ pathname: '/match/[id]', params: { id: matchId } });
   };
@@ -290,7 +306,17 @@ export function DualInputHandler() {
         value={mode}
         onChange={setMode}
       />
-      <MatchSetupForm value={setup} onChange={setSetup} hasOwnKey={(keys.data?.length ?? 0) > 0} />
+      {ranked ? (
+        <Card>
+          <Heading>Ranked: {ranked.myName} vs {ranked.opponentName}</Heading>
+          <Caption>
+            You are Fighter 1. After the analysis, {ranked.opponentName} can watch the recording and confirm or dispute the
+            result. A win you record only counts once they confirm it.
+          </Caption>
+          {onExitRanked ? <Button label="Record a casual match instead" variant="secondary" onPress={onExitRanked} /> : null}
+        </Card>
+      ) : null}
+      <MatchSetupForm value={setup} onChange={setSetup} hasOwnKey={(keys.data?.length ?? 0) > 0} rulesetLocked={ranked !== null} />
       <Card>
         <Caption>
           {remaining === 'unlimited'

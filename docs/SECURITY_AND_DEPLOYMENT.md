@@ -10,13 +10,15 @@ the repository safely.
 |---|---|---|
 | API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the repo with gitleaks; a bundle check confirms no secrets compile in. | `apps/mobile/src/config/env.ts`, `.github/workflows/ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table; `anon` has no table access; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 87 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Reading other users' data | RLS on every table; `anon` has no table access; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 131 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
 | Stolen or phished password | Optional TOTP two-factor authentication. Once enrolled, `aal1` sessions are refused by restrictive RLS policies (tables, Realtime, Storage), a PostgREST pre-request hook (RPCs) and the Edge Function middleware. | `20261024000300_mfa_enforcement.sql`, `_shared/mfa.ts`, `settings/two-factor.tsx` |
 | Location leaks from photos | Profile pictures are re-encoded on the device (pixels only, no EXIF) before upload; private bucket, one-hour signed URLs. | `features/social/avatar.ts` |
 | Live-analysis abuse (re-analysing frames, injecting paths) | Batches are claimed atomically: no overlapping frames, per-match frame budget, unique batch index, frames resolved against the user's own storage folder. One quota unit per match. | `20261024000200_live_analysis.sql`, `analyze-match/pipeline.ts` |
+| Rating manipulation (fake results, alt-account farming, races) | Ratings, history and titles are written only by the `ranked` function via `svc_apply_ranked_result` (no client write grants). Results come from an analysed recording linked before upload; the opponent can watch it and dispute; a recorder's own win needs the opponent's confirmation; max 3 ranked matches per pair per week; versioned rows reject concurrent overwrites; settlement applies once. | `20261028000100_ranked.sql`, `supabase/functions/ranked` |
+| Ranked data leaking private accounts | Ratings and titles follow the profile privacy rule; ranked matches and rating history are participant/own-only; ladder and matchmaking are `SECURITY INVOKER`, so RLS decides who appears. The owner can view a recording only while a dispute about it is open. | `20261028000100_ranked.sql` |
 | Session theft from device | Tokens in AES-256 MMKV; key in Keychain/Keystore (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`); `allowBackup=false`; short JWT expiry with rotating refresh tokens; sign out of all devices. | `lib/storage.ts`, `lib/secure-store.ts`, `app.config.ts` |
 | Man-in-the-middle | HTTPS only (ATS / `usesCleartextTraffic=false`), SPKI pinning with backup pins and optional expiry, PKCE for email links. | `lib/ssl-pinning.ts`, `auth/callback.tsx` |
 | Malicious input (XSS-style spoofing, oversized payloads, prompt injection) | Zod validation client and server, DB CHECK constraints (length, control chars, bidi overrides), body-size limits, plain-text rendering only, athlete hints stripped of markup and fenced as data in prompts, model output re-validated by the rules engine. | `lib/validation.ts`, `_shared/http.ts`, `_shared/ai/prompts.ts` |
@@ -87,9 +89,10 @@ Then in the dashboard, mirror `supabase/config.toml`:
   to known IPs, enable Point-in-Time Recovery for production.
 - **Storage**: raise the global upload limit to at least 500 MB if you allow
   long videos (bucket limits are set by the migration).
-- **Realtime**: the migrations add `public.matches` and
-  `public.match_live_batches` to `supabase_realtime`; Realtime applies RLS,
-  so users only receive their own (or shared) rows.
+- **Realtime**: the migrations add `public.matches`,
+  `public.match_live_batches` and `public.ranked_matches` to
+  `supabase_realtime`; Realtime applies RLS, so users only receive their own
+  (or shared / participant) rows.
 - **Two-factor pre-request hook**: migration `20261024000300` sets
   `pgrst.db_pre_request = 'public.check_request_mfa'` on the `authenticator`
   role. Confirm it took effect with
@@ -145,7 +148,8 @@ sessions (sign out of all devices).
 
 | Function | Methods | Purpose | Rate limit (per user) |
 |---|---|---|---|
-| `analyze-match` | POST | validate, reserve quota, run analysis in background | 20 / hour |
+| `analyze-match` | POST | validate, reserve quota, run analysis (one-shot or live batches) in background | 20 starts / hour, 300 requests / hour |
+| `ranked` | POST | confirm ranked results, settle Elo / titles with version checks | 60 / hour |
 | `api-keys` | GET, POST, DELETE | BYOK vault | 60 / min (writes 10 / hour) |
 | `account` | GET, DELETE | data export, account deletion | 30 / hour (export 5 / day) |
 
@@ -220,6 +224,7 @@ Panel screens, device authentication before opening them.
 | KEK exposed | Rotate (section 4) immediately, then ask users to replace their stored keys. |
 | Service-role key exposed | Rotate the project's API keys / JWT secret in the dashboard, redeploy functions. |
 | Abuse of analysis quota | Lower `monthly_analysis_limit`, review `admin_usage_overview`, suspend offenders. |
+| Ranked cheating reported | Owner Panel → Disputes: watch the recording, void the match. For accounts farming ratings, suspend them (suspended users cannot play ranked). |
 
 ## 8. Publishing the repository to GitHub
 
@@ -247,6 +252,7 @@ Then in the GitHub repository settings:
 - [ ] Supabase Security Advisor has no findings.
 - [ ] Owner account bootstrapped, MFA enrolled, `owner_requires_mfa = true`.
 - [ ] `authenticator` role has `pgrst.db_pre_request = public.check_request_mfa`; a test account with 2FA gets `mfa_required` from the Data API with an `aal1` token.
+- [ ] `ranked` function deployed (`npm run functions:deploy` deploys all functions); one ranked match played end to end between two test accounts, including a dispute resolved in the Owner Panel.
 - [ ] Production secrets set; no secrets in EAS `EXPO_PUBLIC_*` variables.
 - [ ] TLS pins configured with a backup pin.
 - [ ] Privacy Policy and Terms reviewed by counsel; `LEGAL_VERSIONS` bumped when they change.

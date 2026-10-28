@@ -17,6 +17,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'Feed' }} />
       <Tabs.Screen name="record" options={{ title: 'Analyze' }} />
+      <Tabs.Screen name="ranked" options={{ title: 'Ranked' }} />
       <Tabs.Screen name="matches" options={{ title: 'Matches' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>

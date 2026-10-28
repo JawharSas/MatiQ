@@ -6,7 +6,7 @@
  */
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fromPostgrest } from '@/lib/errors';
+import { fromFunctionError, fromPostgrest } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/validation';
 
@@ -84,6 +84,57 @@ export function useAuditLog() {
       if (error) throw fromPostgrest(error);
       return (data ?? []) as AuditEntry[];
     },
+  });
+}
+
+export interface RankedDispute {
+  id: string;
+  discipline: 'bjj' | 'wrestling' | 'mma';
+  variant: string;
+  match_id: string | null;
+  fighter_a_id: string;
+  fighter_a_username: string | null;
+  fighter_b_id: string;
+  fighter_b_username: string | null;
+  winner_id: string | null;
+  result_method: string | null;
+  dispute_reason: string | null;
+  disputed_by: string | null;
+  recorded_at: string | null;
+  updated_at: string;
+}
+
+export function useRankedDisputes() {
+  return useQuery({
+    queryKey: ['admin', 'ranked-disputes'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('admin_list_ranked_disputes', { p_limit: 50 });
+      if (error) throw fromPostgrest(error);
+      return (data ?? []) as RankedDispute[];
+    },
+  });
+}
+
+/**
+ * Voids a disputed ranked result, or upholds it: the server marks it ready
+ * and the `ranked` function applies the ratings. Both are audited.
+ */
+export function useResolveDispute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, outcome, reason }: { id: string; outcome: 'apply' | 'void'; reason?: string }) => {
+      const { error } = await supabase.rpc('admin_resolve_ranked_dispute', {
+        p_id: id,
+        p_outcome: outcome,
+        p_reason: reason ? cleanText(reason) : null,
+      });
+      if (error) throw fromPostgrest(error);
+      if (outcome === 'apply') {
+        const { error: settleError } = await supabase.functions.invoke('ranked', { body: { action: 'settle', id } });
+        if (settleError) throw await fromFunctionError(settleError);
+      }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
   });
 }
 

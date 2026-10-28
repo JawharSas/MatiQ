@@ -1,18 +1,22 @@
 import { useDeferredValue, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
 import { colors, font, spacing } from '@/ui/theme';
 import {
   type AdminUserRow,
+  type RankedDispute,
   useAdminUsers,
   useAuditLog,
+  useRankedDisputes,
+  useResolveDispute,
   useSetUnlimited,
   useUpdateEntitlements,
   useUsageOverview,
 } from './api';
 
-type Tab = 'users' | 'overview' | 'audit';
+type Tab = 'users' | 'overview' | 'disputes' | 'audit';
 
 export function OwnerPanel() {
   const [tab, setTab] = useState<Tab>('users');
@@ -22,12 +26,13 @@ export function OwnerPanel() {
         options={[
           { value: 'users', label: 'Users' },
           { value: 'overview', label: 'Usage' },
+          { value: 'disputes', label: 'Disputes' },
           { value: 'audit', label: 'Audit log' },
         ]}
         value={tab}
         onChange={setTab}
       />
-      {tab === 'users' ? <UserSearch /> : tab === 'overview' ? <Overview /> : <AuditLog />}
+      {tab === 'users' ? <UserSearch /> : tab === 'overview' ? <Overview /> : tab === 'disputes' ? <Disputes /> : <AuditLog />}
     </View>
   );
 }
@@ -182,6 +187,62 @@ function Overview() {
         ))}
       </Card>
     </View>
+  );
+}
+
+function Disputes() {
+  const disputes = useRankedDisputes();
+  if (disputes.error) return <ErrorText>{errorMessage(disputes.error)}</ErrorText>;
+  return (
+    <View style={styles.stack}>
+      <Caption>
+        Disputed ranked results. Watch the recording, then uphold the analysed result (ratings are applied) or void the match (no
+        rating change). Both fighters see the outcome.
+      </Caption>
+      {disputes.data?.map((dispute) => <DisputeCard key={dispute.id} dispute={dispute} />)}
+      {disputes.data?.length === 0 ? <Caption>No open disputes.</Caption> : null}
+    </View>
+  );
+}
+
+function DisputeCard({ dispute }: { dispute: RankedDispute }) {
+  const router = useRouter();
+  const resolve = useResolveDispute();
+  const name = (uid: string | null, username: string | null) => (uid ? `@${username ?? 'deleted'}` : 'nobody');
+  const winner =
+    dispute.winner_id === null
+      ? 'Draw'
+      : `${name(dispute.winner_id, dispute.winner_id === dispute.fighter_a_id ? dispute.fighter_a_username : dispute.fighter_b_username)} by ${(dispute.result_method ?? 'decision').replace(/_/g, ' ')}`;
+  const disputedBy = dispute.disputed_by === dispute.fighter_a_id ? dispute.fighter_a_username : dispute.fighter_b_username;
+
+  const confirmResolve = (outcome: 'apply' | 'void') =>
+    Alert.alert(outcome === 'apply' ? 'Uphold this result?' : 'Void this match?', outcome === 'apply' ? 'Ratings will be updated.' : 'No ratings change.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: outcome === 'apply' ? 'Uphold' : 'Void', style: 'destructive', onPress: () => resolve.mutate({ id: dispute.id, outcome }) },
+    ]);
+
+  return (
+    <Card>
+      <Text style={font.body}>
+        @{dispute.fighter_a_username ?? 'deleted'} vs @{dispute.fighter_b_username ?? 'deleted'} · {dispute.discipline.toUpperCase()} ({dispute.variant})
+      </Text>
+      <Caption>Analysed result: {winner}</Caption>
+      <Caption>
+        Disputed by @{disputedBy ?? 'deleted'}: {dispute.dispute_reason ?? 'no reason given'}
+      </Caption>
+      {dispute.match_id ? (
+        <Button label="Watch recording" variant="secondary" onPress={() => router.push({ pathname: '/match/[id]', params: { id: dispute.match_id! } })} />
+      ) : null}
+      <View style={styles.pager}>
+        <View style={styles.fill}>
+          <Button label="Uphold result" disabled={resolve.isPending} onPress={() => confirmResolve('apply')} />
+        </View>
+        <View style={styles.fill}>
+          <Button label="Void match" variant="danger" disabled={resolve.isPending} onPress={() => confirmResolve('void')} />
+        </View>
+      </View>
+      <ErrorText>{resolve.error ? errorMessage(resolve.error) : null}</ErrorText>
+    </Card>
   );
 }
 

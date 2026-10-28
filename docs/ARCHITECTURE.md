@@ -17,7 +17,7 @@ flowchart LR
     API["PostgREST<br/>RLS on every table"]
     RT["Realtime<br/>match status, live batches"]
     ST[("Storage<br/>private buckets")]
-    EF["Edge Functions (Deno)<br/>analyze-match · api-keys · account"]
+    EF["Edge Functions (Deno)<br/>analyze-match · ranked · api-keys · account"]
     DB[("Postgres<br/>public + private schemas")]
   end
 
@@ -120,6 +120,16 @@ sequenceDiagram
 - A match abandoned mid-recording stays `live`; deleting it releases the
   reservation, and the stale-reservation sweep refunds it otherwise.
 
+### Rulesets
+
+Every scorecard is Fighter 1 (athlete A) vs Fighter 2 (athlete B).
+
+| Discipline | Variants | Scoring |
+|---|---|---|
+| BJJ | `ibjjf`, `ibjjf_reversals`, `submission_only` | Takedown, sweep, knee on belly 2 · guard pass 3 · mount, back control 4 (3 s stabilisation), advantages, penalty progression, submissions. `ibjjf_reversals` adds 2 points for a stabilised reversal from a non-guard bottom position (IBJJF itself only scores reversals from guard, as sweeps). |
+| Wrestling | `folkstyle`, `freestyle` | Folkstyle: takedown 3, escape 1, reversal 2, near fall 2/3/4 by hold time, riding time 1 (≥ 1:00 net), falls, technical fall at 15. Freestyle: takedown 2 (4 to danger), grand amplitude 4/5, exposure 2, step-out 1, reversal 1, passivity 1, cautions, technical superiority at 10. |
+| MMA | `unified` | Strikes landed/attempted by target and position, knockdowns, takedowns, control time, submission attempts, finishes; projected 10-point-must round scores. |
+
 ### Why the AI only detects events
 
 Vision models are good at recognising *what happened* and poor at applying
@@ -203,6 +213,11 @@ erDiagram
   AUTH_USERS ||--o| USER_API_KEYS : "stores (private schema)"
   MATCHES ||--o{ MATCH_LIVE_BATCHES : "analysed live in"
   MATCHES ||--o| LIVE_SESSIONS : "has (private schema)"
+  MATCHES ||--o| RANKED_MATCHES : "is the recording of"
+  AUTH_USERS ||--o{ RANKED_MATCHES : "challenger / opponent"
+  AUTH_USERS ||--o{ RANKED_RATINGS : "rated per discipline"
+  AUTH_USERS ||--o{ RATING_HISTORY : "rating changes"
+  AUTH_USERS ||--o{ USER_TITLES : unlocks
 ```
 
 `private` schema (not exposed through the API): `user_api_keys`,
@@ -257,6 +272,103 @@ calls can additionally require `aal2` for every owner
 
 The feed (`get_feed`) is `SECURITY INVOKER`: it runs under the caller's RLS,
 so it cannot return anything the caller could not read directly.
+
+## Ranked ladder
+
+Ranked play turns analysed matches between two MatIQ users into Elo
+ratings. The scoring stays in the rules engine; ranking adds who the
+fighters are and a confirmation step, because the AI only sees a video.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending: challenge
+  pending --> accepted: opponent accepts
+  pending --> declined
+  pending --> cancelled
+  accepted --> cancelled: before recording
+  pending --> expired: 7 days
+  accepted --> expired: 7 days unrecorded
+  accepted --> awaiting_confirmation: recording linked + analysis completed
+  awaiting_confirmation --> confirmed: both confirm, or 72 h undisputed (not for the recorder's own win)
+  awaiting_confirmation --> disputed: either fighter
+  awaiting_confirmation --> voided: recording deleted, or recorder's win unconfirmed for 7 days
+  disputed --> awaiting_confirmation: owner upholds (ready)
+  disputed --> voided: owner voids
+  confirmed --> [*]
+```
+
+- **Fighters.** Whoever records links their fresh draft to the accepted
+  challenge (`link_ranked_match`) and becomes Fighter 1 (athlete A); the
+  other participant is Fighter 2 (athlete B). The ruleset is fixed by the
+  challenge and the recording must use it. Fighter 2 can watch the
+  recording and read the scorecard (`private.can_view_match`).
+- **Confirmation.** When the analysis completes, a trigger proposes the
+  result. Either fighter can dispute it. It settles when both confirm, or
+  after 72 hours without a dispute, except that a win the recorder claims
+  for themselves always needs Fighter 2's confirmation (otherwise it is
+  voided after 7 days): the person holding the camera can't bank wins
+  alone.
+- **Settlement.** The `ranked` Edge Function loads both rating rows,
+  computes everything with `settleRankedMatch` (shared rules engine) and
+  calls `svc_apply_ranked_result` with the row versions it read. The RPC
+  locks both rows in a fixed order, rejects stale versions (`conflict`, the
+  function recomputes and retries) and applies at most once.
+- **Anti-abuse.** One open ranked match per pair and discipline, at most 3
+  ranked matches per pair in any 7 days, 20 challenges a day, private
+  strangers can't be challenged, suspended users can't play, and disputes
+  are resolved in the Owner Panel (audited). During an open dispute, and
+  only then, the owner can view that recording.
+
+### Elo
+
+`expected = 1 / (1 + 10^((R_opp - R) / 400))`, `delta = round(K × m × (score − expected))`.
+
+| | Value |
+|---|---|
+| Start / floor | 1000 / 100 |
+| K | 40 for the first 10 ranked matches, 24 afterwards, 16 from 1500 |
+| m (finish multiplier) | 1.25 submission, KO/TKO, fall · 1.15 technical superiority · 1 otherwise |
+| Minimum move | ±1 for any decisive result |
+
+### Tiers and belts
+
+| Tier | Belt | Rating | Divisions |
+|---|---|---|---|
+| Bronze | White Belt | < 1050 | III < 950, II 950–999, I 1000–1049 |
+| Silver | Blue Belt | 1050–1199 | 50 points each |
+| Gold | Purple Belt | 1200–1349 | 50 points each |
+| Platinum | Brown Belt | 1350–1499 | 50 points each |
+| Grandmaster | Black Belt | ≥ 1500 | none |
+
+New fighters start at 1000 (Bronze I) and show "Placement n/5" for their
+first 5 matches. The leaderboard lists fighters after placement; private
+accounts only appear to their friends.
+
+### Titles
+
+Titles are computed from career totals per discipline
+(`packages/rules-engine/src/ranking/titles.ts`), only from confirmed ranked
+matches, and kept once earned. A fighter can feature one on their profile
+and the ladder.
+
+| Title | Requirement |
+|---|---|
+| Submission Wizard | 5 wins by submission (BJJ, MMA) |
+| Takedown Machine | 25 takedowns |
+| Iron Chin | absorb 100 significant strikes in MMA, never stopped by KO/TKO |
+| Knockout Artist | 3 KO/TKO wins |
+| Volume Striker | 250 significant strikes landed |
+| Sweep Specialist | 10 sweeps (BJJ) |
+| Pressure Passer | 15 guard passes (BJJ) |
+| Backpack | 10 scored back takes (BJJ) |
+| Escape Artist | 20 escapes (BJJ, wrestling) |
+| Pinning Machine | 3 wins by fall (wrestling) |
+| Technician | 3 technical-superiority wins (wrestling) |
+| Control Freak | 30 minutes of top control or riding time |
+| Unstoppable | 5 wins in a row |
+| Giant Slayer | beat someone rated 200+ above you |
+| Veteran | 25 ranked matches |
+| Grandmaster | reach 1500 |
 
 ## Usage limits
 

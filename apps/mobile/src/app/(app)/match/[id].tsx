@@ -9,6 +9,8 @@ import { useStoredKeys } from '@/features/api-keys/api';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { cancelLiveAnalysis } from '@/features/capture/live-analysis';
 import { discardMatch, requestAnalysis } from '@/features/capture/match-session';
+import { useRankedForMatch } from '@/features/ranked/api';
+import { describeRanked } from '@/features/ranked/ranked-state';
 import { errorMessage, messageFor } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen } from '@/ui/components';
 
@@ -40,6 +42,7 @@ function MatchView({ id, clipStart, clipEnd }: { id: string; clipStart?: number;
   const isOwner = match.data?.owner_id === userId;
   // Only needed to offer a BYOK retry on the owner's failed matches.
   const keys = useStoredKeys(isOwner && match.data?.status === 'failed');
+  const ranked = useRankedForMatch(id);
   const retry = useMutation({
     mutationFn: (keySource: 'platform' | 'byok') => requestAnalysis(id, { keySource }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['match', id] }),
@@ -58,8 +61,12 @@ function MatchView({ id, clipStart, clipEnd }: { id: string; clipStart?: number;
   const hasStoredKey = (keys.data?.length ?? 0) > 0;
   const title = data.title || `${data.athlete_a_label} vs ${data.athlete_b_label}`;
 
+  const rankedPending = ranked.data?.status === 'awaiting_confirmation' || ranked.data?.status === 'disputed';
   const remove = () =>
-    Alert.alert('Delete this match?', 'The video, analysis and any posts sharing it will be permanently deleted.', [
+    Alert.alert(
+      'Delete this match?',
+      `The video, analysis and any posts sharing it will be permanently deleted.${rankedPending ? ' The unconfirmed ranked result will be voided.' : ''}`,
+      [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -69,14 +76,29 @@ function MatchView({ id, clipStart, clipEnd }: { id: string; clipStart?: number;
           if (data.status === 'live') await cancelLiveAnalysis(id).catch(() => undefined);
           await discardMatch(userId, id);
           await queryClient.invalidateQueries({ queryKey: ['my-matches'] });
+          await queryClient.invalidateQueries({ queryKey: ['ranked'] });
           router.back();
         },
       },
-    ]);
+      ],
+    );
+
+  const rankedView = ranked.data ? describeRanked(ranked.data, userId) : null;
 
   return (
     <Screen>
       <Stack.Screen options={{ title }} />
+      {ranked.data && rankedView ? (
+        <Card>
+          <Heading>Ranked match</Heading>
+          <Body muted>{rankedView.label}</Body>
+          <Button
+            label={rankedView.canConfirm ? 'Confirm or dispute the result' : 'Ranked details'}
+            variant={rankedView.canConfirm ? 'primary' : 'secondary'}
+            onPress={() => router.push({ pathname: '/ranked/match/[id]', params: { id: ranked.data!.id } })}
+          />
+        </Card>
+      ) : null}
       {data.status === 'live' ? (
         <Card>
           <Heading>Live analysis in progress</Heading>
