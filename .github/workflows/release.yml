@@ -65,6 +65,17 @@ jobs:
       - name: Generate the native Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
+      - name: Install the Android SDK parts React Native needs
+        # Left to Gradle, several native modules download the NDK at the
+        # same time and corrupt the archive ("Archive is not a ZIP archive").
+        run: |
+          toml=node_modules/react-native/gradle/libs.versions.toml
+          get() { sed -n "s/^$1 *= *\"\(.*\)\"/\1/p" "$toml"; }
+          ndk=$(get ndkVersion); compile=$(get compileSdk); tools=$(get buildTools)
+          [ -n "$ndk" ] && [ -n "$compile" ] && [ -n "$tools" ] || { echo "::error::Could not read SDK versions from $toml"; exit 1; }
+          echo "NDK $ndk, platform android-$compile, build-tools $tools"
+          (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" "platforms;android-$compile" "build-tools;$tools" > /dev/null
+          test -d "$ANDROID_HOME/ndk/$ndk" || { echo "::error::NDK $ndk was not installed"; exit 1; }
       - name: Build the release APK
         working-directory: apps/mobile/android
         # Debug-signed: for sideloading by testers. Store builds use EAS (eas.json).
