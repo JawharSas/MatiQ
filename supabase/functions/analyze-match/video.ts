@@ -12,9 +12,14 @@
  *      frames themselves were read on the phone);
  *   3. publishes it as `video.{mp4|mov}`, the only name viewers can read, or
  *      deletes it.
+ *
+ * When the check can't run (storage unreachable), the upload stays in
+ * `checking.*` and `video_check_unavailable` is thrown; callers mark the
+ * match failed, so "Retry analysis" checks it again.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { HttpError } from '../_shared/http.ts';
 import type { Logger } from '../_shared/log.ts';
 import { type ByteSource, checkVideoFile } from '../_shared/rules-engine/media/index.ts';
 
@@ -26,6 +31,7 @@ const MAX_FETCH_BYTES = 40 * 1024 * 1024;
 const UPLOADED = /^upload\.(mp4|mov)$/;
 const CHECKING = /^checking\.(mp4|mov)$/;
 const PUBLISHED = new Set(['video.mp4', 'video.mov']);
+const CHECK_ATTEMPTS = 3;
 
 type Fetch = typeof fetch;
 
@@ -67,7 +73,7 @@ export async function publishVideo(
   ownerId: string,
   matchId: string,
   log: Logger,
-  fetchFn: Fetch = fetch,
+  { fetchFn = fetch, retryDelayMs = 1000 }: { fetchFn?: Fetch; retryDelayMs?: number } = {},
 ): Promise<boolean> {
   const folder = `${ownerId}/${matchId}`;
   const storage = admin.storage.from(BUCKET);
@@ -88,16 +94,19 @@ export async function publishVideo(
   if (!pending) return published.length > 0;
 
   const path = `${folder}/${pending}`;
-  const { data: signed, error: signError } = await storage.createSignedUrl(path, 120);
-  if (signError || !signed) throw new Error(`signing the upload failed: ${signError?.message ?? 'no url'}`);
-
   let result;
-  try {
-    result = await checkVideoFile(await rangeSource(signed.signedUrl, fetchFn), { maxBytes: MAX_VIDEO_BYTES });
-  } catch (cause) {
-    // Not published; the next analysis attempt checks it again.
-    log.warn('video check could not run', { error: cause });
-    return published.length > 0;
+  for (let attempt = 1; !result; attempt++) {
+    try {
+      const { data: signed, error: signError } = await storage.createSignedUrl(path, 120);
+      if (signError || !signed) throw new Error(`signing the upload failed: ${signError?.message ?? 'no url'}`);
+      result = await checkVideoFile(await rangeSource(signed.signedUrl, fetchFn), { maxBytes: MAX_VIDEO_BYTES });
+    } catch (cause) {
+      log.warn('video check could not run', { attempt, error: cause });
+      if (attempt >= CHECK_ATTEMPTS) {
+        throw new HttpError(503, 'video_check_unavailable', 'The uploaded video could not be checked; try again');
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+    }
   }
 
   if (!result.ok) {

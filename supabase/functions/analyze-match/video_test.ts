@@ -102,27 +102,44 @@ Deno.test('rangeSource refuses servers that ignore Range', async () => {
 
 Deno.test('a genuine upload is checked and published as video.mp4', async () => {
   const storage = fakeStorage({ [`${folder}/upload.mp4`]: MP4 });
-  const published = await publishVideo(storage.admin, 'user-1', 'match-1', silent, storage.fetch);
+  const published = await publishVideo(storage.admin, 'user-1', 'match-1', silent, { fetchFn: storage.fetch });
   assert(published, 'published');
   assert([...storage.objects.keys()].join() === `${folder}/video.mp4`, `only video.mp4 remains: ${[...storage.objects.keys()]}`);
 });
 
 Deno.test('anything else is deleted, never published', async () => {
   const storage = fakeStorage({ [`${folder}/upload.mp4`]: NOT_A_VIDEO });
-  const published = await publishVideo(storage.admin, 'user-1', 'match-1', silent, storage.fetch);
+  const published = await publishVideo(storage.admin, 'user-1', 'match-1', silent, { fetchFn: storage.fetch });
   assert(!published, 'not published');
   assert(storage.objects.size === 0, 'the upload is gone');
 });
 
 Deno.test('a rejected re-upload keeps the earlier published video', async () => {
   const storage = fakeStorage({ [`${folder}/video.mp4`]: MP4, [`${folder}/upload.mov`]: NOT_A_VIDEO });
-  assert(await publishVideo(storage.admin, 'user-1', 'match-1', silent, storage.fetch), 'still has a video');
+  assert(await publishVideo(storage.admin, 'user-1', 'match-1', silent, { fetchFn: storage.fetch }), 'still has a video');
   assert([...storage.objects.keys()].join() === `${folder}/video.mp4`, 'the bad upload is removed');
 });
 
 Deno.test('no upload: reports the published state unchanged', async () => {
   const none = fakeStorage({});
-  assert(!(await publishVideo(none.admin, 'user-1', 'match-1', silent, none.fetch)), 'no video');
+  assert(!(await publishVideo(none.admin, 'user-1', 'match-1', silent, { fetchFn: none.fetch })), 'no video');
   const existing = fakeStorage({ [`${folder}/video.mov`]: MP4 });
-  assert(await publishVideo(existing.admin, 'user-1', 'match-1', silent, existing.fetch), 'existing video');
+  assert(await publishVideo(existing.admin, 'user-1', 'match-1', silent, { fetchFn: existing.fetch }), 'existing video');
+});
+
+Deno.test('a check that cannot run keeps the upload for a retry', async () => {
+  const storage = fakeStorage({ [`${folder}/upload.mp4`]: MP4 });
+  let calls = 0;
+  const down = (() => {
+    calls++;
+    return Promise.reject(new Error('storage unreachable'));
+  }) as typeof fetch;
+  let code = '';
+  await publishVideo(storage.admin, 'user-1', 'match-1', silent, { fetchFn: down, retryDelayMs: 0 }).catch((error) => (code = error.code));
+  assert(code === 'video_check_unavailable', `retryable error, got ${code}`);
+  assert(calls === 3, `three attempts, got ${calls}`);
+  assert([...storage.objects.keys()].join() === `${folder}/checking.mp4`, 'the upload is held, not deleted or published');
+
+  assert(await publishVideo(storage.admin, 'user-1', 'match-1', silent, { fetchFn: storage.fetch }), 'the retry publishes it');
+  assert([...storage.objects.keys()].join() === `${folder}/video.mp4`, 'published after the retry');
 });

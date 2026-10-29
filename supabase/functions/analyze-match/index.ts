@@ -108,6 +108,22 @@ async function createProvider(ctx: RequestContext, source: KeySource): Promise<A
 const batching = () => ({ framesPerRequest: env.analysisFramesPerRequest(), concurrency: env.analysisConcurrency() });
 const errorCode = (error: unknown) => (error instanceof AnalysisError ? error.code : 'internal_error');
 
+/**
+ * Checks and publishes an uploaded video. If that fails (storage
+ * unreachable), the match is marked failed so "Retry analysis" runs the check
+ * again on the video held in `checking.*`.
+ */
+async function publishMatchVideo(ctx: RequestContext, id: string, beforeFailing?: () => Promise<void>): Promise<boolean> {
+  try {
+    return await publishVideo(ctx.admin, ctx.user.id, id, ctx.log);
+  } catch (error) {
+    await beforeFailing?.();
+    const code = error instanceof HttpError ? error.code : 'video_check_unavailable';
+    await setStatus(ctx.admin, id, 'failed', { p_error_code: code }).catch(() => undefined);
+    throw error;
+  }
+}
+
 // analyze ---------------------------------------------------------------------------
 
 async function handleAnalyze(ctx: RequestContext, body: { matchId: string; keySource: KeySource; athleteA?: string; athleteB?: string }) {
@@ -119,7 +135,7 @@ async function handleAnalyze(ctx: RequestContext, body: { matchId: string; keySo
   if (allFrames.length < MIN_FRAMES) throw new HttpError(422, 'frames_missing', 'Upload frames before starting analysis');
   const frames = subsample(allFrames, env.analysisMaxFrames());
 
-  const hasVideo = await publishVideo(ctx.admin, ctx.user.id, match.id, ctx.log);
+  const hasVideo = await publishMatchVideo(ctx, match.id);
 
   const provider = await createProvider(ctx, body.keySource);
   const log = ctx.log.child({ matchId: match.id });
@@ -252,7 +268,11 @@ async function handleLiveFinalize(ctx: RequestContext, body: { matchId: string }
   const frames = (await listFrames(ctx.admin, ctx.user.id, match.id)).filter((frame) => frame.t <= match.duration_ms + 2000);
   if (frames.length < MIN_FRAMES) throw new HttpError(422, 'frames_missing');
 
-  const hasVideo = await publishVideo(ctx.admin, ctx.user.id, match.id, ctx.log);
+  const hasVideo = await publishMatchVideo(ctx, match.id, async () => {
+    // Same as a failed finalize: end the live session and refund its quota.
+    await ctx.admin.rpc('svc_end_live_session', { p_match_id: match.id }).then(undefined, () => undefined);
+    await settleUsage(ctx.admin, session.reservation_id, false).catch(() => undefined);
+  });
   await setStatus(ctx.admin, match.id, 'queued', { p_frame_count: frames.length, p_has_video: hasVideo, p_error_code: null });
 
   const provider = await createProvider(ctx, session.key_source);
