@@ -44,6 +44,12 @@ jobs:
     steps:
       - id: check
         run: |
+          # Only reviewed code reaches the live project: a manual run started
+          # on another branch stops here.
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Deploy backend only deploys main. Start it with \"Use workflow from: main\" (this run is on $GITHUB_REF_NAME)."
+            exit 1
+          fi
           if [ "$HAS_TOKEN" != true ]; then
             message="Add the SUPABASE_ACCESS_TOKEN secret (from supabase.com/dashboard/account/tokens) under Settings -> Secrets and variables -> Actions, then run Deploy backend."
             # A backend change merged before the backend is set up is not a failure.
