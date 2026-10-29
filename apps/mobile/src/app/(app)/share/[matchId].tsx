@@ -8,7 +8,7 @@ import { Text } from '@/ui/text';
 import { useMatch } from '@/features/analysis/useMatch';
 import { useAuth, useUserId } from '@/features/auth/AuthProvider';
 import { createPost, useProfile } from '@/features/social/api';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, postSchema } from '@/lib/validation';
 import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow } from '@/ui/components';
 import { colors, font } from '@/ui/theme';
@@ -47,6 +47,7 @@ export default function ShareScreen() {
       router.back();
     } catch (caught) {
       setError(errorMessage(caught));
+      if (isBannedError(caught)) await queryClient.invalidateQueries({ queryKey: ['age-check'] });
     } finally {
       setBusy(false);
     }

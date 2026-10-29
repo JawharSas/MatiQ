@@ -7,6 +7,7 @@
 
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
 const CODE = /^[A-Za-z0-9-]{8,128}$/;
@@ -36,6 +37,7 @@ export function exchangeAuthCode(code: string): Promise<void> {
 
 /** Message for an `error_description` that Supabase or Google put on the redirect. */
 export function redirectErrorMessage(description: string | undefined): string {
+  if (description && /banned/i.test(description)) return messageFor('banned');
   return description && /cancel|denied/i.test(description)
     ? 'Google sign-in was cancelled.'
     : 'Google sign-in did not complete. Please try again.';

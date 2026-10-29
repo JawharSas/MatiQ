@@ -12,8 +12,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { Discipline } from '../rules-engine/index.ts';
-import { type BatchContext, batchIntro, coachingSystemPrompt, systemPrompt } from './prompts.ts';
-import { BATCH_SCHEMAS, type BatchOutput } from './schemas.ts';
+import { type BatchContext, batchIntro, coachingSystemPrompt, IMAGE_SAFETY_PROMPT, systemPrompt } from './prompts.ts';
+import { BATCH_SCHEMAS, type BatchOutput, type Safety, SAFETY_SCHEMA } from './schemas.ts';
 
 export interface Frame {
   t: number;
@@ -37,6 +37,8 @@ export interface AnalysisProvider {
   readonly model: string;
   analyzeBatch(context: BatchContext, frames: Frame[]): Promise<BatchOutput>;
   coachingSummary(discipline: Discipline, digest: unknown, observations: string[]): Promise<string>;
+  /** Content check of one JPEG; null when the model declined to look at it. */
+  checkImage(jpegBase64: string): Promise<Safety | null>;
 }
 
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -106,7 +108,33 @@ export function createAnthropicProvider(options: {
       return {
         events: parsed.events as Record<string, unknown>[],
         observations: parsed.observations.slice(0, 5),
+        safety: parsed.safety,
       };
+    },
+
+    async checkImage(jpegBase64) {
+      const response = await call(() =>
+        client.beta.messages.parse({
+          model: options.model,
+          max_tokens: 1000,
+          betas: [FALLBACK_BETA],
+          fallbacks: 'default',
+          system: IMAGE_SAFETY_PROMPT,
+          output_config: { effort: 'low', format: betaZodOutputFormat(SAFETY_SCHEMA) },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Profile picture to check:' },
+                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpegBase64 } },
+              ],
+            },
+          ],
+        })
+      );
+      if (response.stop_reason === 'refusal') return null;
+      if (!response.parsed_output) throw new AnalysisError('ai_invalid_output', 'The AI response did not match the safety schema');
+      return response.parsed_output;
     },
 
     async coachingSummary(discipline, digest, observations) {

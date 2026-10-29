@@ -88,7 +88,7 @@ select ok(
   'no profile changes before the age check');
 select pg_temp.as_user('b2222222-2222-4222-8222-222222222222');
 select throws_ok(
-  $$insert into storage.objects (bucket_id, name) values ('avatars', 'b2222222-2222-4222-8222-222222222222/a.jpg')$$,
+  $$insert into storage.objects (bucket_id, name) values ('avatars', 'b2222222-2222-4222-8222-222222222222/pending.jpg')$$,
   '42501', null, 'no uploads before the age check');
 select set_config('request.method', 'POST', true);
 select throws_ok($$select public.check_request()$$, '42501', 'age_check_required', 'the API refuses writes and RPCs');

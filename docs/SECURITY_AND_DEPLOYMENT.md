@@ -10,7 +10,7 @@ the repository safely.
 |---|---|---|
 | API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app; the app and the release build refuse a secret or `service_role` key. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the full git history with gitleaks and the built bundle with `scripts/scan-bundle.mjs`. | `config/env.ts`, `config/public-key.ts`, `release.yml`, `ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 187 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 233 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
@@ -22,6 +22,8 @@ the repository safely.
 | Finding where someone is (IP address, GPS in videos) | No table, function or screen exposes another user's IP address, email or location; only Supabase's own auth logs hold IPs (owner-only, in the dashboard). Nothing a user posts makes other phones contact a server they choose (no external images, links or previews; avatars must be the owner's own storage path). Before upload the app blanks location (GPS) and phone make and model in a copy of the video (`findPersonalMetadata`); videos published before 1.4.1 are owner-only. | `rules-engine/src/media/video-check.ts`, `capture/video-check.ts`, `20261029000400_privacy_hardening.sql` |
 | Discovering the backend | The Supabase URL and publishable key are in every build (an app must know its server), so the protection is what they allow: nothing for anonymous callers (no table grants, no callable functions but the request hooks, so the API description is empty), GraphQL removed, RLS on every row, secrets only in functions. A custom domain (Supabase Pro add-on) hides the project name but not the server itself. | `20261029000400_privacy_hardening.sql`, `07_rls_and_uploads.test.sql` |
 | Location leaks from photos | Profile pictures are re-encoded on the device (pixels only, no EXIF) before upload; private bucket, one-hour signed URLs. | `features/social/avatar.ts` |
+| Sexual content, hate and harassment | Names, bios, match titles, dispute notes and posts go through a database word filter that sees through spacing, look-alike characters and stretched letters; a matching post is held back and counts as a strike (3 in 30 days ban the account). The AI checks every analysed batch of frames and every profile picture (uploaded as `pending.jpg`, readable only by its owner, published by the `moderation` function after the check); a confident 18+ finding moves the files to the locked `moderation-quarantine` bucket and bans the account at once. | `20261029000500_moderation.sql`, `_shared/moderation.ts`, `supabase/functions/moderation`, `analyze-match/pipeline.ts` |
+| Banned users coming back | A ban sets `banned_until` in Supabase Auth (no sign-in or token refresh), ends sessions, suspends the account and hides its profile, posts and shared matches. The networks it used in the last 30 days are blocked for 30 days: the request hook and the function middleware refuse any account calling from them. Only keyed one-way fingerprints (HMAC-SHA256, IPv6 per /64) of the addresses are stored. | `20261029000500_moderation.sql`, `_shared/middleware.ts` |
 | Live-analysis abuse (re-analysing frames, injecting paths) | Batches are claimed atomically: no overlapping frames, per-match frame budget, unique batch index, frames resolved against the user's own storage folder. One quota unit per match. | `20261024000200_live_analysis.sql`, `analyze-match/pipeline.ts` |
 | Rating manipulation (fake results, alt-account farming, races) | Ratings, history and titles are written only by the `ranked` function via `svc_apply_ranked_result` (no client write grants). Results come from an analysed recording linked before upload; the opponent can watch it and dispute; a recorder's own win needs the opponent's confirmation; max 3 ranked matches per pair per week; versioned rows reject concurrent overwrites; settlement applies once. | `20261028000100_ranked.sql`, `supabase/functions/ranked` |
 | Ranked data leaking private accounts | Ratings and titles follow the profile privacy rule; ranked matches and rating history are participant/own-only; ladder and matchmaking are `SECURITY INVOKER`, so RLS decides who appears. The owner can view a recording only while a dispute about it is open. | `20261028000100_ranked.sql` |
@@ -252,6 +254,50 @@ it up, because it needs your own Cloudflare keys:
 To turn it off again, delete the secret and switch CAPTCHA protection off in
 Supabase → Authentication → Attack Protection.
 
+### Moderation and bans
+
+What runs on its own:
+
+- **Word filter** (`private.blocked_terms`): names, bios, match titles,
+  dispute notes and posts. Edit the list in the Owner panel → Moderation (end
+  a word with `*` to catch its endings). A post that matches is held back
+  (only its author sees it, and the app deletes it) and counts as a strike;
+  three strikes in 30 days ban the account. Strikes are kept 90 days.
+- **18+ check by the AI**: every analysis batch reports whether the frames
+  show sexual content. A finding with confidence 0.7 or more moves the
+  match's frames and video to the `moderation-quarantine` bucket, bans the
+  account and fails the analysis with `content_removed`.
+- **Profile pictures** are checked before anyone else sees them. This needs
+  the platform AI key: set the `ANTHROPIC_API_KEY` function secret. Without
+  it, new pictures are refused (`moderation_unavailable`) and nothing is
+  published unchecked.
+- **Bans** (automatic, or **Ban account** on a user in the Owner panel):
+  sign-in and token refresh refused by Supabase Auth, sessions ended,
+  profile, posts and shared matches hidden, and every network the account
+  used in the last 30 days blocked for 30 days. **Lift ban** under
+  Moderation undoes all of it. The owner account can't be banned.
+
+Know the limits:
+
+- Network blocks hit everyone on that network who signs in to MatIQ: a gym's
+  Wi-Fi, or a mobile carrier that shares one address between many phones.
+  If someone reports that, lift the ban, or ban again later from a
+  different network. Blocks apply to the Data API and the Edge Functions;
+  creating an account still works but the new account gets the banned screen.
+- The AI check sees the sampled frames, not every frame of the video, and a
+  word list never catches everything. Reports (the **Report** button) are
+  still how people tell you about the rest.
+- Analyses with a user's own API key run the same check with their key.
+
+If the AI finds sexual content involving a minor, or a report says so: do
+not download, copy or share it. In the United States you must report it to
+the NCMEC CyberTipline (report.cybertip.org) and preserve the content and
+the account details as the law requires (the REPORT Act extended
+preservation to one year); other countries have their own hotline (INHOPE
+lists them). The quarantine bucket keeps it out of everyone's reach,
+including the person who uploaded it. Delete other quarantined content once
+an appeal is settled, and within 90 days.
+
 ### Bootstrap the owner account
 
 Sign up in the app first, then run once in the SQL editor (as `postgres`):
@@ -403,6 +449,7 @@ Then in the GitHub repository settings:
 - [ ] TLS pins configured with a backup pin.
 - [ ] Privacy Policy and Terms reviewed by counsel; `LEGAL_VERSIONS` bumped when they change.
 - [ ] Rule values in `packages/rules-engine` checked against current rulebooks.
+- [ ] `ANTHROPIC_API_KEY` set (needed for profile-picture checks); `moderation` function deployed; a test post with a blocked word is held back, and a ban plus **Lift ban** work on a test account.
 - [ ] App Store privacy labels / Play data-safety form match the Privacy Policy (no data sold, no tracking).
 
 ## 10. Security checklist
@@ -426,7 +473,7 @@ How each item of the common web and mobile security checklist is covered.
 | 13 | Parameterize queries | supabase-js and PostgREST send parameters separately; SQL functions use typed parameters and no dynamic SQL built from input; search escapes LIKE wildcards. |
 | 14 | Validate all input | Zod in the app and in every function (strict objects, size limits), database CHECK constraints, body-size limits, model output re-validated. |
 | 15 | Escape user content | React Native renders text, never HTML; no `dangerouslySetInnerHTML` or user content in WebViews (the Turnstile page holds only the site key, JSON-escaped); control and bidi characters are rejected; prompt hints are fenced as data. |
-| 16 | Restrict file uploads | Private buckets with MIME and size limits (videos MP4/MOV up to 500 MB, frames JPEG up to 1 MB, avatars JPEG/PNG/WebP up to 2 MB); fixed file names enforced by policies; videos are checked in full (item 21), frames are checked for JPEG markers on the phone and the server, and avatars are re-encoded to a fresh JPEG on the phone. |
+| 16 | Restrict file uploads | Private buckets with MIME and size limits (videos MP4/MOV up to 500 MB, frames JPEG up to 1 MB, avatars JPEG/PNG/WebP up to 2 MB); fixed file names enforced by policies; videos are checked in full (item 21), frames are checked for JPEG markers on the phone and the server, and avatars are re-encoded to a fresh JPEG on the phone, uploaded as `pending.jpg` and published only after the server's JPEG and AI checks. Banned accounts can't upload anything. |
 | 17 | Trim API responses | Explicit column lists (no `select *`), `max_rows = 100`, functions return only what the screen needs, errors are a code, a message and a request id (no stack traces). |
 | 18 | Add security headers | `_shared/http.ts`: CSP `default-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options`, HSTS, `nosniff`, `no-referrer`, Permissions-Policy, COOP, `no-store`. |
 | 19 | Force HTTPS | The app requires an `https://` Supabase URL (plain HTTP only for a local dev stack), Android blocks cleartext traffic, iOS ATS is on, TLS pinning; HSTS on function responses; Supabase serves only HTTPS. |

@@ -32,7 +32,23 @@ create table auth.users (
   email text,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
-  last_sign_in_at timestamptz
+  last_sign_in_at timestamptz,
+  banned_until timestamptz
+);
+
+-- Sessions and the auth audit log, as far as moderation uses them.
+create table auth.sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  ip inet,
+  created_at timestamptz not null default now()
+);
+
+create table auth.audit_log_entries (
+  id uuid primary key default gen_random_uuid(),
+  payload json,
+  ip_address varchar(64) not null default '',
+  created_at timestamptz default now()
 );
 
 create table auth.mfa_factors (

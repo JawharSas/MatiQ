@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { envError } from '@/config/env';
 import { A11yProvider, useA11y } from '@/features/accessibility/A11yProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { isBannedError } from '@/lib/errors';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
 import { initSupabase } from '@/lib/supabase';
@@ -16,7 +17,17 @@ import { colors } from '@/ui/theme';
 
 void SplashScreen.preventAutoHideAsync();
 
+// A ban takes effect mid-session: the next refused request re-reads the
+// account state, and the signed-in area then shows the banned screen. Once
+// that read has failed with the ban there is nothing more to re-read.
+const onError = (error: unknown) => {
+  if (!isBannedError(error) || isBannedError(queryClient.getQueryState(['age-check'])?.error)) return;
+  void queryClient.invalidateQueries({ queryKey: ['age-check'] });
+};
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (error, query) => query.queryKey[0] !== 'age-check' && onError(error) }),
+  mutationCache: new MutationCache({ onError }),
   defaultOptions: {
     queries: { retry: 1, staleTime: 15_000 },
     mutations: { retry: 0 },

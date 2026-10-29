@@ -6,7 +6,7 @@
 
 import type { MatchResult, AthleteTotals } from '@matiq/rules-engine';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fromPostgrest } from '@/lib/errors';
+import { AppError, fromPostgrest } from '@/lib/errors';
 import { readCache, writeCache } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { cleanText } from '@/lib/validation';
@@ -90,15 +90,31 @@ export async function createPost(input: {
   friendsOnly: boolean;
   highlight?: { start: number; end: number };
 }): Promise<void> {
-  const { error } = await supabase.from('posts').insert({
-    match_id: input.matchId,
-    body: cleanText(input.body, { multiline: true }),
-    friends_only: input.friendsOnly,
-    highlight_start_ms: input.highlight?.start ?? null,
-    highlight_end_ms: input.highlight?.end ?? null,
-  });
+  const { data, error } = await supabase
+    .from('posts')
+    .insert({
+      match_id: input.matchId,
+      body: cleanText(input.body, { multiline: true }),
+      friends_only: input.friendsOnly,
+      highlight_start_ms: input.highlight?.start ?? null,
+      highlight_end_ms: input.highlight?.end ?? null,
+    })
+    .select('id, moderation')
+    .single();
   if (error) throw fromPostgrest(error);
+  // The server's word filter held it back (only its author could see it) and
+  // counted a strike. It is not kept: the strike is.
+  if (data.moderation === 'blocked') {
+    const { error: deleteError } = await supabase.from('posts').delete().eq('id', data.id);
+    // The third strike bans the account straight away: say so.
+    const refused = fromPostgrest(deleteError);
+    if (refused?.code === 'banned') throw refused;
+    throw new AppError('content_not_allowed', POST_HELD_MESSAGE);
+  }
 }
+
+export const POST_HELD_MESSAGE =
+  "This post wasn't shared: it includes words MatIQ doesn't allow. Three of these in 30 days ban the account.";
 
 export async function deletePost(postId: string): Promise<void> {
   const { error } = await supabase.from('posts').delete().eq('id', postId);

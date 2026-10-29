@@ -38,6 +38,9 @@ export interface PreviewDb {
   api_keys: Row[];
   audit_log: Row[];
   mfa_factors: Row[];
+  bans: Row[];
+  moderation_strikes: Row[];
+  blocked_terms: Row[];
   storage: Record<string, Set<string>>;
 }
 
@@ -197,6 +200,17 @@ export function createFixtures(): PreviewDb {
     api_keys: [],
     audit_log: [],
     mfa_factors: [],
+    bans: [],
+    moderation_strikes: [],
+    // A few stand-ins for the server's list (supabase/migrations/20261029000500_moderation.sql).
+    blocked_terms: [
+      { term: 'porn*', category: 'sexual', created_at: '2026-10-29T00:00:00Z' },
+      { term: 'nudes', category: 'sexual', created_at: '2026-10-29T00:00:00Z' },
+      { term: 'onlyfans', category: 'sexual', created_at: '2026-10-29T00:00:00Z' },
+      { term: 'sieg heil', category: 'hate', created_at: '2026-10-29T00:00:00Z' },
+      { term: 'kill yourself', category: 'harassment', created_at: '2026-10-29T00:00:00Z' },
+      { term: 'kys', category: 'harassment', created_at: '2026-10-29T00:00:00Z' },
+    ],
     storage: { 'match-videos': new Set(), 'match-frames': new Set(), avatars: new Set() },
   };
 
@@ -483,6 +497,9 @@ export function createFixtures(): PreviewDb {
     { id: 2, actor_id: USERS.alex, target_user_id: USERS.ivy, action: 'set_unlimited', old_value: { is_unlimited: false }, new_value: { is_unlimited: true }, reason: 'Gym owner partner', created_at: daysAgo(5) },
     { id: 1, actor_id: USERS.alex, target_user_id: USERS.maya, action: 'update_entitlements', old_value: { monthly_analysis_limit: 10 }, new_value: { monthly_analysis_limit: 20 }, reason: 'Fight camp', created_at: daysAgo(12) },
   );
+
+  // One post the word filter held back (the owner sees it under Moderation).
+  db.moderation_strikes.push({ user_id: USERS.tomas, kind: 'post:sexual', detail: 'check my onlyfans', created_at: daysAgo(2) });
 
   return db;
 }

@@ -6,13 +6,15 @@ import { ageCheckStatus } from '@/features/legal/age';
 import { missingAcceptances } from '@/features/legal/consent';
 import { ConsentGate, NotEligible } from '@/features/legal/ConsentGate';
 import { LEGAL_VERSIONS, type LegalDocumentId } from '@/features/legal/documents';
+import { Banned } from '@/features/moderation/Banned';
+import { isBannedError } from '@/lib/errors';
 import { Loading } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
 /**
  * Signed-in area. Before anything else, the user must have answered the age
  * check once and accepted the current Terms and Privacy Policy versions
- * (re-prompted when they change).
+ * (re-prompted when they change). Banned accounts only see why.
  */
 // Deep links into a stack screen (a shared match, a ranked match) keep the
 // tabs underneath, so Back always has somewhere to go.
@@ -29,6 +31,7 @@ export default function AppLayout() {
   // given on the sign-up form.
   const consent = useQuery({ queryKey: ['consent'], queryFn: missingAcceptances, staleTime: Infinity, enabled: !age.isPending });
 
+  if (isBannedError(age.error)) return <Banned />;
   if (consent.isPending || age.isPending) return <Loading />;
   if (age.data === 'not_eligible') return <NotEligible />;
   // If the status cannot be read, ask: answering it again is harmless.

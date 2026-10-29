@@ -63,6 +63,8 @@ export default function SignInScreen() {
       return;
     }
     if (authError.status === 429) return setError(messageFor('rate_limited'));
+    // Only reported after the password matched, so it reveals nothing to others.
+    if (authError.code === 'user_banned') return setError(messageFor('banned'));
     if (authError.status === 400) {
       // A wrong password (or unknown email) counts towards the device lockout.
       const next = afterFailure(throttle, Date.now());

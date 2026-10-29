@@ -305,17 +305,22 @@ export function Segmented<T extends string>({
   options,
   value,
   onChange,
+  columns,
 }: {
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
+  /** Options per row, for longer lists that would otherwise squeeze their labels. */
+  columns?: number;
 }) {
   const pressStyle = usePressStyle();
   const { textScale } = useA11y();
   // With bigger text the options stack, so labels are never cut mid-word (WCAG 1.4.4, 1.4.10).
   const stacked = textScale >= 1.3 || (textScale > 1 && options.length > 3);
+  const wrapped = !stacked && columns !== undefined && options.length > columns;
+  const cell = wrapped ? { flexGrow: 1, flexShrink: 0, flexBasis: `${Math.floor(100 / columns!) - 3}%` as const } : null;
   return (
-    <View style={[styles.segmented, stacked && { flexDirection: 'column' }]} accessibilityRole="tablist">
+    <View style={[styles.segmented, stacked && { flexDirection: 'column' }, wrapped && { flexWrap: 'wrap' }]} accessibilityRole="tablist">
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -324,7 +329,7 @@ export function Segmented<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
-            style={(state) => [styles.segment, stacked && styles.segmentStacked, selected && styles.segmentSelected, ...pressStyle(state)]}
+            style={(state) => [styles.segment, stacked && styles.segmentStacked, cell, selected && styles.segmentSelected, ...pressStyle(state)]}
           >
             <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]} numberOfLines={stacked ? undefined : 2}>
               {option.label}

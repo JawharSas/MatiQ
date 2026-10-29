@@ -3,6 +3,57 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.5.0] Pre-Beta, 2026-10-29
+
+### Moderation
+- Word filter in the database (`private.blocked_terms`, migration
+  `20261029000500_moderation.sql`): text is lower-cased, look-alike
+  characters swapped (`0→o`, `1→i`, `3→e`, `4→a`, `5→s`, `7→t`, `@→a`,
+  `$→s`), punctuation removed and spelled-out letters joined; terms match
+  whole words, also with stretched letters, and `*` catches endings. It
+  covers usernames and display names (a sign-up name that breaks it is
+  replaced with `athlete_<id>`), bios, match titles and athlete labels,
+  dispute notes and posts. Profiles, titles and notes are refused with
+  `content_not_allowed`; a post is held back (`posts.moderation =
+  'blocked'`, only its author can see it; the app deletes it and says why)
+  and recorded as a strike. Three strikes in 30 days ban the account.
+- 18+ content check: every analysis batch returns a `safety` result; a
+  sexual-content finding with confidence ≥ 0.7 moves the match's frames and
+  video to the private `moderation-quarantine` bucket, bans the owner and
+  fails the analysis with `content_removed` (full and live analysis).
+- Profile pictures: the app uploads `{user}/pending.jpg`, which only its
+  owner can read; the new `moderation` function checks it (JPEG, ≤ 2 MB, AI
+  check with the platform key) and publishes it under a new name, or
+  quarantines it and bans the account. Clients can no longer set
+  `avatar_path` (`avatar_requires_review`) or upload any other avatar name.
+  Without `ANTHROPIC_API_KEY` new pictures are refused
+  (`moderation_unavailable`).
+- Bans (`private.bans`): Supabase Auth `banned_until`, sessions deleted,
+  entitlements suspended; profile, posts, shared matches and videos hidden
+  from everyone else; storage uploads refused. The request hook and the
+  function middleware refuse a banned account (`banned`), even for reads.
+- Network bans: HMAC-SHA256 fingerprints (keyed, IPv6 per /64) of the
+  addresses in the account's sessions and auth log for the last 30 days,
+  kept 30 days; requests from those networks are refused for any account.
+  Addresses themselves are never stored. Strikes are kept 90 days.
+- Owner panel → Moderation: bans with **Lift ban** (also clears the network
+  blocks and strikes), the word filter (add and remove words), recent
+  strikes; **Ban account** on a user. All audited. The owner account can't
+  be banned.
+- App: a banned screen (why, contact support, sign out) as soon as the
+  server refuses the account; sign-in says when an account is banned
+  (email and Google); messages for every new error code.
+
+### Legal
+- Terms: Community rules section; bans in Termination. Privacy Policy:
+  Moderation and safety section (word filter, strikes, AI checks of frames
+  and profile pictures, ban records, network fingerprints, quarantine and
+  legal reporting). Both are version `2026-10-29.2`, so everyone accepts
+  them again.
+
+### Fixed
+- Owner panel tabs no longer break words in two: six tabs wrap onto two rows.
+
 ## [1.4.1] Pre-Beta, 2026-10-29
 
 ### Uploads

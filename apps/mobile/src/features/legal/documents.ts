@@ -12,8 +12,8 @@ import { ISSUES_URL, supportContactText } from './contact';
 
 /** Documents people accept (each acceptance is recorded per version). */
 export const LEGAL_VERSIONS = {
-  terms: '2026-10-29',
-  privacy: '2026-10-29',
+  terms: '2026-10-29.2',
+  privacy: '2026-10-29.2',
 } as const;
 
 export type LegalDocumentId = keyof typeof LEGAL_VERSIONS;
@@ -54,7 +54,7 @@ export const PRIVACY_POLICY: LegalDocument = {
     {
       heading: 'What we collect',
       paragraphs: [
-        'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata.',
+        'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata, and are checked for sexual content before anyone else can see them.',
         'Your birth month and year, asked once to check the minimum age. It is never shown on your profile or to other users.',
         'If you sign in with Google: the name and email address of your Google account. We never receive your Google password.',
         'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes. Before a video leaves your phone, the app removes the location (GPS) and phone make and model that cameras write into video files.',
@@ -77,6 +77,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       heading: 'AI processing',
       paragraphs: [
         'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. With live analysis, this happens in small batches while you record so the app can show a provisional score. Frames are deleted from our storage after a successful analysis.',
+        'The same AI check also looks for sexual content in those frames, and in every profile picture you set, before anyone else can see it (see Moderation and safety).',
         'We only use AI providers whose commercial terms prohibit using customer content to train their models. When you analyse with your own API key, your provider account and its terms apply to that request.',
       ],
     },
@@ -93,6 +94,16 @@ export const PRIVACY_POLICY: LegalDocument = {
         'Your matches, videos and analyses stay visible only to you unless you share them in a post. Your profile card (username, display name, avatar, bio) is visible to signed-in users so friends can find you. Blocking a user hides your profile and content from them.',
         'Other users never see your email address, IP address or location. Videos uploaded with app versions before 1.4.1 may still contain location data, so only you can watch them.',
         'Ranked matches: when you record a ranked match, your opponent in that match can watch the recording and its scorecard so they can confirm or dispute the result. Your ranked ratings, record and titles follow your account privacy (everyone for Public accounts, friends only for Private accounts). If a ranked result is disputed, the MatIQ owner may watch that recording to resolve the dispute. This access ends when the dispute is resolved, and the decision is recorded in an audit log.',
+      ],
+    },
+    {
+      heading: 'Moderation and safety',
+      paragraphs: [
+        'Names, bios, match titles, dispute notes and posts are checked automatically against a list of words MatIQ does not allow. A post that matches is not shared. We keep its text (up to 280 characters) as a strike for up to 90 days; three strikes in 30 days ban the account.',
+        'Sexual content found by the AI check in a recording or profile picture bans the account straight away. The owner of MatIQ can also ban accounts that break the Terms.',
+        'When an account is banned we keep the ban record (reason and date) while the ban lasts, and block the networks the account used in the last 30 days for 30 days. For that we store only one-way fingerprints (keyed hashes) of those IP addresses, which cannot be turned back into addresses, never the addresses themselves.',
+        'Content that broke the rules is moved to locked storage that only MatIQ can access, and kept only as long as needed to handle appeals and our legal duties. Where the law requires it, for example for child sexual abuse material, we report it to the authorities (in the United States, NCMEC) and preserve it as the law requires.',
+        `If you think a ban is a mistake, contact ${contact}.`,
       ],
     },
     {
@@ -192,6 +203,14 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       ],
     },
     {
+      heading: 'Community rules',
+      paragraphs: [
+        'MatIQ is for training. No sexual content or nudity of any kind: it bans the account straight away and permanently. No hate speech, slurs, threats, harassment or encouraging self-harm.',
+        'Names, bios, titles, notes and posts are checked automatically, also when letters are spaced out or swapped. A post that breaks the rules is not shared and counts as a strike; three strikes in 30 days ban the account. Recordings and profile pictures are checked by AI.',
+        `A ban signs you out, hides everything you posted and blocks the networks you used. Creating a new account to get around a ban is not allowed. If you think a ban is a mistake, contact ${contact}.`,
+      ],
+    },
+    {
       heading: 'Usage limits and API keys',
       paragraphs: [
         'Free accounts include a monthly number of AI analyses. We may change limits with notice. If you store your own AI provider key, you are responsible for charges on your provider account.',
@@ -200,7 +219,7 @@ export const TERMS_OF_SERVICE: LegalDocument = {
     {
       heading: 'Termination',
       paragraphs: [
-        'You can delete your account at any time. We may suspend accounts that break these Terms. Sections that by their nature should survive termination will survive.',
+        'You can delete your account at any time. We may suspend or ban accounts that break these Terms. Sections that by their nature should survive termination will survive.',
       ],
     },
     {

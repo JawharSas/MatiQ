@@ -10,7 +10,7 @@ import { Avatar } from '@/features/social/Avatar';
 import { changeAvatar, removeAvatar } from '@/features/social/avatar';
 import { PrivacyToggle } from '@/features/social/PrivacyToggle';
 import { RankedSummary } from '@/features/ranked/components';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, profileSchema } from '@/lib/validation';
 import { Badge, Body, Button, Caption, Card, ErrorText, ListGroup, ListRow, Loading, Screen, SectionHeader, TextField } from '@/ui/components';
 import { colors, font, spacing } from '@/ui/theme';
@@ -48,10 +48,11 @@ export default function ProfileScreen() {
     setError(null);
     try {
       if (remove && card.avatar_path) await removeAvatar(userId, card.avatar_path);
-      else if (!remove) await changeAvatar(userId, card.avatar_path);
+      else if (!remove) await changeAvatar(userId);
       await queryClient.invalidateQueries({ queryKey: ['profile', userId] });
     } catch (caught) {
       setError(errorMessage(caught));
+      if (isBannedError(caught)) await queryClient.invalidateQueries({ queryKey: ['age-check'] });
     } finally {
       setAvatarBusy(false);
     }

@@ -4,12 +4,20 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
-import { Body, Button, Caption, Card, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
+import { Body, Button, Caption, Card, ChoiceChips, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
 import { colors, font, spacing } from '@/ui/theme';
 import {
   type AdminUserRow,
+  type BlockedTerm,
   type RankedDispute,
+  useAddBlockedTerm,
   useAdminUsers,
+  useBans,
+  useBanUser,
+  useBlockedTerms,
+  useRemoveBlockedTerm,
+  useStrikes,
+  useUnbanUser,
   useAuditLog,
   useRankedDisputes,
   useRemovePost,
@@ -19,7 +27,7 @@ import {
   useUsageOverview,
 } from './api';
 
-type Tab = 'users' | 'overview' | 'disputes' | 'content' | 'audit';
+type Tab = 'users' | 'overview' | 'disputes' | 'moderation' | 'content' | 'audit';
 
 export function OwnerPanel() {
   const [tab, setTab] = useState<Tab>('users');
@@ -30,11 +38,13 @@ export function OwnerPanel() {
           { value: 'users', label: 'Users' },
           { value: 'overview', label: 'Usage' },
           { value: 'disputes', label: 'Disputes' },
+          { value: 'moderation', label: 'Moderation' },
           { value: 'content', label: 'Content' },
           { value: 'audit', label: 'Audit log' },
         ]}
         value={tab}
         onChange={setTab}
+        columns={3}
       />
       {tab === 'users' ? (
         <UserSearch />
@@ -42,6 +52,8 @@ export function OwnerPanel() {
         <Overview />
       ) : tab === 'disputes' ? (
         <Disputes />
+      ) : tab === 'moderation' ? (
+        <Moderation />
       ) : tab === 'content' ? (
         <ContentTakedown />
       ) : (
@@ -83,9 +95,25 @@ function UserSearch() {
 function UserRow({ user }: { user: AdminUserRow }) {
   const setUnlimited = useSetUnlimited();
   const updateEntitlements = useUpdateEntitlements();
+  const ban = useBanUser();
   const [limit, setLimit] = useState(String(user.monthly_analysis_limit));
+  const [banReason, setBanReason] = useState('');
   const [expanded, setExpanded] = useState(false);
-  const error = setUnlimited.error ?? updateEntitlements.error;
+  const [banError, setBanError] = useState<string | null>(null);
+  const error = setUnlimited.error ?? updateEntitlements.error ?? ban.error;
+
+  const confirmBan = () => {
+    if (!banReason.trim()) return setBanError('Enter a reason for the ban.');
+    setBanError(null);
+    Alert.alert(
+      'Ban this account?',
+      `${user.username} is signed out, hidden from everyone and blocked, with the networks they used, until you lift the ban under Moderation.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Ban', style: 'destructive', onPress: () => ban.mutate({ userId: user.user_id, reason: banReason }) },
+      ],
+    );
+  };
 
   const toggleUnlimited = (value: boolean) => {
     Alert.alert(
@@ -153,7 +181,11 @@ function UserRow({ user }: { user: AdminUserRow }) {
           <TextField label="Monthly analysis limit" value={limit} onChangeText={setLimit} keyboardType="number-pad" maxLength={6} />
           <Button label="Save limit" variant="secondary" onPress={saveLimit} loading={updateEntitlements.isPending} />
           {user.role !== 'owner' ? (
-            <Button label={user.is_suspended ? 'Restore account' : 'Suspend account'} variant="danger" onPress={toggleSuspended} />
+            <>
+              <Button label={user.is_suspended ? 'Restore account' : 'Suspend account'} variant="danger" onPress={toggleSuspended} />
+              <TextField label="Ban reason" value={banReason} onChangeText={setBanReason} maxLength={280} error={banError} />
+              <Button label="Ban account" variant="danger" icon="ban" loading={ban.isPending} onPress={confirmBan} />
+            </>
           ) : null}
           <Button
             label="Cancel"
@@ -161,6 +193,8 @@ function UserRow({ user }: { user: AdminUserRow }) {
             onPress={() => {
               setExpanded(false);
               setLimit(String(user.monthly_analysis_limit));
+              setBanReason('');
+              setBanError(null);
             }}
           />
         </View>
@@ -265,6 +299,131 @@ function DisputeCard({ dispute }: { dispute: RankedDispute }) {
       </View>
       <ErrorText>{resolve.error ? errorMessage(resolve.error) : null}</ErrorText>
     </Card>
+  );
+}
+
+const TERM_CATEGORIES = [
+  { value: 'sexual', label: 'Sexual' },
+  { value: 'hate', label: 'Hate' },
+  { value: 'harassment', label: 'Harassment' },
+] as const;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  sexual_content: '18+ content',
+  text: 'Word filter',
+  other: 'Other',
+};
+
+/** Bans (with unban), the word filter and recent strikes. */
+function Moderation() {
+  const bans = useBans();
+  const strikes = useStrikes();
+  const unban = useUnbanUser();
+  const [error, setError] = useState<string | null>(null);
+
+  const confirmUnban = (userId: string, username: string | null) => {
+    setError(null);
+    Alert.alert('Lift this ban?', `@${username ?? 'deleted user'} can sign in again and their networks are unblocked.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Lift ban', onPress: () => unban.mutate({ userId }, { onError: (caught) => setError(errorMessage(caught)) }) },
+    ]);
+  };
+
+  return (
+    <View style={styles.stack}>
+      <Caption>
+        Sexual content in a recording or profile picture bans an account at once, and three posts that break the word filter in 30
+        days ban it too. A ban signs the person out, hides everything they posted and blocks the networks they used for 30 days
+        (only one-way fingerprints of the addresses are kept).
+      </Caption>
+      <Heading>Bans</Heading>
+      {bans.error ? <ErrorText>{errorMessage(bans.error)}</ErrorText> : null}
+      <ErrorText>{error}</ErrorText>
+      {bans.data?.map((ban) => (
+        <Card key={ban.user_id}>
+          <Text style={font.heading}>@{ban.username ?? 'deleted user'}</Text>
+          <Body muted>{ban.reason}</Body>
+          <Caption>
+            {CATEGORY_LABELS[ban.category] ?? ban.category} · {ban.source === 'automatic' ? 'automatic' : 'by you'} ·{' '}
+            {new Date(ban.created_at).toLocaleString()}
+          </Caption>
+          <Button label="Lift ban" variant="secondary" onPress={() => confirmUnban(ban.user_id, ban.username)} />
+        </Card>
+      ))}
+      {bans.data?.length === 0 ? <Caption>Nobody is banned.</Caption> : null}
+
+      <BlockedWords />
+
+      <Heading>Recent strikes</Heading>
+      {strikes.error ? <ErrorText>{errorMessage(strikes.error)}</ErrorText> : null}
+      {strikes.data?.map((strike, index) => (
+        <Card key={`${strike.user_id}-${strike.created_at}-${index}`}>
+          <Text style={font.body}>
+            @{strike.username ?? 'deleted user'} · {strike.kind.replace(/^post:/, 'post, ')}
+          </Text>
+          {strike.detail ? <Caption>“{strike.detail}”</Caption> : null}
+          <Caption>{new Date(strike.created_at).toLocaleString()}</Caption>
+        </Card>
+      ))}
+      {strikes.data?.length === 0 ? <Caption>No strikes in the last 90 days.</Caption> : null}
+    </View>
+  );
+}
+
+function BlockedWords() {
+  const terms = useBlockedTerms();
+  const add = useAddBlockedTerm();
+  const remove = useRemoveBlockedTerm();
+  const [term, setTerm] = useState('');
+  const [category, setCategory] = useState<BlockedTerm['category']>('harassment');
+  const [error, setError] = useState<string | null>(null);
+  const [showList, setShowList] = useState(false);
+
+  const save = () => {
+    const cleaned = term.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!/^[a-z0-9]+( [a-z0-9]+)*\*?$/.test(cleaned) || cleaned.length < 2 || cleaned.length > 60) {
+      return setError('Use 2 to 60 letters, numbers and spaces. End with * to also catch word endings.');
+    }
+    setError(null);
+    add.mutate({ term: cleaned, category }, { onSuccess: () => setTerm(''), onError: (caught) => setError(errorMessage(caught)) });
+  };
+
+  return (
+    <View style={styles.stack}>
+      <Heading>Word filter</Heading>
+      <Caption>
+        Names, bios, match titles, dispute notes and posts are checked against this list, also when letters are spaced out,
+        swapped for numbers or stretched. A post that matches is held back and counts as a strike.
+      </Caption>
+      <Card>
+        <TextField label="Word or phrase to block" value={term} onChangeText={setTerm} autoCapitalize="none" maxLength={60} />
+        <ChoiceChips label="Category" options={TERM_CATEGORIES} value={category} onChange={setCategory} columns={3} />
+        <ErrorText>{error}</ErrorText>
+        <Button label="Add to the filter" loading={add.isPending} onPress={save} />
+      </Card>
+      <Button
+        label={showList ? 'Hide the list' : `Show the list${terms.data ? ` (${terms.data.length})` : ''}`}
+        variant="secondary"
+        onPress={() => setShowList((shown) => !shown)}
+      />
+      {terms.error ? <ErrorText>{errorMessage(terms.error)}</ErrorText> : null}
+      {showList
+        ? terms.data?.map((entry) => (
+            <View key={entry.term} style={styles.rowHeader}>
+              <Text style={[font.body, styles.fill]}>
+                {entry.term} <Text style={font.caption}>· {entry.category}</Text>
+              </Text>
+              <Button
+                label="Remove"
+                variant="secondary"
+                size="sm"
+                hint={`Removes ${entry.term} from the filter`}
+                onPress={() => remove.mutate({ term: entry.term }, { onError: (caught) => setError(errorMessage(caught)) })}
+              />
+            </View>
+          ))
+        : null}
+    </View>
   );
 }
 
