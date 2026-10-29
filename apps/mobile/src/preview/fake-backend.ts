@@ -387,9 +387,11 @@ function checkUpdate(table: string, values: Row) {
 
 function banUser(userId: string, reason: string, category: string, source: 'owner' | 'automatic') {
   if (entitlementsOf(userId)?.role === 'owner') fail('22023', 'the owner account cannot be banned');
-  db.bans = db.bans.filter((ban) => ban.user_id !== userId);
-  db.bans.unshift({ user_id: userId, reason, category, source, created_at: now() });
   const e = entitlementsOf(userId);
+  const earlier = db.bans.find((ban) => ban.user_id === userId);
+  const prior = earlier ? { prior_suspended: earlier.prior_suspended, prior_suspended_reason: earlier.prior_suspended_reason } : { prior_suspended: Boolean(e?.is_suspended), prior_suspended_reason: e?.suspended_reason ?? null };
+  db.bans = db.bans.filter((ban) => ban.user_id !== userId);
+  db.bans.unshift({ user_id: userId, reason, category, source, created_at: now(), ...prior });
   if (e) Object.assign(e, { is_suspended: true, suspended_reason: `Banned: ${reason}` });
   audit('ban', userId, {}, { category, source }, reason);
 }
@@ -945,7 +947,8 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     const ban = db.bans.find((row) => row.user_id === p_user_id) ?? fail('P0002', 'not banned');
     db.bans = db.bans.filter((row) => row.user_id !== p_user_id);
     db.moderation_strikes = db.moderation_strikes.filter((row) => row.user_id !== p_user_id);
-    Object.assign(entitlementsOf(p_user_id), { is_suspended: false, suspended_reason: null });
+    const e = entitlementsOf(p_user_id);
+    if (e.suspended_reason === `Banned: ${ban.reason}`) Object.assign(e, { is_suspended: ban.prior_suspended, suspended_reason: ban.prior_suspended_reason });
     audit('unban', p_user_id, { category: ban.category, source: ban.source }, {}, 'Ban lifted');
     return null;
   },

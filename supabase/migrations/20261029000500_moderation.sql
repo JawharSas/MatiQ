@@ -24,15 +24,22 @@ create table private.bans (
   category text not null constraint ban_category check (category in ('sexual_content', 'text', 'other')),
   source text not null constraint ban_source check (source in ('owner', 'automatic')),
   created_by uuid references auth.users (id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- The suspension the account had before the ban, restored when it is lifted.
+  prior_suspended boolean not null default false,
+  prior_suspended_reason text
 );
 
+-- One row per banned account and network: a network two banned accounts used
+-- stays blocked until both bans are lifted (or the rows expire).
 create table private.banned_ips (
-  ip_hash text primary key,
-  user_id uuid references auth.users (id) on delete set null,
+  ip_hash text not null,
+  user_id uuid not null references auth.users (id) on delete cascade,
   expires_at timestamptz not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  primary key (ip_hash, user_id)
 );
+create index banned_ips_user on private.banned_ips (user_id);
 
 create table private.moderation_strikes (
   id bigint generated always as identity primary key,
@@ -271,13 +278,20 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  was_suspended boolean;
+  was_reason text;
 begin
   if exists (select 1 from public.user_entitlements where user_id = p_user and role = 'owner') then
     raise exception 'the owner account cannot be banned' using errcode = '22023';
   end if;
 
-  insert into private.bans (user_id, reason, category, source, created_by)
-  values (p_user, left(btrim(p_reason), 280), p_category, p_source, nullif(p_actor, private.system_actor()))
+  select is_suspended, suspended_reason into was_suspended, was_reason
+  from public.user_entitlements where user_id = p_user;
+  -- A second ban keeps the state from before the first.
+  insert into private.bans (user_id, reason, category, source, created_by, prior_suspended, prior_suspended_reason)
+  values (p_user, left(btrim(p_reason), 280), p_category, p_source, nullif(p_actor, private.system_actor()),
+          coalesce(was_suspended, false), was_reason)
   on conflict (user_id) do update
   set reason = excluded.reason, category = excluded.category, source = excluded.source,
       created_by = excluded.created_by, created_at = now();
@@ -289,25 +303,25 @@ begin
   -- Fingerprints of the addresses the account used in the last 30 days.
   begin
     insert into private.banned_ips (ip_hash, user_id, expires_at)
-    select distinct private.ip_fingerprint(host(s.ip)), p_user, now() + interval '30 days'
-    from auth.sessions s
-    where s.user_id = p_user and s.ip is not null
-    on conflict (ip_hash) do update set user_id = excluded.user_id, expires_at = excluded.expires_at;
+    select distinct f.hash, p_user, now() + interval '30 days'
+    from auth.sessions s, lateral (select private.ip_fingerprint(host(s.ip)) as hash) f
+    where s.user_id = p_user and s.ip is not null and f.hash is not null
+    on conflict (ip_hash, user_id) do update set expires_at = excluded.expires_at;
   exception when undefined_column or undefined_table or insufficient_privilege then
     null;
   end;
   begin
+    -- ip_address is free text: entries that aren't an address are skipped.
     insert into private.banned_ips (ip_hash, user_id, expires_at)
-    select distinct private.ip_fingerprint(a.ip_address), p_user, now() + interval '30 days'
-    from auth.audit_log_entries a
+    select distinct f.hash, p_user, now() + interval '30 days'
+    from auth.audit_log_entries a, lateral (select private.ip_fingerprint(a.ip_address) as hash) f
     where a.payload ->> 'actor_id' = p_user::text
       and a.created_at > now() - interval '30 days'
-      and coalesce(a.ip_address, '') <> ''
-    on conflict (ip_hash) do update set user_id = excluded.user_id, expires_at = excluded.expires_at;
+      and f.hash is not null
+    on conflict (ip_hash, user_id) do update set expires_at = excluded.expires_at;
   exception when undefined_column or undefined_table or insufficient_privilege then
     null;
   end;
-  delete from private.banned_ips where ip_hash is null;
 
   -- Supabase Auth refuses sign-in and token refresh; current sessions end.
   -- (The ban holds without these too: the request hook and the functions
@@ -683,7 +697,10 @@ begin
   if not found then
     raise exception 'this account is not banned' using errcode = 'P0002';
   end if;
-  update public.user_entitlements set is_suspended = false, suspended_reason = null where user_id = p_user_id;
+  -- Back to the suspension from before the ban, unless it was changed since.
+  update public.user_entitlements
+  set is_suspended = removed.prior_suspended, suspended_reason = removed.prior_suspended_reason
+  where user_id = p_user_id and suspended_reason is not distinct from left('Banned: ' || removed.reason, 280);
   begin
     update auth.users set banned_until = null where id = p_user_id;
   exception when insufficient_privilege then

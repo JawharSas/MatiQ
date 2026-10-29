@@ -24,7 +24,9 @@ pre-release channels are named in the release title.
 - Profile pictures: the app uploads `{user}/pending.jpg`, which only its
   owner can read; the new `moderation` function checks it (JPEG, ≤ 2 MB, AI
   check with the platform key) and publishes it under a new name, or
-  quarantines it and bans the account. Clients can no longer set
+  quarantines it and bans the account. The upload is moved to that name
+  (which the app can't write) before it is read, so replacing `pending.jpg`
+  during the check can't swap the published picture. Clients can no longer set
   `avatar_path` (`avatar_requires_review`) or upload any other avatar name.
   Without `ANTHROPIC_API_KEY` new pictures are refused
   (`moderation_unavailable`).
@@ -35,9 +37,12 @@ pre-release channels are named in the release title.
 - Network bans: HMAC-SHA256 fingerprints (keyed, IPv6 per /64) of the
   addresses in the account's sessions and auth log for the last 30 days,
   kept 30 days; requests from those networks are refused for any account.
-  Addresses themselves are never stored. Strikes are kept 90 days.
-- Owner panel → Moderation: bans with **Lift ban** (also clears the network
-  blocks and strikes), the word filter (add and remove words), recent
+  A network two banned accounts used stays blocked until both bans are
+  lifted. Addresses themselves are never stored. Strikes are kept 90 days.
+  Auth log entries that aren't an address are skipped.
+- Owner panel → Moderation: bans with **Lift ban** (also clears the account's
+  network blocks and strikes, and restores a suspension it had before the
+  ban), the word filter (add and remove words), recent
   strikes; **Ban account** on a user. All audited. The owner account can't
   be banned.
 - App: a banned screen (why, contact support, sign out) as soon as the

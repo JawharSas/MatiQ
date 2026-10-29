@@ -4,7 +4,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(44);
+select plan(48);
 
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
 begin
@@ -37,6 +37,9 @@ update public.profiles set visibility = 'public'
 insert into auth.sessions (user_id, ip) values
   ('e1111111-1111-4111-8111-111111111111', '203.0.113.7'),
   ('e1111111-1111-4111-8111-111111111111', '2001:db8:1:2::1');
+-- The auth log keeps addresses as text; one that isn't an address must not break a ban.
+insert into auth.audit_log_entries (payload, ip_address)
+  values (json_build_object('actor_id', 'e1111111-1111-4111-8111-111111111111'), 'unknown');
 
 -- Word filter ------------------------------------------------------------------------
 select is(private.text_violation('nice porn'), 'sexual', 'blocked words are found');
@@ -113,10 +116,25 @@ select pg_temp.as_user('e3333333-3333-4333-8333-333333333333');
 select throws_ok($$select public.admin_ban_user('e4444444-4444-4444-8444-444444444444', '  ')$$, '22023', null, 'a ban needs a reason');
 select lives_ok($$select public.admin_add_blocked_term('sandbagger', 'harassment')$$, 'the owner adds a word to the filter');
 select is(private.text_violation('what a sandbagger'), 'harassment', 'which applies at once');
+reset role;
+insert into auth.sessions (user_id, ip) values ('e5555555-5555-4555-8555-555555555555', '203.0.113.7');
+update public.user_entitlements set is_suspended = true, suspended_reason = 'Chargeback'
+  where user_id = 'e5555555-5555-4555-8555-555555555555';
+select pg_temp.as_user('e3333333-3333-4333-8333-333333333333');
+select lives_ok($$select public.admin_ban_user('e5555555-5555-4555-8555-555555555555', 'Ban evasion')$$, 'a second account on that network is banned');
 select lives_ok($$select public.admin_unban_user('e1111111-1111-4111-8111-111111111111')$$, 'the owner lifts a ban');
 reset role;
 select ok(not private.is_banned('e1111111-1111-4111-8111-111111111111') and (select banned_until is null from auth.users where id = 'e1111111-1111-4111-8111-111111111111'), 'the account can sign in again');
 select is((select count(*)::int from private.banned_ips where user_id = 'e1111111-1111-4111-8111-111111111111'), 0, 'and its addresses are unblocked');
+select pg_temp.as_user('e2222222-2222-4222-8222-222222222222');
+select set_config('request.headers', '{"x-forwarded-for":"203.0.113.7"}', true);
+select throws_ok($$select public.check_request()$$, '42501', 'banned', 'a network another banned account used stays blocked');
+select pg_temp.as_user('e3333333-3333-4333-8333-333333333333');
+select lives_ok($$select public.admin_unban_user('e5555555-5555-4555-8555-555555555555')$$, 'the second ban is lifted');
+reset role;
+select is(
+  (select suspended_reason from public.user_entitlements where user_id = 'e5555555-5555-4555-8555-555555555555' and is_suspended),
+  'Chargeback', 'a suspension from before the ban stays');
 select pg_temp.as_service();
 select throws_ok($$select public.svc_ban_user('e3333333-3333-4333-8333-333333333333', 'x', 'other')$$, '22023', null, 'the owner account cannot be banned');
 

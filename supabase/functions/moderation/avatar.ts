@@ -2,6 +2,10 @@
  * Profile-picture check. The app uploads `avatars/{user}/pending.jpg`, which
  * only its owner can read; nothing is shown to other people until the AI
  * check passes and the picture is published under a new name.
+ *
+ * The upload is first moved to that new name, which the app can't write, and
+ * only then read and checked: replacing `pending.jpg` during the check can't
+ * swap the picture that gets published.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -35,34 +39,33 @@ export async function checkAvatar(
     throw new HttpError(503, 'moderation_unavailable', 'Picture checks are not set up yet');
   }
 
-  const { data: file, error } = await storage.download(pending);
-  if (error || !file) throw new HttpError(404, 'not_found', 'Upload the picture first');
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.byteLength > MAX_AVATAR_BYTES || !isJpeg(bytes)) {
-    await discard();
+  const path = `${userId}/${crypto.randomUUID()}.jpg`;
+  const { error: moveError } = await storage.move(pending, path);
+  if (moveError) throw new HttpError(404, 'not_found', 'Upload the picture first');
+  const reject = async () => {
+    await storage.remove([path]);
     throw new HttpError(422, 'image_rejected', 'This picture could not be used');
-  }
+  };
+
+  const { data: file, error } = await storage.download(path);
+  if (error || !file) return await reject();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength > MAX_AVATAR_BYTES || !isJpeg(bytes)) return await reject();
 
   let safety;
   try {
     safety = await provider.checkImage(toBase64(bytes));
   } catch (error) {
-    await discard();
+    await storage.remove([path]);
     throw error;
   }
   if (isSexualContent(safety)) {
-    await quarantine(admin, AVATARS_BUCKET, [pending], userId, `avatar-${crypto.randomUUID()}`, log);
+    await quarantine(admin, AVATARS_BUCKET, [path], userId, `avatar-${crypto.randomUUID()}`, log);
     await banForSexualContent(admin, userId, 'a profile picture', log);
     throw new HttpError(403, 'banned', 'This account is banned from MatIQ');
   }
-  if (!safety) {
-    await discard();
-    throw new HttpError(422, 'image_rejected', 'This picture could not be used');
-  }
+  if (!safety) return await reject();
 
-  const path = `${userId}/${crypto.randomUUID()}.jpg`;
-  const { error: moveError } = await storage.move(pending, path);
-  if (moveError) throw new Error(`publishing the picture failed: ${moveError.message}`);
   const { data: previous, error: publishError } = await admin.rpc('svc_publish_avatar', { p_user_id: userId, p_path: path });
   if (publishError) {
     await storage.remove([path]);

@@ -119,3 +119,17 @@ Deno.test('a failing check discards the picture', async () => {
   const code = await errorCode(checkAvatar(admin, USER, provider(new Error('AI down')), silent));
   assert(code === 'AI down' && objects.size === 0, `got ${code}`);
 });
+
+Deno.test('replacing pending.jpg during the check does not swap the published picture', async () => {
+  const { admin, objects } = fakeAdmin({ [PENDING]: JPEG });
+  const swapped = JPEG.slice();
+  swapped[100] = 0x42;
+  const ai = provider({ sexualContent: false, confidence: 0.99 });
+  ai.checkImage = () => {
+    objects.set(`avatars/${PENDING}`, swapped);
+    return Promise.resolve({ sexualContent: false, confidence: 0.99 });
+  };
+  const path = await checkAvatar(admin, USER, ai, silent);
+  assert(objects.get(`avatars/${path}`) === JPEG, 'the checked bytes are the ones published');
+  assert(objects.get(`avatars/${PENDING}`) === swapped, 'the replacement waits as a new, unchecked upload');
+});

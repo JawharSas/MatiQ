@@ -10,7 +10,7 @@ the repository safely.
 |---|---|---|
 | API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app; the app and the release build refuse a secret or `service_role` key. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the full git history with gitleaks and the built bundle with `scripts/scan-bundle.mjs`. | `config/env.ts`, `config/public-key.ts`, `release.yml`, `ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 233 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 237 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
@@ -275,7 +275,9 @@ What runs on its own:
   sign-in and token refresh refused by Supabase Auth, sessions ended,
   profile, posts and shared matches hidden, and every network the account
   used in the last 30 days blocked for 30 days. **Lift ban** under
-  Moderation undoes all of it. The owner account can't be banned.
+  Moderation undoes it and restores a suspension the account had before
+  the ban; a network another banned account also used stays blocked. The
+  owner account can't be banned.
 
 Know the limits:
 
