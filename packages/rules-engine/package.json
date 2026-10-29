@@ -2,12 +2,13 @@
   "name": "@matiq/rules-engine",
   "version": "1.0.0",
   "private": true,
-  "description": "Deterministic BJJ, wrestling and MMA scoring shared by the MatIQ app and edge functions.",
+  "description": "Deterministic BJJ, wrestling and MMA scoring and the uploaded-video check, shared by the MatIQ app and edge functions.",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./media": "./src/media/index.ts"
   },
   "sideEffects": false,
   "scripts": {

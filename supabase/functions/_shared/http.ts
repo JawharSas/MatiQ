@@ -20,11 +20,20 @@ export class HttpError extends Error {
   }
 }
 
-const SECURITY_HEADERS: Record<string, string> = {
+/**
+ * Every response is JSON for the app: never cached, never sniffed, framed or
+ * rendered as a page, HTTPS only, and no browser features.
+ */
+export const SECURITY_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'X-Frame-Options': 'DENY',
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
 /** CORS headers for an allow-listed browser origin; native apps send none. */

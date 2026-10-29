@@ -125,6 +125,44 @@ jobs:
           if ! jq -n '{fileSizeLimit: 524288000}' | api PATCH /config/storage; then
             echo "::warning::Could not raise the upload limit to 500 MB; the Free plan allows 50 MB. Longer match videos will not upload: turn off \"Upload video\" when setting up a match, or move the project to the Pro plan."
           fi
+      - name: Sign-in protection
+        env:
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: |
+          auth="https://api.supabase.com/v1/projects/$REF/config/auth"
+          current=$(curl -sS --fail-with-body "$auth" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN")
+          # Per IP address, per 5 minutes: sign-in and sign-up attempts (the
+          # field has had two names), code checks (email links, two-factor
+          # codes) and session refreshes. Only fields this project's API
+          # knows are sent; supabase/config.toml has the same values.
+          limits=$(jq -c '. as $have
+            | {rate_limit_sign_in_sign_ups: 30, rate_limit_otp: 30, rate_limit_verify: 30, rate_limit_token_refresh: 150}
+            | with_entries(select(.key as $k | $have | has($k)))' <<< "$current")
+          if [ "$limits" = '{}' ]; then
+            echo "::warning::This project's Auth API lists no rate limit fields; check Authentication -> Rate Limits in the dashboard."
+          elif curl -sS --fail-with-body -o /dev/null -X PATCH "$auth" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              -H 'Content-Type: application/json' --data-binary "$limits"; then
+            echo "Rate limits: $limits"
+          else
+            echo "::warning::Could not set the sign-in rate limits; the Supabase defaults stay in place."
+          fi
+
+          # Bot protection (Cloudflare Turnstile). Only once the secret exists:
+          # turning it on makes Auth refuse email sign-in and sign-up without a
+          # check, so build the app with EXPO_PUBLIC_TURNSTILE_SITE_KEY first.
+          if [ -n "$TURNSTILE_SECRET_KEY" ]; then
+            echo "::add-mask::$TURNSTILE_SECRET_KEY"
+            jq -n --arg secret "$TURNSTILE_SECRET_KEY" \
+              '{security_captcha_enabled: true, security_captcha_provider: "turnstile", security_captcha_secret: $secret}' \
+              | curl -sS --fail-with-body -o /dev/null -X PATCH "$auth" -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                  -H 'Content-Type: application/json' --data-binary @- \
+              || { echo "::error::Could not turn on CAPTCHA protection."; exit 1; }
+            echo "Bot protection: Turnstile on"
+          elif [ "$(jq -r '.security_captcha_enabled // false' <<< "$current")" = true ]; then
+            echo "Bot protection: on (set in the dashboard)"
+          else
+            echo "::notice::Bot protection is off. To turn it on, see docs/SECURITY_AND_DEPLOYMENT.md (Bot protection)."
+          fi
       - name: Function secrets
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

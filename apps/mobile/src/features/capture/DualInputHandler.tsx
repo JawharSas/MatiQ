@@ -138,7 +138,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
   const processVideoFile = async (
     cleanSetup: MatchSetup,
     matchId: string,
-    video: { uri: string; durationMs: number; mimeType: PickedVideo['mimeType'] },
+    video: { uri: string; durationMs: number; verified?: PickedVideo['verified'] },
     { sampleFrames }: { sampleFrames: boolean },
   ) => {
     const queue = queueRef.current!;
@@ -147,7 +147,8 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
 
     let extraction = sampleFrames ? 0 : 1;
     let videoProgress = cleanSetup.uploadVideo ? 0 : 1;
-    const step = [sampleFrames ? 'Sampling frames' : null, cleanSetup.uploadVideo ? 'uploading video' : null]
+    const videoStep = video.verified ? 'uploading video' : 'checking and uploading video';
+    const step = [sampleFrames ? 'Sampling frames' : null, cleanSetup.uploadVideo ? videoStep : null]
       .filter(Boolean)
       .join(' and ');
     const report = () =>
@@ -174,7 +175,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
         : Promise.resolve(),
       cleanSetup.uploadVideo
         ? uploadVideo(userId, matchId, video.uri, {
-            mimeType: video.mimeType,
+            ...(video.verified ? { verified: video.verified } : {}),
             signal: controller.signal,
             onProgress: (fraction) => {
               videoProgress = fraction;
@@ -197,7 +198,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
       await processVideoFile(
         cleanSetup,
         matchId,
-        { uri: result.videoUri, durationMs: result.durationMs, mimeType: 'video/mp4' },
+        { uri: result.videoUri, durationMs: result.durationMs },
         { sampleFrames: !result.liveSampled },
       );
       deleteLocalFile(result.videoUri);

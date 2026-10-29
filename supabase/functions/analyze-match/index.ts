@@ -11,8 +11,8 @@
  *   POST { action: 'live_cancel', matchId }                                    -> 200
  *
  * Checks, in order: authentication, per-user rate limits, ownership, match
- * state, video-length entitlement, uploaded frames, BYOK key availability and
- * the atomic quota reservation. Long work runs in the background; the app
+ * state, video-length entitlement, uploaded frames, the uploaded video (see
+ * video.ts), BYOK key availability and the atomic quota reservation. Long work runs in the background; the app
  * follows progress through Realtime (`matches`, `match_live_batches`).
  */
 
@@ -35,6 +35,7 @@ import {
   setStatus,
   subsample,
 } from './pipeline.ts';
+import { publishVideo } from './video.ts';
 
 const MIN_FRAMES = 3;
 const START_LIMIT = { max: 20, windowSeconds: 3600 };
@@ -118,8 +119,7 @@ async function handleAnalyze(ctx: RequestContext, body: { matchId: string; keySo
   if (allFrames.length < MIN_FRAMES) throw new HttpError(422, 'frames_missing', 'Upload frames before starting analysis');
   const frames = subsample(allFrames, env.analysisMaxFrames());
 
-  const { data: videoObjects } = await ctx.admin.storage.from('match-videos').list(`${ctx.user.id}/${match.id}`, { limit: 5 });
-  const hasVideo = (videoObjects ?? []).some((object) => object.name === 'video.mp4' || object.name === 'video.mov');
+  const hasVideo = await publishVideo(ctx.admin, ctx.user.id, match.id, ctx.log);
 
   const provider = await createProvider(ctx, body.keySource);
   const log = ctx.log.child({ matchId: match.id });
@@ -252,8 +252,7 @@ async function handleLiveFinalize(ctx: RequestContext, body: { matchId: string }
   const frames = (await listFrames(ctx.admin, ctx.user.id, match.id)).filter((frame) => frame.t <= match.duration_ms + 2000);
   if (frames.length < MIN_FRAMES) throw new HttpError(422, 'frames_missing');
 
-  const { data: videoObjects } = await ctx.admin.storage.from('match-videos').list(`${ctx.user.id}/${match.id}`, { limit: 5 });
-  const hasVideo = (videoObjects ?? []).some((object) => object.name === 'video.mp4' || object.name === 'video.mov');
+  const hasVideo = await publishVideo(ctx.admin, ctx.user.id, match.id, ctx.log);
   await setStatus(ctx.admin, match.id, 'queued', { p_frame_count: frames.length, p_has_video: hasVideo, p_error_code: null });
 
   const provider = await createProvider(ctx, session.key_source);

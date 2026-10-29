@@ -3,6 +3,48 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.4.1] Pre-Beta, 2026-10-29
+
+### Uploads
+- Full video check before upload (`@matiq/rules-engine/media`): the whole
+  file is read on the phone. It must be MP4 or QuickTime with `ftyp` first,
+  only known top-level boxes tiling the file exactly, one `moov` with a
+  video track in a known codec, no encrypted tracks or external media, every
+  chunk inside `mdat` without overlaps and at most a little unreferenced
+  padding, and (H.264 / HEVC) every frame's NAL units adding up to the frame
+  size. Fragmented MP4 is not accepted. The picker shows progress and says
+  why a file is refused; in-app recordings are checked too.
+- The app uploads to `upload.{mp4|mov}`; analyze-match moves it to
+  `checking.*` (out of the client's reach), checks it again with HTTP range
+  reads and publishes it as `video.*` or deletes it. Clients can't write
+  `video.*`; people a match is shared with can only read `video.*`
+  (migration `20261029000300_video_upload_check.sql`).
+- Frames: JPEG start and end markers checked on the phone and the server.
+
+### Sign-in
+- Device lockout after 5 wrong passwords (30 seconds, doubling up to 15
+  minutes); cleared by a successful sign-in.
+- Cloudflare Turnstile bot check on email sign-in and sign-up when
+  `EXPO_PUBLIC_TURNSTILE_SITE_KEY` is set; Deploy backend turns on CAPTCHA
+  protection in Supabase Auth when the `TURNSTILE_SECRET_KEY` secret exists.
+- Deploy backend sets the Auth rate limits explicitly (per IP, per 5
+  minutes: 30 sign-in / sign-up attempts, 30 code checks, 150 refreshes).
+
+### Keys, headers and dependencies
+- The app and the release build refuse a secret or `service_role` Supabase
+  key; CI scans the built bundle for secrets (`scripts/scan-bundle.mjs`).
+- Function responses add CSP `default-src 'none'`, `frame-ancestors
+  'none'`, `X-Frame-Options: DENY`, HSTS, Permissions-Policy and COOP.
+- Edge Functions: zod 4.6.5 → 4.6.7 (GHSA-mrhx-c7xc-m3w5).
+- CI Dependency audit (`scripts/audit-deps.mjs`: app and Edge Functions,
+  high / critical fail unless allow-listed with a reason and review date) and
+  Dependency review on pull requests.
+- pgTAP `07_rls_and_uploads` (14 tests): RLS on every table, nothing for
+  `anon`, no views in the API schema, `svc_*` functions service-only, and the
+  upload names.
+- `docs/SECURITY_AND_DEPLOYMENT.md` section 10 maps the 21-point security
+  checklist to these controls.
+
 ## [1.4.0] Pre-Beta, 2026-10-29
 
 ### Accessibility (WCAG 2.2 AA)

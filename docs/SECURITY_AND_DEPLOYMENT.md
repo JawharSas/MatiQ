@@ -8,13 +8,17 @@ the repository safely.
 
 | Threat | Control | Where |
 |---|---|---|
-| API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the repo with gitleaks; a bundle check confirms no secrets compile in. | `apps/mobile/src/config/env.ts`, `.github/workflows/ci.yml` |
+| API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app; the app and the release build refuse a secret or `service_role` key. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the full git history with gitleaks and the built bundle with `scripts/scan-bundle.mjs`. | `config/env.ts`, `config/public-key.ts`, `release.yml`, `ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table; `anon` has no table access; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 133 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 187 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
 | Stolen or phished password | Optional TOTP two-factor authentication. Once enrolled, `aal1` sessions are refused by restrictive RLS policies (tables, Realtime, Storage), a PostgREST pre-request hook (RPCs) and the Edge Function middleware. | `20261024000300_mfa_enforcement.sql`, `_shared/mfa.ts`, `settings/two-factor.tsx` |
+| Disguised or malicious uploads | Videos: the app reads the whole file before uploading (MP4/QuickTime structure, every chunk inside the media data, nothing hidden, every H.264/HEVC frame's NAL units); clients can only write `upload.*`; analyze-match moves the upload out of the client's reach, checks it again and only then publishes `video.*`, the only name viewers can read. Frames: JPEG start and end markers checked on the phone and the server. Buckets limit MIME types and sizes. | `rules-engine/src/media/video-check.ts`, `analyze-match/video.ts`, `20261029000300_video_upload_check.sql` |
+| Password guessing, credential stuffing, bots | Supabase Auth rate limits per IP (set by Deploy backend), a device lockout after 5 wrong passwords (30 s, doubling to 15 min), optional Cloudflare Turnstile on email sign-in and sign-up, one error message for unknown email and wrong password. | `backend.yml`, `features/auth/sign-in-throttle.ts`, `features/auth/Captcha.tsx` |
+| Vulnerable dependencies | Dependabot updates; CI audits the app's and the Edge Functions' runtime dependencies (high and critical fail unless allow-listed with a reason and review date); pull requests can't add dependencies with known high-severity advisories. | `scripts/audit-deps.mjs`, `.github/dependency-audit-allowlist.json`, `ci.yml` |
+| API responses misused by a browser (framing, sniffing, caching) | Every function response is `no-store` JSON with `nosniff`, a `default-src 'none'` CSP, `frame-ancestors 'none'` / `X-Frame-Options: DENY`, HSTS, `no-referrer`, a closed Permissions-Policy and COOP; CORS only for allow-listed origins. | `_shared/http.ts` |
 | Location leaks from photos | Profile pictures are re-encoded on the device (pixels only, no EXIF) before upload; private bucket, one-hour signed URLs. | `features/social/avatar.ts` |
 | Live-analysis abuse (re-analysing frames, injecting paths) | Batches are claimed atomically: no overlapping frames, per-match frame budget, unique batch index, frames resolved against the user's own storage folder. One quota unit per match. | `20261024000200_live_analysis.sql`, `analyze-match/pipeline.ts` |
 | Rating manipulation (fake results, alt-account farming, races) | Ratings, history and titles are written only by the `ranked` function via `svc_apply_ranked_result` (no client write grants). Results come from an analysed recording linked before upload; the opponent can watch it and dispute; a recorder's own win needs the opponent's confirmation; max 3 ranked matches per pair per week; versioned rows reject concurrent overwrites; settlement applies once. | `20261028000100_ranked.sql`, `supabase/functions/ranked` |
@@ -31,6 +35,8 @@ the repository safely.
 |---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | No (public by design) | `apps/mobile/.env` locally, EAS environment variables for builds |
 | `EXPO_PUBLIC_TLS_PINS` | No | same as above |
+| `EXPO_PUBLIC_TURNSTILE_SITE_KEY` | No (public by design) | GitHub Actions variable (release builds) |
+| `TURNSTILE_SECRET_KEY` | **Yes** | GitHub Actions secret; Deploy backend copies it into Supabase Auth's CAPTCHA settings |
 | `SUPABASE_ACCESS_TOKEN` (and optionally `SUPABASE_DB_PASSWORD`) | **Yes** | GitHub Actions secret, used only by the Deploy backend workflow |
 | `ANTHROPIC_API_KEY` | **Yes** | GitHub Actions secret (the Deploy backend workflow copies it into the function secrets) or `supabase secrets set` |
 | `MATIQ_KEK_V{n}`, `MATIQ_KEK_CURRENT` | **Yes** | Function secrets: the Deploy backend workflow creates `MATIQ_KEK_V1` once if it is missing and never prints it; set it yourself first with `supabase secrets set` if you want a recovery copy in a password manager |
@@ -213,6 +219,33 @@ repeat infringers in **Owner panel → Users**.
 - MatIQ has no ads, trackers or analytics SDKs, which keeps it outside most
   COPPA "support for internal operations" questions; keep it that way.
 
+### Sign-in protection and bot protection
+
+Deploy backend sets the Supabase Auth rate limits explicitly on every run
+(per IP address, per 5 minutes: 30 sign-in or sign-up attempts, 30 code
+checks, 150 session refreshes) and the app locks sign-in on the device after
+5 wrong passwords. The Free plan has no per-account lockout hook, so the
+per-IP limits and the device lockout are the controls.
+
+Bot protection (Cloudflare Turnstile, free) is ready but off until you set
+it up, because it needs your own Cloudflare keys:
+
+1. Cloudflare dashboard → **Turnstile → Add widget**. Hostname: your Supabase
+   project host (`<project-ref>.supabase.co`; the app's check page claims
+   that host). Widget mode: **Managed**.
+2. GitHub → Settings → Secrets and variables → Actions:
+   - **Variables**: `EXPO_PUBLIC_TURNSTILE_SITE_KEY` = the site key.
+   - Do **not** add the secret yet.
+3. Run **Release** and get testers onto the new build: only builds with the
+   site key can pass the check.
+4. Then add the **secret** `TURNSTILE_SECRET_KEY` and run **Deploy
+   backend**: it turns on CAPTCHA protection in Supabase Auth. From then on
+   email sign-in and sign-up need the check (Google sign-in doesn't);
+   builds without the site key can no longer sign in with email.
+
+To turn it off again, delete the secret and switch CAPTCHA protection off in
+Supabase → Authentication → Attack Protection.
+
 ### Bootstrap the owner account
 
 Sign up in the app first, then run once in the SQL editor (as `postgres`):
@@ -357,10 +390,39 @@ Then in the GitHub repository settings:
 - [ ] `npm test`, `npm run typecheck`, `npm run functions:check`, database tests all green.
 - [ ] Supabase Security Advisor has no findings.
 - [ ] Owner account bootstrapped, MFA enrolled, `owner_requires_mfa = true`.
-- [ ] `authenticator` role has `pgrst.db_pre_request = public.check_request_mfa`; a test account with 2FA gets `mfa_required` from the Data API with an `aal1` token.
+- [ ] `authenticator` role has `pgrst.db_pre_request = public.check_request`; a test account with 2FA gets `mfa_required` from the Data API with an `aal1` token, and a new account gets `age_check_required` on writes until it answers the age check.
+- [ ] CI's Dependency audit, Secret scan and bundle scan are green; allow-list entries in `.github/dependency-audit-allowlist.json` are still justified.
 - [ ] `ranked` function deployed (`npm run functions:deploy` deploys all functions); one ranked match played end to end between two test accounts, including a dispute resolved in the Owner Panel.
 - [ ] Production secrets set; no secrets in EAS `EXPO_PUBLIC_*` variables.
 - [ ] TLS pins configured with a backup pin.
 - [ ] Privacy Policy and Terms reviewed by counsel; `LEGAL_VERSIONS` bumped when they change.
 - [ ] Rule values in `packages/rules-engine` checked against current rulebooks.
 - [ ] App Store privacy labels / Play data-safety form match the Privacy Policy (no data sold, no tracking).
+
+## 10. Security checklist
+
+How each item of the common web and mobile security checklist is covered.
+
+| # | Item | How MatIQ does it |
+|---|---|---|
+| 1 | Hide API keys | Only the Supabase URL and publishable key are in the app. AI keys, the service-role key and key-encryption keys are Edge Function secrets; people's own AI keys are encrypted server side and never returned. CI scans the built bundle (`scripts/scan-bundle.mjs`). |
+| 2 | Purge Git secrets | gitleaks scans the full history in CI (`fetch-depth: 0`); no `.env`, keystore or key file has ever been committed; `.gitignore` blocks them. If a secret is ever pushed: rotate it first, then rewrite history. |
+| 3 | Use the public DB key | The app and the release build refuse anything but a publishable key or an `anon` JWT (`config/public-key.ts`, release "Check public configuration"). |
+| 4 | Enable RLS | On every table in `public` and `private` and on storage objects; pgTAP `07_rls_and_uploads` fails if a table without RLS is added, if `anon` gets any table grant or privileged function, or if a view appears in the API schema. |
+| 5 | Encrypt sensitive data | TLS (with certificate pinning) in transit; Supabase encrypts the database and storage at rest (AES-256); BYOK keys AES-256-GCM with a key-encryption key; session tokens in AES-256 MMKV with the key in Keychain / Keystore. |
+| 6 | Enforce server-side auth | Every table, RPC, storage object and function checks the JWT on the server; functions re-validate it with Supabase Auth (revoked sessions fail); two-factor and the age check are enforced by the database and the functions, not just the app. |
+| 7 | Lock record access | RLS policies scope every row to its owner or to what privacy settings allow; storage paths are `{user}/{match}/…` and checked by policies. |
+| 8 | Block field tampering | Column-level grants: clients can't write roles, `is_unlimited`, status, scores, `has_video` or ratings; server-owned fields are written only by `svc_*` functions as the service role. |
+| 9 | Secure session cookies | The app uses no cookies: short-lived JWTs (15 min) with rotating refresh tokens, stored encrypted on the device, `allowBackup=false`. The Edge Functions set none. |
+| 10 | Hash passwords | Supabase Auth stores bcrypt hashes; minimum 12 characters with upper, lower, digit and symbol; changing the password needs re-authentication. |
+| 11 | Rate limit login | Supabase Auth per-IP limits set by Deploy backend; device lockout after 5 wrong passwords; per-user limits on every function and on sensitive RPCs. |
+| 12 | Add bot protection | Cloudflare Turnstile on email sign-in and sign-up, verified by Supabase Auth (turn on as described in section 3). |
+| 13 | Parameterize queries | supabase-js and PostgREST send parameters separately; SQL functions use typed parameters and no dynamic SQL built from input; search escapes LIKE wildcards. |
+| 14 | Validate all input | Zod in the app and in every function (strict objects, size limits), database CHECK constraints, body-size limits, model output re-validated. |
+| 15 | Escape user content | React Native renders text, never HTML; no `dangerouslySetInnerHTML` or user content in WebViews (the Turnstile page holds only the site key, JSON-escaped); control and bidi characters are rejected; prompt hints are fenced as data. |
+| 16 | Restrict file uploads | Private buckets with MIME and size limits (videos MP4/MOV up to 500 MB, frames JPEG up to 1 MB, avatars JPEG/PNG/WebP up to 2 MB); fixed file names enforced by policies; videos are checked in full (item 21), frames are checked for JPEG markers on the phone and the server, and avatars are re-encoded to a fresh JPEG on the phone. |
+| 17 | Trim API responses | Explicit column lists (no `select *`), `max_rows = 100`, functions return only what the screen needs, errors are a code, a message and a request id (no stack traces). |
+| 18 | Add security headers | `_shared/http.ts`: CSP `default-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options`, HSTS, `nosniff`, `no-referrer`, Permissions-Policy, COOP, `no-store`. |
+| 19 | Force HTTPS | The app requires an `https://` Supabase URL (plain HTTP only for a local dev stack), Android blocks cleartext traffic, iOS ATS is on, TLS pinning; HSTS on function responses; Supabase serves only HTTPS. |
+| 20 | Scan dependencies | Dependabot; CI Dependency audit of the app and the Edge Functions; Dependency review on pull requests. |
+| 21 | Only videos, fully scanned before upload | The phone reads the whole file before uploading: it must be an MP4 or QuickTime file whose boxes tile the file exactly, with a real video track, nothing hidden in or after the media data, and H.264 / HEVC frames whose NAL units add up. Anything else (documents, archives, apps, images, audio, renamed files, files with data appended) is refused with a message. The server checks the uploaded copy again before anyone can watch it and deletes anything that fails. |

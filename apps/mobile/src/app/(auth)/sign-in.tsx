@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
+import { useCaptcha } from '@/features/auth/Captcha';
 import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
+import { afterFailure, noThrottle, parseThrottle, remainingMs, THROTTLE_KEY, waitMessage } from '@/features/auth/sign-in-throttle';
 import { messageFor } from '@/lib/errors';
+import { openSecureStorage } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import { emailSchema } from '@/lib/validation';
 import { LogoMark, Wordmark } from '@/ui/brand';
@@ -27,6 +30,7 @@ export default function SignInScreen() {
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notCreated, setNotCreated] = useState(false);
+  const captcha = useCaptcha();
 
   // After an age check that did not pass, say so here once more (neutrally).
   useEffect(() => {
@@ -40,17 +44,34 @@ export default function SignInScreen() {
       setError('Enter your email and password.');
       return;
     }
+    const storage = await openSecureStorage();
+    const throttle = parseThrottle(storage.getString(THROTTLE_KEY));
+    const wait = remainingMs(throttle, Date.now());
+    if (wait > 0) return setError(waitMessage(wait));
+    if (captcha.enabled && !captcha.token) return setError('Complete the security check first.');
+
     setBusy(true);
-    const { error: authError } = await supabase.auth.signInWithPassword({ email: parsedEmail.data, password });
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: parsedEmail.data,
+      password,
+      ...(captcha.token ? { options: { captchaToken: captcha.token } } : {}),
+    });
     setBusy(false);
-    if (authError) {
-      // One message for unknown email and wrong password: no account probing.
-      setError(
-        authError.status === 429
-          ? messageFor('rate_limited')
-          : 'Incorrect email or password, or the email is not confirmed yet.',
-      );
+    captcha.reset();
+    if (!authError) {
+      storage.set(THROTTLE_KEY, JSON.stringify(noThrottle));
+      return;
     }
+    if (authError.status === 429) return setError(messageFor('rate_limited'));
+    if (authError.status === 400) {
+      // A wrong password (or unknown email) counts towards the device lockout.
+      const next = afterFailure(throttle, Date.now());
+      storage.set(THROTTLE_KEY, JSON.stringify(next));
+      const locked = remainingMs(next, Date.now());
+      if (locked > 0) return setError(waitMessage(locked));
+    }
+    // One message for unknown email and wrong password: no account probing.
+    setError('Incorrect email or password, or the email is not confirmed yet.');
   };
 
   return (
@@ -94,6 +115,7 @@ export default function SignInScreen() {
           textContentType="password"
           autoComplete="current-password"
         />
+        {captcha.element}
         <ErrorText>{error}</ErrorText>
         <Button label="Sign in" onPress={() => void signIn()} loading={busy} />
       </Card>

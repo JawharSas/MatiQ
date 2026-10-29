@@ -2,6 +2,7 @@ import * as Linking from 'expo-linking';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useCaptcha } from '@/features/auth/Captcha';
 import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
 import { ageCheckLocked, lockAgeCheck, rememberBirthMonthForSignup } from '@/features/legal/age';
 import { type BirthInput, meetsMinimumAge, parseBirthMonth } from '@/features/legal/age-rule';
@@ -23,6 +24,7 @@ export default function SignUpScreen() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [blocked, setBlocked] = useState<boolean | null>(null);
+  const captcha = useCaptcha();
 
   useEffect(() => {
     void ageCheckLocked().then(setBlocked);
@@ -43,6 +45,8 @@ export default function SignUpScreen() {
       return;
     }
 
+    if (captcha.enabled && !captcha.token) return setError('Complete the security check first.');
+
     setBusy(true);
     try {
       await rememberConsentForSignup(parsed.data.email);
@@ -54,8 +58,10 @@ export default function SignUpScreen() {
           // Only these two fields are read server side, and both are re-validated.
           data: { username: parsed.data.username, display_name: parsed.data.displayName },
           emailRedirectTo: Linking.createURL('/auth/callback'),
+          ...(captcha.token ? { captchaToken: captcha.token } : {}),
         },
       });
+      captcha.reset();
       if (authError) {
         setError(authError.status === 429 ? messageFor('rate_limited') : authError.message);
         return;
@@ -139,6 +145,7 @@ export default function SignUpScreen() {
           videos are never sold or shared with data brokers. New accounts are private.
         </Caption>
       </Card>
+      {captcha.element}
       <ErrorText>{error}</ErrorText>
       <Button label="Create account" onPress={() => void submit()} loading={busy} />
       <Button label="Cancel" variant="secondary" hint="Goes back to sign in" disabled={busy} onPress={() => router.replace('/sign-in')} />

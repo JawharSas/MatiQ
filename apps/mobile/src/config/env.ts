@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { isPublicSupabaseKey } from './public-key';
 
 const pinSchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/, 'TLS pins must be base64 SHA-256 hashes');
 
@@ -18,11 +19,18 @@ const schema = z.object({
     .refine((url) => url.startsWith('https://') || /^http:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?$/.test(url), {
       message: 'Supabase URL must use HTTPS (plain HTTP is only allowed for a local dev stack)',
     }),
-  supabaseAnonKey: z.string().min(20),
+  supabaseAnonKey: z.string().min(20).refine(isPublicSupabaseKey, {
+    message: 'Use the publishable (anon) key. A secret or service_role key must never be built into the app.',
+  }),
   tlsPins: z.array(pinSchema),
   tlsPinsExpire: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  /** Cloudflare Turnstile site key (public). Set together with CAPTCHA protection in Supabase Auth. */
+  turnstileSiteKey: z
+    .string()
+    .regex(/^[0-3]x[A-Za-z0-9_-]{10,64}$/, 'Turnstile site keys look like 0x4AAAA...')
     .optional(),
   legalEntity: z.string().min(1).max(80),
   supportEmail: z.string().email(),
@@ -53,6 +61,7 @@ const parsed = schema.safeParse({
   supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   tlsPins: splitList(process.env.EXPO_PUBLIC_TLS_PINS),
   tlsPinsExpire: process.env.EXPO_PUBLIC_TLS_PINS_EXPIRE || undefined,
+  turnstileSiteKey: process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || undefined,
   legalEntity: process.env.EXPO_PUBLIC_LEGAL_ENTITY || 'MatIQ',
   supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'privacy@example.com',
   dmcaAgent: {
