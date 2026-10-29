@@ -21,7 +21,7 @@ export default function ProfileScreen() {
   const profile = useProfile(userId);
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ displayName: '', bio: '' });
+  const [draft, setDraft] = useState({ username: '', displayName: '', bio: '' });
   const [error, setError] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
 
@@ -33,7 +33,7 @@ export default function ProfileScreen() {
     const parsed = profileSchema.safeParse(draft);
     if (!parsed.success) return setError(firstIssue(parsed.error));
     try {
-      await updateProfile(userId, { display_name: parsed.data.displayName, bio: parsed.data.bio });
+      await updateProfile(userId, { username: parsed.data.username, display_name: parsed.data.displayName, bio: parsed.data.bio });
       await queryClient.invalidateQueries({ queryKey: ['profile', userId] });
       setEditing(false);
       setError(null);
@@ -90,6 +90,7 @@ export default function ProfileScreen() {
       {!editing ? <ErrorText>{error}</ErrorText> : null}
       {editing ? (
         <Card>
+          <TextField label="Username" value={draft.username} onChangeText={(v) => setDraft({ ...draft, username: v })} autoCapitalize="none" maxLength={24} />
           <TextField label="Display name" value={draft.displayName} onChangeText={(v) => setDraft({ ...draft, displayName: v })} maxLength={50} />
           <TextField label="Bio" value={draft.bio} onChangeText={(v) => setDraft({ ...draft, bio: v })} multiline maxLength={280} />
           <ErrorText>{error}</ErrorText>
@@ -104,7 +105,7 @@ export default function ProfileScreen() {
             variant="secondary"
             icon="create-outline"
             onPress={() => {
-              setDraft({ displayName: card.display_name, bio: card.bio });
+              setDraft({ username: card.username, displayName: card.display_name, bio: card.bio });
               setEditing(true);
             }}
           />

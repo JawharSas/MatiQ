@@ -9,11 +9,11 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Pre-Beta V1.3.0** · Android · free
+> **Pre-Beta V1.3.1** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.3.0-pre-beta/MatIQ-1.3.0-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.3.1-pre-beta/MatIQ-1.3.1-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.3.0-pre-beta) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.3.1-pre-beta) · iPhone: coming later
 
 ## What you can do
 
@@ -40,11 +40,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.3.0-pre-beta/MatIQ-1.3.0-android.apk).
-   Your browser saves `MatIQ-1.3.0-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.3.1-pre-beta/MatIQ-1.3.1-android.apk).
+   Your browser saves `MatIQ-1.3.1-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.3.0-android.apk`.
+   **Downloads** app and tap `MatIQ-1.3.1-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
@@ -55,12 +55,16 @@ free space.
 
 ## Get started
 
-1. **Create your account.** Tap **Create an account**, then enter your email,
+1. **Create your account.** The quickest way: tap **Continue with Google**,
+   pick your Google account and accept the Terms and Privacy Policy. You're
+   in; change your username any time under **Profile → Edit profile**.
+
+   Or with your email: tap **Create an account**, then enter your email,
    a password (at least 12 characters, with an uppercase letter, a lowercase
    letter, a number and a symbol), a username and the name people will see.
    Accept the Terms and Privacy Policy, confirm you're 13 or older and tap
    **Create account**.
-2. **Confirm your email.** Open the link MatIQ emails you **on the same
+2. **Confirm your email** (email sign-up only). Open the link MatIQ emails you **on the same
    phone**, then sign in.
 3. **Analyse your first round.** Open the **Analyze** tab, pick the sport,
    the rules and who's Fighter 1 and Fighter 2, then **Record live** or

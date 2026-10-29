@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { acceptCurrentVersions, missingAcceptances } from '@/features/legal/consent';
 import { LEGAL_DOCUMENTS } from '@/features/legal/documents';
 import { errorMessage } from '@/lib/errors';
-import { Body, Button, Card, ErrorText, LinkText, Loading, Screen, Title } from '@/ui/components';
+import { Body, Button, Caption, Card, ErrorText, LinkText, Loading, Screen, Title } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
 /**
@@ -79,6 +79,8 @@ function ConsentGate({ missing }: { missing: ('terms' | 'privacy')[] }) {
           </Link>
         </Card>
       ))}
+      {/* Accounts made with Google skip the sign-up form, so the age check is asked here. */}
+      <Caption>By tapping I agree you also confirm you are at least 13 (or the minimum age in your country).</Caption>
       <ErrorText>{error}</ErrorText>
       <Button label="I agree" onPress={() => void accept()} loading={busy} />
     </Screen>
