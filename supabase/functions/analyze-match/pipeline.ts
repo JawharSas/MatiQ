@@ -12,10 +12,11 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { type AnalysisProvider, type Frame } from '../_shared/ai/anthropic.ts';
+import { AnalysisError, type AnalysisProvider, type Frame } from '../_shared/ai/anthropic.ts';
 import type { BatchOutput } from '../_shared/ai/schemas.ts';
 import { toBase64 } from '../_shared/crypto.ts';
 import type { Logger } from '../_shared/log.ts';
+import { banForSexualContent, isSexualContent, quarantine } from '../_shared/moderation.ts';
 import { analyzeMatch, type Discipline, MAX_EVENTS } from '../_shared/rules-engine/index.ts';
 import { isJpeg } from '../_shared/rules-engine/media/index.ts';
 
@@ -165,6 +166,28 @@ export function analyzeFrames(
   );
 }
 
+/**
+ * Content check on analysed batches. Sexual content bans the account at once
+ * and moves the match's frames and video to quarantine; the analysis then
+ * stops with `content_removed`, so the match is never completed or shared.
+ */
+export async function enforceContentSafety(
+  admin: SupabaseClient,
+  match: MatchRow,
+  outputs: readonly BatchOutput[],
+  log: Logger,
+): Promise<void> {
+  if (!outputs.some((output) => isSexualContent(output.safety))) return;
+  const folder = `${match.owner_id}/${match.id}`;
+  const caseId = `match-${match.id}`;
+  const frames = (await listFrames(admin, match.owner_id, match.id)).map((frame) => frame.path);
+  await quarantine(admin, FRAMES_BUCKET, frames, match.owner_id, caseId, log);
+  const { data: videos } = await admin.storage.from('match-videos').list(folder, { limit: 20 });
+  await quarantine(admin, 'match-videos', (videos ?? []).map((object) => `${folder}/${object.name}`), match.owner_id, caseId, log);
+  await banForSexualContent(admin, match.owner_id, `a match recording (${match.id})`, log);
+  throw new AnalysisError('content_removed', 'Sexual content was found in this recording');
+}
+
 /** Rules engine + coaching notes + save (marks the match completed). */
 export async function scoreAndSave(
   admin: SupabaseClient,
@@ -233,6 +256,7 @@ export async function runAnalysisPipeline(options: PipelineOptions): Promise<voi
   log.info('analysis started', { matchId: match.id, frames: options.frames.length });
   await setStatus(admin, match.id, 'processing');
   const outputs = await analyzeFrames(admin, provider, match, options.frames, options, options);
+  await enforceContentSafety(admin, match, outputs, log);
   await scoreAndSave(admin, provider, match, outputs, log);
   await deleteFrames(admin, options.frames, log);
 }
@@ -287,6 +311,7 @@ export async function runLiveFinalize(options: LiveFinalizeOptions): Promise<voi
   log.info('live finalize', { matchId: match.id, liveBatches: done.length, remainingFrames: remaining.length });
 
   const leftovers = await analyzeFrames(admin, provider, match, remaining, options, options);
+  await enforceContentSafety(admin, match, leftovers, log);
   const liveOutputs: BatchOutput[] = done.map((batch) => ({ events: batch.events, observations: batch.observations }));
   await scoreAndSave(admin, provider, match, [...liveOutputs, ...leftovers], log);
   await deleteFrames(admin, options.frames, log);

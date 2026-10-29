@@ -37,6 +37,12 @@ const MESSAGES: Record<string, string> = {
   invalid_birth_month: 'Enter a real birth month and year.',
   age_check_required: 'Enter your birth month and year first.',
   video_check_unavailable: "Your video couldn't be checked just now. Open the match and tap Retry analysis.",
+  banned: 'This account is banned from MatIQ for breaking the community rules.',
+  content_not_allowed: "That includes words MatIQ doesn't allow. Please change it.",
+  avatar_requires_review: 'Profile pictures are checked before anyone sees them. Pick the picture again.',
+  image_rejected: "This picture can't be used. Pick a different one.",
+  moderation_unavailable: "Profile pictures can't be checked right now, so they can't be changed yet.",
+  content_removed: 'This recording broke the community rules and was removed.',
   '22023': "That isn't possible right now. Refresh and try again.",
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",
@@ -50,11 +56,18 @@ export function messageFor(code: string | undefined, fallback = 'Something went 
   return (code && MESSAGES[code]) || fallback;
 }
 
+const SPECIFIC_MESSAGES = new Set(['mfa_required', 'age_check_required', 'banned', 'content_not_allowed', 'avatar_requires_review']);
+
+/** True for the error every request gets once an account (or its network) is banned. */
+export function isBannedError(error: unknown): boolean {
+  return (error instanceof AppError && error.code === 'banned') || (error instanceof Error && error.message === 'banned');
+}
+
 /** Normalises a PostgREST error ({ code, message }) into an AppError. */
 export function fromPostgrest(error: { code?: string; message: string } | null): AppError | null {
   if (!error) return null;
-  // The two-factor and age guards raise 42501 with a specific message.
-  const code = error.message === 'mfa_required' || error.message === 'age_check_required' ? error.message : (error.code ?? 'unknown');
+  // The server's guards and filters raise a Postgres code with a specific message.
+  const code = SPECIFIC_MESSAGES.has(error.message) ? error.message : (error.code ?? 'unknown');
   return new AppError(code, messageFor(code));
 }
 

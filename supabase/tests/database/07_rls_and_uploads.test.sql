@@ -76,6 +76,7 @@ select throws_ok(
 
 -- The server publishes the checked video and the match is shared.
 reset role;
+update public.matches set status = 'completed' where id = 'daaaaaaa-0000-4000-8000-000000000001';
 insert into storage.objects (bucket_id, name)
   values ('match-videos', 'd1111111-1111-4111-8111-111111111111/daaaaaaa-0000-4000-8000-000000000001/video.mp4');
 insert into public.posts (id, author_id, match_id, body)
@@ -105,8 +106,8 @@ select throws_ok(
 
 -- A video published before metadata removal (older apps): owner only.
 reset role;
-insert into public.matches (id, owner_id, discipline, variant, source, duration_ms)
-  values ('daaaaaaa-0000-4000-8000-000000000002', 'd1111111-1111-4111-8111-111111111111', 'bjj', 'ibjjf', 'upload', 60000);
+insert into public.matches (id, owner_id, discipline, variant, source, duration_ms, status)
+  values ('daaaaaaa-0000-4000-8000-000000000002', 'd1111111-1111-4111-8111-111111111111', 'bjj', 'ibjjf', 'upload', 60000, 'completed');
 insert into storage.objects (bucket_id, name, created_at)
   values ('match-videos', 'd1111111-1111-4111-8111-111111111111/daaaaaaa-0000-4000-8000-000000000002/video.mp4', now() - interval '1 day');
 insert into public.posts (id, author_id, match_id, body)

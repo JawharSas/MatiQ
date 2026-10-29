@@ -5,16 +5,20 @@
  * before upload. Re-encoding writes pixels only, so EXIF metadata (GPS
  * location, device model, capture time) never leaves the phone. Avatars live
  * in a private bucket and are shown through short-lived signed URLs.
+ *
+ * Nobody else sees a new picture until the server has checked it: the app
+ * uploads `{user}/pending.jpg` (readable by its owner only) and the
+ * `moderation` function publishes it, or removes it. Sexual content bans the
+ * account.
  */
 
 import { useQuery } from '@tanstack/react-query';
-import * as Crypto from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { type Image, Images } from 'react-native-nitro-image';
 import { deleteLocalFile } from '@/features/capture/match-session';
 import { toFilePath, toFileUri } from '@/features/capture/frame-processor';
-import { AppError } from '@/lib/errors';
+import { AppError, fromFunctionError } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { updateProfile } from './api';
 
@@ -64,29 +68,26 @@ async function pickCleanAvatar(): Promise<string | null> {
 }
 
 /**
- * Lets the user pick a photo and makes it their avatar. Returns the new
- * storage path, or null when cancelled. The previous avatar is deleted.
+ * Lets the user pick a photo and sends it for the check. Returns the new
+ * storage path once it is published, or null when cancelled. The server
+ * deletes the previous avatar.
  */
-export async function changeAvatar(userId: string, previousPath: string | null): Promise<string | null> {
+export async function changeAvatar(userId: string): Promise<string | null> {
   const uri = await pickCleanAvatar();
   if (!uri) return null;
-  // A fresh name per upload, so cached signed URLs of the old picture don't linger.
-  const path = `${userId}/${Crypto.randomUUID()}.jpg`;
   try {
     const bytes = await new File(uri).arrayBuffer();
-    const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, { contentType: 'image/jpeg', upsert: false });
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(`${userId}/pending.jpg`, bytes, { contentType: 'image/jpeg', upsert: true });
     if (error) throw new AppError('upload_failed', 'Uploading the picture failed');
   } finally {
     deleteLocalFile(uri);
   }
-  try {
-    await updateProfile(userId, { avatar_path: path });
-  } catch (error) {
-    await supabase.storage.from(BUCKET).remove([path]);
-    throw error;
-  }
-  if (previousPath) await supabase.storage.from(BUCKET).remove([previousPath]);
-  return path;
+  const { data, error } = await supabase.functions.invoke<{ path: string }>('moderation', { body: { action: 'avatar' } });
+  if (error) throw await fromFunctionError(error);
+  if (!data?.path) throw new AppError('unknown', 'Something went wrong. Please try again.');
+  return data.path;
 }
 
 export async function removeAvatar(userId: string, path: string): Promise<void> {

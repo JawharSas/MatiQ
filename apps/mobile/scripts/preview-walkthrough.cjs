@@ -191,6 +191,11 @@ async function main() {
       await see('Share your scorecard');
       await page.getByRole('radio', { name: /^0:25/ }).first().click();
       await shot('share', { tall: true });
+      // The word filter sees through spacing and swapped characters.
+      await page.getByLabel('Caption').fill('nice p 0 r n');
+      await button('Post').click();
+      await see("This post wasn't shared");
+      await shot('share-filtered');
       await button('Cancel').click();
       await see('Technique breakdown');
       await page.getByRole('tab', { name: 'Alex', exact: true }).click();
@@ -329,6 +334,28 @@ async function main() {
       await shot('owner-disputes');
       await button('Void match').click();
       await see('No open disputes');
+      await page.getByRole('tab', { name: 'Moderation' }).click();
+      await see('Recent strikes');
+      await see('check my onlyfans');
+      await shot('owner-moderation', { tall: true });
+      await button('Show the list (6)').click();
+      await see('sieg heil');
+      await page.getByLabel('Word or phrase to block').fill('sandbagger');
+      await button('Add to the filter').click();
+      await see('sandbagger');
+      await page.getByRole('tab', { name: 'Users' }).click();
+      await page.getByLabel('Search by username, email or user id').fill('tomas');
+      // The search runs as you type: wait for the one match.
+      await page.waitForFunction(
+        () => [...document.querySelectorAll('[role="button"]')].filter((el) => el.textContent === 'Manage').length === 1,
+      );
+      await see('@tomas_ruiz');
+      await button('Manage').click();
+      await page.getByLabel('Ban reason').fill('Spam in the comments');
+      await button('Ban account').click();
+      await page.getByRole('tab', { name: 'Moderation' }).click();
+      await see('Spam in the comments');
+      await shot('owner-moderation-banned', { tall: true });
       await page.getByRole('tab', { name: 'Content' }).click();
       await page.getByLabel('Post ID').fill(reportedPostId);
       await page.getByLabel('Reason').fill('DMCA notice from Example Films, 29 Oct');
@@ -337,6 +364,7 @@ async function main() {
       await shot('owner-content');
       await page.getByRole('tab', { name: 'Audit log' }).click();
       await see('remove post');
+      await see('add blocked term');
       await see('resolve ranked dispute');
       await shot('owner-audit-log');
       await page.goBack();
@@ -346,6 +374,12 @@ async function main() {
       await button('Settings').click();
       await button('Sign out').click();
       await page.getByLabel('Email').waitFor();
+      // Tomás was banned in the owner panel.
+      await page.getByLabel('Email').fill('tomas_ruiz@example.com');
+      await page.getByLabel('Password').fill(PASSWORD);
+      await button('Sign in').click();
+      await see('This account is banned from MatIQ');
+      await shot('sign-in-banned');
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password').fill(PASSWORD);
       await button('Sign in').click();
@@ -357,10 +391,47 @@ async function main() {
       await see('rear naked choke');
     });
 
-    await step('sign-up age check (COPPA)', async () => {
+    await step('lift a ban', async () => {
+      await tab('Profile').click();
+      await button('Owner panel').click();
+      await page.getByRole('tab', { name: 'Moderation' }).click();
+      await see('Spam in the comments');
+      await button('Lift ban').click();
+      await see('Nobody is banned.');
+      await page.goBack();
+    });
+
+    await step('three strikes ban an account', async () => {
       await tab('Profile').click();
       await button('Settings').click();
       await button('Sign out').click();
+      await page.getByLabel('Email').fill('sam_okafor@example.com');
+      await page.getByLabel('Password').fill(PASSWORD);
+      await button('Sign in').click();
+      await see('Before you continue');
+      await button('Continue').click();
+      await page.getByRole('radio', { name: 'March' }).click();
+      await page.getByLabel('Birth year').fill('1998');
+      await button('Continue').click();
+      await page.getByRole('checkbox', { name: /^I agree/ }).click();
+      await button('Continue').click();
+      await tab('Matches').click();
+      await matchLink('Room wrestling').click();
+      await button('Share to feed').click();
+      await see('Share your scorecard');
+      for (const caption of ['nudes', 'k y s', 'sieg heil']) {
+        await page.getByLabel('Caption').fill(caption);
+        await button('Post').click();
+        if (caption !== 'sieg heil') await see("This post wasn't shared");
+      }
+      // The banned screen replaces the app (not just the error on Share).
+      await see("or the network you're connected to", 15_000);
+      await shot('banned', { tall: true });
+      await button('Sign out').click();
+      await page.getByLabel('Email').waitFor();
+    });
+
+    await step('sign-up age check (COPPA)', async () => {
       await button('Create an account').click();
       await see('Create your account');
       await shot('sign-up', { tall: true });

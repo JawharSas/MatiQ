@@ -27,6 +27,7 @@ import { variantsFor } from '../_shared/rules-engine/index.ts';
 import {
   analyzeOneBatch,
   type AthleteHints,
+  enforceContentSafety,
   listFrames,
   type MatchRow,
   runAnalysisPipeline,
@@ -235,6 +236,7 @@ async function handleLiveBatch(ctx: RequestContext, body: { matchId: string; bat
     (async () => {
       try {
         const output = await analyzeOneBatch(ctx.admin, provider, match, frames, hints, body.batchIndex, null);
+        await enforceContentSafety(ctx.admin, match, [output], log);
         await ctx.admin.rpc('svc_complete_live_batch', {
           p_match_id: match.id,
           p_batch_index: body.batchIndex,
@@ -245,6 +247,9 @@ async function handleLiveBatch(ctx: RequestContext, body: { matchId: string; bat
         });
       } catch (caught) {
         log.error('live batch failed', { error: caught });
+        if (errorCode(caught) === 'content_removed') {
+          await setStatus(ctx.admin, match.id, 'failed', { p_error_code: 'content_removed' }).catch(() => undefined);
+        }
         await ctx.admin.rpc('svc_complete_live_batch', {
           p_match_id: match.id,
           p_batch_index: body.batchIndex,

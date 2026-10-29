@@ -105,5 +105,9 @@ import_map = "./functions/deno.json"
 verify_jwt = true
 import_map = "./functions/deno.json"
 
+[functions.moderation]
+verify_jwt = true
+import_map = "./functions/deno.json"
+
 [analytics]
 enabled = false

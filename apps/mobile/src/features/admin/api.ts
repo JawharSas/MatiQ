@@ -191,3 +191,73 @@ export function useUpdateEntitlements() {
     },
   );
 }
+
+// Moderation -------------------------------------------------------------------
+
+export interface BanRow {
+  user_id: string;
+  username: string | null;
+  reason: string;
+  category: 'sexual_content' | 'text' | 'other';
+  source: 'owner' | 'automatic';
+  created_at: string;
+  strikes: number;
+}
+
+export interface StrikeRow {
+  user_id: string;
+  username: string | null;
+  kind: string;
+  detail: string | null;
+  created_at: string;
+}
+
+export interface BlockedTerm {
+  term: string;
+  category: 'sexual' | 'hate' | 'harassment';
+  created_at: string;
+}
+
+function useAdminList<T>(key: string, rpc: 'admin_list_bans' | 'admin_list_strikes' | 'admin_list_blocked_terms') {
+  return useQuery({
+    queryKey: ['admin', key],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc(rpc);
+      if (error) throw fromPostgrest(error);
+      return (data ?? []) as T[];
+    },
+  });
+}
+
+export const useBans = () => useAdminList<BanRow>('bans', 'admin_list_bans');
+export const useStrikes = () => useAdminList<StrikeRow>('strikes', 'admin_list_strikes');
+export const useBlockedTerms = () => useAdminList<BlockedTerm>('blocked-terms', 'admin_list_blocked_terms');
+
+/** Bans the account and blocks the networks it used (stored as one-way fingerprints). */
+export function useBanUser() {
+  return useAdminMutation(async ({ userId, reason }: { userId: string; reason: string }) => {
+    const { error } = await supabase.rpc('admin_ban_user', { p_user_id: userId, p_reason: cleanText(reason).slice(0, 280) });
+    if (error) throw fromPostgrest(error);
+  });
+}
+
+export function useUnbanUser() {
+  return useAdminMutation(async ({ userId }: { userId: string }) => {
+    const { error } = await supabase.rpc('admin_unban_user', { p_user_id: userId });
+    if (error) throw fromPostgrest(error);
+  });
+}
+
+export function useAddBlockedTerm() {
+  return useAdminMutation(async ({ term, category }: { term: string; category: BlockedTerm['category'] }) => {
+    const { error } = await supabase.rpc('admin_add_blocked_term', { p_term: term.trim().toLowerCase(), p_category: category });
+    if (error) throw fromPostgrest(error);
+  });
+}
+
+export function useRemoveBlockedTerm() {
+  return useAdminMutation(async ({ term }: { term: string }) => {
+    const { error } = await supabase.rpc('admin_remove_blocked_term', { p_term: term });
+    if (error) throw fromPostgrest(error);
+  });
+}

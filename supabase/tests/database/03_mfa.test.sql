@@ -27,7 +27,7 @@ insert into private.age_checks (user_id, birth_month) select id, date '1990-01-0
 select pg_temp.as_user('71111111-1111-4111-8111-111111111111', 'aal1');
 insert into public.matches (id, discipline, variant, source, duration_ms)
   values ('7aaaaaaa-0000-4000-8000-000000000001', 'bjj', 'ibjjf', 'upload', 60000);
-insert into storage.objects (bucket_id, name) values ('avatars', '71111111-1111-4111-8111-111111111111/a.jpg');
+insert into storage.objects (bucket_id, name) values ('avatars', '71111111-1111-4111-8111-111111111111/pending.jpg');
 select pg_temp.as_user('72222222-2222-4222-8222-222222222222', 'aal1');
 insert into public.matches (id, discipline, variant, source, duration_ms)
   values ('7aaaaaaa-0000-4000-8000-000000000002', 'bjj', 'ibjjf', 'upload', 60000);

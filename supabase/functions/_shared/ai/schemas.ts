@@ -68,12 +68,23 @@ const mmaEvent = z.object({
   confidence,
 });
 
+/** Content check, filled in for every batch and for profile pictures. */
+export const SAFETY_SCHEMA = z.object({
+  sexualContent: z
+    .boolean()
+    .describe('True only if an image shows sexual activity, pornography or nudity (exposed genitals, or breasts or buttocks beyond what athletic wear shows)'),
+  confidence: z.number().describe('Your confidence in sexualContent, from 0 to 1'),
+});
+
+export type Safety = z.infer<typeof SAFETY_SCHEMA>;
+
 function batchSchema<T extends z.ZodType>(event: T) {
   return z.object({
     events: z.array(event),
     observations: z
       .array(z.string())
       .describe('Up to 5 short technical observations about this segment (habits, openings, defensive gaps)'),
+    safety: SAFETY_SCHEMA,
   });
 }
 
@@ -86,4 +97,6 @@ export const BATCH_SCHEMAS = {
 export interface BatchOutput {
   events: Record<string, unknown>[];
   observations: string[];
+  /** Absent for results stored before the content check existed. */
+  safety?: Safety;
 }

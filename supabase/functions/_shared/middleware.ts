@@ -1,8 +1,9 @@
 /**
  * Request pipeline shared by every Edge Function:
  *
- *   CORS preflight -> method allow-list -> JWT authentication ->
- *   per-user rate limit -> age check -> handler -> uniform error mapping
+ *   CORS preflight -> method allow-list -> JWT authentication -> bans
+ *   (account and network) -> per-user rate limit -> age check -> handler ->
+ *   uniform error mapping
  *
  * Unknown errors become a generic 500 with a request id; internal messages
  * and stack traces are logged (redacted) but never returned to the client.
@@ -12,6 +13,7 @@ import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { ConfigError } from './env.ts';
 import { corsHeaders, errorResponse, HttpError } from './http.ts';
 import { createLogger, type Logger } from './log.ts';
+import { accessDenied, requestIps } from './moderation.ts';
 import { adminClient, authenticateRequest } from './supabase.ts';
 
 export interface RequestContext {
@@ -79,6 +81,9 @@ export function createHandler(options: HandlerOptions, handler: Handler): (req: 
 
       const user = await authenticateRequest(req);
       const admin = adminClient();
+      if (await accessDenied(admin, user.id, requestIps(req))) {
+        throw new HttpError(403, 'banned', 'This account or network is banned from MatIQ');
+      }
       if (options.rateLimit) await enforceRateLimit(admin, `${options.name}:${user.id}`, options.rateLimit);
       if (!options.allowBeforeAgeCheck) await requireAgeCheck(admin, user.id);
 

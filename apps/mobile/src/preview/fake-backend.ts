@@ -45,6 +45,9 @@ const ageCheckPending = () => {
   return viewer !== null && !ageChecked.has(viewer);
 };
 const AGE_CHECK_REQUIRED = { code: '42501', message: 'age_check_required', details: null, hint: 'Enter your birth month and year first.' };
+/** Like the server's pre-request hook: a banned account gets nothing at all. */
+const isBanned = (uid: string | null) => uid !== null && db.bans.some((ban) => ban.user_id === uid);
+const BANNED = { code: '42501', message: 'banned', details: null, hint: null };
 let tokenSeq = 0;
 const authListeners = new Set<(event: string, session: PreviewSession | null) => void>();
 
@@ -90,6 +93,7 @@ const blocked = (a: string, b: string) => db.blocks.some((row) => (row.blocker_i
 function canViewAuthor(viewer: string | null, author: string, friendsOnly = false): boolean {
   if (!viewer) return false;
   if (viewer === author) return true;
+  if (isBanned(author)) return false;
   if (blocked(viewer, author)) return false;
   if (!friendsOnly && profileOf(author)?.visibility === 'public') return true;
   return areFriends(viewer, author);
@@ -110,7 +114,9 @@ function canViewMatch(viewer: string | null, match: Row): boolean {
 function visible(table: string, row: Row, viewer: string | null): boolean {
   switch (table) {
     case 'profiles':
-      return viewer !== null && !blocked(viewer, row.id);
+      return viewer !== null && !blocked(viewer, row.id) && (row.id === viewer || !isBanned(row.id));
+    case 'posts':
+      return (row.moderation == null || row.author_id === viewer) && canViewAuthor(viewer, row.author_id, row.friends_only);
     case 'matches':
       return canViewMatch(viewer, row);
     case 'match_analyses': {
@@ -279,6 +285,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
   private run(): unknown {
     const viewer = me();
     if (!viewer && this.table !== 'profiles') fail('42501', 'permission denied');
+    if (isBanned(viewer)) fail('42501', 'banned');
     if (this.action !== 'select' && ageCheckPending()) fail('42501', 'age_check_required');
     switch (this.action) {
       case 'select':
@@ -290,6 +297,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
       }
       case 'update': {
         const rows = this.matching(viewer).filter((row) => canWrite(this.table, row, viewer!));
+        checkUpdate(this.table, this.values as Row);
         for (const row of rows) {
           Object.assign(row, this.values);
           emit(this.table, 'UPDATE', row);
@@ -344,12 +352,65 @@ function canWrite(table: string, row: Row, viewer: string): boolean {
   }
 }
 
+// Moderation (mirrors supabase/migrations/20261029000500_moderation.sql) ----------------
+
+/** Lower case, look-alike characters swapped, spelled-out letters joined. */
+function normalizeForFilter(text: string): string {
+  const swapped = text.toLowerCase().replace(/[013457@$]/g, (ch) => ({ '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's' })[ch]!);
+  return swapped
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b([a-z0-9]) (?=[a-z0-9]\b)/g, '$1')
+    .trim();
+}
+
+function textViolation(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const normal = normalizeForFilter(text);
+  const squeezed = normal.replace(/([a-z])\1+/g, '$1');
+  for (const { term, category } of db.blocked_terms) {
+    const pattern = new RegExp(`\\b${term.replace(/\*$/, '').replace(/ /g, '\\s*')}${term.endsWith('*') ? '[a-z0-9]*' : ''}\\b`);
+    if (pattern.test(normal) || pattern.test(squeezed)) return category;
+  }
+  return null;
+}
+
+const FILTERED_COLUMNS: Record<string, string[]> = {
+  profiles: ['username', 'display_name', 'bio'],
+  matches: ['title', 'athlete_a_label', 'athlete_b_label'],
+};
+
+function checkUpdate(table: string, values: Row) {
+  if ((FILTERED_COLUMNS[table] ?? []).some((column) => textViolation(values[column]))) fail('22023', 'content_not_allowed');
+  // Only the moderation function publishes a profile picture.
+  if (table === 'profiles' && values.avatar_path) fail('42501', 'avatar_requires_review');
+}
+
+function banUser(userId: string, reason: string, category: string, source: 'owner' | 'automatic') {
+  if (entitlementsOf(userId)?.role === 'owner') fail('22023', 'the owner account cannot be banned');
+  const e = entitlementsOf(userId);
+  const earlier = db.bans.find((ban) => ban.user_id === userId);
+  const prior = earlier ? { prior_suspended: earlier.prior_suspended, prior_suspended_reason: earlier.prior_suspended_reason } : { prior_suspended: Boolean(e?.is_suspended), prior_suspended_reason: e?.suspended_reason ?? null };
+  db.bans = db.bans.filter((ban) => ban.user_id !== userId);
+  db.bans.unshift({ user_id: userId, reason, category, source, created_at: now(), ...prior });
+  if (e) Object.assign(e, { is_suspended: true, suspended_reason: `Banned: ${reason}` });
+  audit('ban', userId, {}, { category, source }, reason);
+}
+
+function recordStrike(userId: string, kind: string, detail: string) {
+  db.moderation_strikes.unshift({ user_id: userId, kind, detail: detail.slice(0, 280), created_at: now() });
+  const recent = db.moderation_strikes.filter((s) => s.user_id === userId && Date.parse(s.created_at) > Date.now() - 30 * 86_400_000);
+  if (recent.length >= 3 && !isBanned(userId) && entitlementsOf(userId)?.role !== 'owner') {
+    banUser(userId, 'Automatic: three posts that broke the community rules in 30 days', 'text', 'automatic');
+  }
+}
+
 function insertRow(table: string, value: Row, upsert: boolean): Row | null {
   const viewer = me()!;
   const rows = tableRows(table);
   let row: Row;
   switch (table) {
     case 'matches':
+      if (FILTERED_COLUMNS.matches!.some((column) => textViolation(value[column]))) fail('22023', 'content_not_allowed');
       row = { has_video: false, error_code: null, frame_count: 0, status: 'draft', created_at: now(), recorded_at: now(), ...value, owner_id: viewer };
       break;
     case 'legal_acceptances': {
@@ -358,9 +419,12 @@ function insertRow(table: string, value: Row, upsert: boolean): Row | null {
       if (exists) return upsert ? null : fail('23505', 'duplicate key value');
       break;
     }
-    case 'posts':
-      row = { id: uuid(), created_at: now(), ...value, author_id: viewer };
+    case 'posts': {
+      const category = textViolation(value.body);
+      row = { id: uuid(), created_at: now(), ...value, author_id: viewer, moderation: category ? 'blocked' : null };
+      if (category) recordStrike(viewer, `post:${category}`, String(value.body));
       break;
+    }
     case 'post_likes':
       if (rows.some((r) => r.post_id === value.post_id && r.user_id === viewer)) fail('23505', 'duplicate key value');
       row = { ...value, user_id: viewer, created_at: now() };
@@ -609,7 +673,7 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
 
   get_feed: ({ p_before, p_limit = 20, p_author, p_friends_only }, viewer) =>
     db.posts
-      .filter((post) => canViewAuthor(viewer, post.author_id, post.friends_only))
+      .filter((post) => (post.moderation == null || post.author_id === viewer) && canViewAuthor(viewer, post.author_id, post.friends_only))
       .filter((post) => !p_author || post.author_id === p_author)
       .filter((post) => !p_friends_only || post.author_id === viewer || areFriends(viewer, post.author_id))
       .filter((post) => !p_before || post.created_at < p_before)
@@ -619,7 +683,7 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
 
   get_profile: ({ p_user_id }, viewer) => {
     const p = profileOf(p_user_id);
-    if (!p || blocked(viewer, p_user_id)) return [];
+    if (!p || blocked(viewer, p_user_id) || (p_user_id !== viewer && isBanned(p_user_id))) return [];
     const canView = canViewAuthor(viewer, p_user_id);
     return [
       {
@@ -872,6 +936,53 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     emit('ranked_matches', 'UPDATE', r);
     return r.status;
   },
+  admin_ban_user: ({ p_user_id, p_reason }) => {
+    requireOwner();
+    if (!String(p_reason ?? '').trim()) fail('22023', 'a reason is required');
+    banUser(p_user_id, String(p_reason).trim(), 'other', 'owner');
+    return null;
+  },
+  admin_unban_user: ({ p_user_id }) => {
+    requireOwner();
+    const ban = db.bans.find((row) => row.user_id === p_user_id) ?? fail('P0002', 'not banned');
+    db.bans = db.bans.filter((row) => row.user_id !== p_user_id);
+    db.moderation_strikes = db.moderation_strikes.filter((row) => row.user_id !== p_user_id);
+    const e = entitlementsOf(p_user_id);
+    if (e.suspended_reason === `Banned: ${ban.reason}`) Object.assign(e, { is_suspended: ban.prior_suspended, suspended_reason: ban.prior_suspended_reason });
+    audit('unban', p_user_id, { category: ban.category, source: ban.source }, {}, 'Ban lifted');
+    return null;
+  },
+  admin_list_bans: () => {
+    requireOwner();
+    return db.bans.map((ban) => ({
+      ...ban,
+      username: profileOf(ban.user_id)?.username ?? null,
+      strikes: db.moderation_strikes.filter((s) => s.user_id === ban.user_id).length,
+    }));
+  },
+  admin_list_strikes: () => {
+    requireOwner();
+    return db.moderation_strikes.slice(0, 100).map((strike) => ({ ...strike, username: profileOf(strike.user_id)?.username ?? null }));
+  },
+  admin_list_blocked_terms: () => {
+    requireOwner();
+    return [...db.blocked_terms].sort((a, b) => a.category.localeCompare(b.category) || a.term.localeCompare(b.term));
+  },
+  admin_add_blocked_term: ({ p_term, p_category }) => {
+    requireOwner();
+    const term = String(p_term ?? '').trim().toLowerCase();
+    if (!/^[a-z0-9]+( [a-z0-9]+)*\*?$/.test(term) || term.length < 2 || term.length > 60) fail('23514', 'invalid term');
+    db.blocked_terms = db.blocked_terms.filter((row) => row.term !== term);
+    db.blocked_terms.push({ term, category: p_category, created_at: now() });
+    audit('add_blocked_term', null, {}, { term, category: p_category }, null);
+    return null;
+  },
+  admin_remove_blocked_term: ({ p_term }) => {
+    requireOwner();
+    db.blocked_terms = db.blocked_terms.filter((row) => row.term !== p_term);
+    audit('remove_blocked_term', null, { term: p_term }, {}, null);
+    return null;
+  },
   admin_remove_post: ({ p_post_id, p_reason }) => {
     requireOwner();
     if (!String(p_reason ?? '').trim()) fail('22023', 'a reason is required');
@@ -890,6 +1001,18 @@ function functionError(status: number, code: string) {
 }
 
 const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string) => unknown> = {
+  // The preview has no AI: every picture passes the check.
+  moderation: (body, _method, viewer) => {
+    if (body.action !== 'avatar') fail('validation_failed', 'Unknown action');
+    const avatars = db.storage.avatars!;
+    if (!avatars.delete(`${viewer}/pending.jpg`)) fail('not_found', 'Upload the picture first');
+    const path = `${viewer}/${uuid()}.jpg`;
+    avatars.add(path);
+    const profile = profileOf(viewer)!;
+    if (profile.avatar_path) avatars.delete(profile.avatar_path);
+    profile.avatar_path = path;
+    return { status: 'ok', path };
+  },
   'analyze-match': (body, _method, viewer) => {
     const action = body.action ?? 'analyze';
     switch (action) {
@@ -994,6 +1117,7 @@ const auth = {
     await latency(250);
     const user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     if (!user || password !== PREVIEW_PASSWORD) return { data: { session: null, user: null }, error: { status: 400, message: 'Invalid login credentials' } };
+    if (isBanned(user.id)) return { data: { session: null, user: null }, error: { status: 400, code: 'user_banned', message: 'User is banned' } };
     user.last_sign_in_at = now();
     setSession(issueSession(user.id, 'aal1'), 'SIGNED_IN');
     return { data: { session, user: session!.user }, error: null };
@@ -1085,7 +1209,9 @@ function bucket(name: string) {
     },
     async upload(path: string) {
       await latency(30);
+      if (isBanned(me())) return { data: null, error: { message: 'banned' } };
       if (ageCheckPending()) return { data: null, error: { message: 'age_check_required' } };
+      if (name === 'avatars' && path !== `${me()}/pending.jpg`) return { data: null, error: { message: 'new row violates row-level security policy' } };
       objects.add(path);
       return { data: { path }, error: null };
     },
@@ -1116,6 +1242,7 @@ const client = {
     const handler = RPCS[name];
     if (!handler) return { data: null, error: { code: 'PGRST202', message: `function ${name} not found`, details: null, hint: null } };
     if (!me()) return { data: null, error: { code: '42501', message: 'permission denied', details: null, hint: null } };
+    if (isBanned(me())) return { data: null, error: BANNED };
     if (!options.get && ageCheckPending()) return { data: null, error: AGE_CHECK_REQUIRED };
     try {
       return { data: structuredClone(handler(args, me()!)), error: null };
@@ -1130,6 +1257,7 @@ const client = {
       const handler = FUNCTIONS[fn ?? ''];
       if (!handler) return { data: null, error: functionError(404, 'not_found') };
       if (!me()) return { data: null, error: functionError(401, 'unauthorized') };
+      if (isBanned(me())) return { data: null, error: functionError(403, 'banned') };
       if (fn !== 'account' && ageCheckPending()) return { data: null, error: functionError(403, 'age_check_required') };
       void query;
       try {
