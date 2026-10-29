@@ -110,7 +110,7 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](SECURITY_AND_DEPLOYMENT.md).
 ├── scripts/                         rules-engine sync, local DB tests, KEK rotation
 ├── docs/                            architecture and security/deployment guides
 ├── CHANGELOG.md                     release notes
-└── .github/                         CI (tests, type checks, UI walkthrough, secret scan) and release workflow
+└── .github/                         CI (tests, type checks, UI walkthrough, secret scan), release and backend deploy workflows
 ```
 
 ## Getting started
@@ -168,6 +168,16 @@ cd apps/mobile
 npm run preview:web && npm run preview:serve   # http://127.0.0.1:8081
 # sign in with demo@matiq.app / matiq-preview
 ```
+
+## Hosted backend
+
+**Actions → Deploy backend → Run workflow**
+([`.github/workflows/backend.yml`](../.github/workflows/backend.yml)) sets up
+the Supabase project from `EXPO_PUBLIC_SUPABASE_URL` and the
+`SUPABASE_ACCESS_TOKEN` secret: migrations, Auth and Data API settings,
+function secrets and Edge Functions. It runs again by itself when a backend
+change reaches `main`. Details and the CLI route:
+[security & deployment guide, section 3](SECURITY_AND_DEPLOYMENT.md#hosted-project).
 
 ## Releases
 
