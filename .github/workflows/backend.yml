@@ -84,7 +84,7 @@ jobs:
       - name: Apply database changes
         run: |
           if [ -n "$DB_PASSWORD" ]; then export SUPABASE_DB_PASSWORD="$DB_PASSWORD"; fi
-          supabase db push
+          supabase db push --linked
       - name: Auth, Data API and storage settings
         run: |
           api() { # <method> <path>, JSON body on stdin
@@ -112,7 +112,7 @@ jobs:
             mailer_secure_email_change_enabled: true,
             security_update_password_require_reauthentication: true,
             password_min_length: 12,
-            password_required_characters: "abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789:!@#$%^&*()_+-=[]{};'\''\\:\"|<>?,./`~",
+            password_required_characters: "abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789:!@#$%^&*()_+-=[]{};'\''\\\\:\"|<>?,./`~",
             jwt_exp: 900,
             refresh_token_rotation_enabled: true,
             security_refresh_token_reuse_interval: 10,
