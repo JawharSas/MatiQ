@@ -2,6 +2,7 @@ import * as Linking from 'expo-linking';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
 import { rememberConsentForSignup } from '@/features/legal/consent';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +22,7 @@ export default function SignUpScreen() {
     confirmedAge: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -74,6 +76,9 @@ export default function SignUpScreen() {
         <LogoMark size={44} />
         <Title>Create your account</Title>
       </View>
+      <GoogleButton onError={setGoogleError} />
+      <ErrorText>{googleError}</ErrorText>
+      <AuthDivider label="or sign up with email" />
       <Card>
         <TextField label="Email" value={form.email} onChangeText={(v) => update('email', v)} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
         <TextField

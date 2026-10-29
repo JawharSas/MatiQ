@@ -60,6 +60,7 @@ export const signUpSchema = z.object({
 });
 
 export const profileSchema = z.object({
+  username: usernameSchema,
   displayName: singleLine(50, 1),
   bio: multiLine(280),
 });

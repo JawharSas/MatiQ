@@ -3,6 +3,7 @@ import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { emailSchema } from '@/lib/validation';
@@ -21,6 +22,7 @@ export default function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const signIn = async () => {
@@ -58,6 +60,9 @@ export default function SignInScreen() {
           ))}
         </View>
       </View>
+      <GoogleButton onError={setGoogleError} />
+      <ErrorText>{googleError}</ErrorText>
+      <AuthDivider label="or sign in with email" />
       <Card>
         <TextField
           label="Email"

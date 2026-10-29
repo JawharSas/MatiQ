@@ -3,6 +3,34 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.3.1] Pre-Beta, 2026-10-29
+
+### Sign-in
+- **Continue with Google** on sign-in and sign-up: Supabase OAuth with PKCE
+  in the system browser (`expo-web-browser`; Custom Tabs on Android,
+  ASWebAuthenticationSession on iOS). The Google client secret stays in
+  Supabase; the redirect only carries a one-time code. On Android the
+  redirect reaches both the browser session and `/auth/callback`, so the
+  code exchange runs once and both wait for it.
+- New Google accounts take their display name from Google's `full_name` /
+  `name` (trimmed, 50 characters, same unsafe-character check) and get a
+  generated username (migration `20261029000100_oauth_profile_names.sql`,
+  pgTAP `05_oauth_signup`).
+- **Edit profile** can change the username (same rules as sign-up; a taken
+  name shows "That is already taken.").
+- The policy screen now also confirms the minimum age, since Google
+  sign-ups skip the sign-up form.
+- `/auth/callback` explains a cancelled Google sign-in instead of showing
+  "Link expired".
+
+### Backend
+- **Deploy backend** workflow (Actions → Deploy backend): applies the
+  migrations, the hardened Auth / Data API / storage settings, the function
+  secrets (key-encryption key generated once) and the Edge Functions, from
+  the browser. Runs again when backend code reaches `main`; main only.
+- Redirect allow-list: `matiq:///auth/callback` (what release builds send)
+  as well as `matiq://auth/callback`.
+
 ## [1.3.0] Pre-Beta, 2026-10-28
 
 ### Look and feel

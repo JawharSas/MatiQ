@@ -985,6 +985,9 @@ const auth = {
   async exchangeCodeForSession() {
     return { data: { session: null }, error: { message: 'Email links are not available in the preview' } };
   },
+  async signInWithOAuth() {
+    return { data: { provider: 'google', url: null }, error: { message: 'Google sign-in is not available in the preview' } };
+  },
   mfa: {
     async listFactors() {
       await latency();

@@ -133,6 +133,31 @@ storage objects and backups) and in transit with TLS. BYOK API keys are
 additionally encrypted at the application layer, so even a database dump does
 not reveal them.
 
+### Google sign-in
+
+The app opens Supabase's Google OAuth flow (PKCE) in the system browser and
+returns to `matiq:///auth/callback`, which the allow-list above already
+covers. The Google client secret lives only in Supabase.
+
+1. In the [Google Cloud console](https://console.cloud.google.com), create a
+   project, then **Google Auth Platform**:
+   - **Branding**: app name MatIQ, support email, developer contact email.
+   - **Audience**: External, then **Publish app** so any Google account can
+     sign in (MatIQ only asks for the basic `openid`, `email` and `profile`
+     scopes, which need no Google review).
+   - **Clients → Create client**: type **Web application**, authorized
+     redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`.
+     Copy the client ID and client secret.
+2. In Supabase: **Authentication → Sign In / Providers → Google**, turn it
+   on, paste the client ID and secret, save.
+
+No Android or iOS client (and no signing-key SHA-1) is needed for this flow.
+New Google accounts get their Google name as the display name and a
+generated username they can change under Edit profile; the policy screen
+asks them to accept the Terms and Privacy Policy and confirm their age.
+Signing in with Google on an email that already has a confirmed MatIQ
+account links to that account.
+
 ### Bootstrap the owner account
 
 Sign up in the app first, then run once in the SQL editor (as `postgres`):
