@@ -504,6 +504,72 @@ async function check(source: ByteSource, { maxBytes, deep = false, onProgress, s
   return { ok: true, container, durationMs, videoCodec: video.codec, tracks: tracks.length, framesChecked };
 }
 
+// Personal metadata ------------------------------------------------------------
+
+/** Top-level boxes that can hold location or device details (XMP, Samsung trailer, ...). */
+const PERSONAL_TOP_LEVEL = new Set(['meta', 'uuid', 'sefd', 'PICT', 'pnot']);
+/** Movie- and track-level metadata: `©xyz` / `loci` GPS, Apple location keys, make and model. */
+const PERSONAL_IN_MOVIE = new Set(['udta', 'meta', 'uuid']);
+/** Timed metadata tracks that carry GPS: GoPro telemetry and camera motion. */
+const TELEMETRY_CODECS = new Set(['gpmd', 'camm']);
+
+export interface MetadataEdit {
+  /** What it is (e.g. `moov/udta`), for logs and tests. */
+  what: string;
+  /** Start of a box whose type becomes `free`; null for sample data. */
+  box: number | null;
+  /** Byte range to overwrite with zeros. */
+  start: number;
+  end: number;
+}
+
+/**
+ * Finds what to blank so a video no longer says where it was recorded (GPS
+ * in `©xyz`, `loci`, Apple's `com.apple.quicktime.location.*`, XMP, GoPro
+ * telemetry) or on which phone (make, model, software). Boxes become `free`
+ * boxes of the same size with zeroed contents and telemetry samples are
+ * zeroed, so no offset moves and the file stays valid and playable. Call it
+ * on a file that passed `checkVideoFile`.
+ */
+export async function findPersonalMetadata(source: ByteSource): Promise<MetadataEdit[]> {
+  const edits: MetadataEdit[] = [];
+  const blank = (what: string, box: Box) => edits.push({ what, box: box.start, start: box.body, end: box.end });
+  for (let offset = 0; offset < source.size; ) {
+    const header = await readExactly(source, offset, Math.min(32, source.size - offset));
+    const view = viewOf(header);
+    const type = fourcc(header, 4);
+    let size = u32(view, 0);
+    let headerSize = 8;
+    if (size === 1) {
+      size = u64(view, 8);
+      headerSize = 16;
+    } else if (size === 0) {
+      size = source.size - offset;
+    }
+    if (type === 'uuid') headerSize += 16;
+    if (size < headerSize) throw new Reject('damaged', 'invalid box size');
+    const box: Box = { type, start: offset, body: offset + headerSize, end: offset + size };
+
+    if (PERSONAL_TOP_LEVEL.has(type)) blank(type, box);
+    if (type === 'moov') {
+      const moov = await readExactly(source, box.body, box.end - box.body);
+      for (const child of childBoxes(moov, 0, moov.byteLength, box.body)) {
+        if (PERSONAL_IN_MOVIE.has(child.type)) blank(`moov/${child.type}`, child);
+        if (child.type !== 'trak') continue;
+        for (const part of childBoxes(moov, child.body - box.body, child.end - box.body, box.body)) {
+          if (PERSONAL_IN_MOVIE.has(part.type)) blank(`trak/${part.type}`, part);
+        }
+      }
+      for (const track of parseMoov(moov, box.body, false).tracks) {
+        if (!TELEMETRY_CODECS.has(track.codec)) continue;
+        for (const chunk of track.chunks) edits.push({ what: `${track.codec} samples`, box: null, start: chunk.start, end: chunk.end });
+      }
+    }
+    offset = box.end;
+  }
+  return edits;
+}
+
 /**
  * JPEG frames: starts with an SOI marker followed by another marker and ends
  * with EOI (trailing zero padding allowed).

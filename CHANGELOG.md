@@ -21,6 +21,19 @@ pre-release channels are named in the release title.
   (migration `20261029000300_video_upload_check.sql`).
 - Frames: JPEG start and end markers checked on the phone and the server.
 
+### Privacy
+- Location (GPS) and phone make and model are removed from every video
+  before upload: `findPersonalMetadata` finds `udta` / `meta` / XMP boxes
+  (Android `loci` and `©xyz`, Apple `com.apple.quicktime.location.*`, make,
+  model) and GoPro / camera-motion telemetry; a copy is uploaded with those
+  boxes blanked to `free` boxes of the same size and telemetry zeroed, so
+  the video plays as before.
+- Videos published before 1.4.1 may still contain location: only their
+  owners can watch them now (migration `20261029000400_privacy_hardening.sql`).
+- GraphQL (`pg_graphql`) removed: the app only uses the REST Data API.
+- Privacy Policy: IP addresses (security logs only, never shown to other
+  users) and the video metadata removal.
+
 ### Sign-in
 - Device lockout after 5 wrong passwords (30 seconds, doubling up to 15
   minutes); cleared by a successful sign-in.
@@ -39,7 +52,7 @@ pre-release channels are named in the release title.
 - CI Dependency audit (`scripts/audit-deps.mjs`: app and Edge Functions,
   high / critical fail unless allow-listed with a reason and review date) and
   Dependency review on pull requests.
-- pgTAP `07_rls_and_uploads` (14 tests): RLS on every table, nothing for
+- pgTAP `07_rls_and_uploads` (16 tests): RLS on every table, nothing for
   `anon`, no views in the API schema, `svc_*` functions service-only, and the
   upload names.
 - `docs/SECURITY_AND_DEPLOYMENT.md` section 10 maps the 21-point security

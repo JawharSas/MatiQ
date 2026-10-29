@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { type ByteSource, checkVideoFile, isJpeg, type VideoCheckResult } from '../src/media/index.ts';
+import { type ByteSource, checkVideoFile, findPersonalMetadata, isJpeg, type MetadataEdit, type VideoCheckResult } from '../src/media/index.ts';
 
 // Fixtures are 1-second ffmpeg test patterns (see test/fixtures/README.md).
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -188,6 +188,72 @@ describe('checkVideoFile: everything else is refused', () => {
     new DataView(free.buffer).setUint32(0, 16);
     free.set(new TextEncoder().encode('free'), 4);
     assert.equal(rejected(await check(concat(free, base))), 'not_a_video');
+  });
+});
+
+/** Applies edits the way the app does: blanked boxes become `free`, ranges are zeroed. */
+function applyEdits(bytes: Uint8Array, edits: MetadataEdit[]): Uint8Array {
+  const out = bytes.slice();
+  for (const edit of edits) {
+    if (edit.box !== null) out.set(new TextEncoder().encode('free'), edit.box + 4);
+    out.fill(0, edit.start, edit.end);
+  }
+  return out;
+}
+
+const contains = (bytes: Uint8Array, text: string | number[]) => {
+  const needle = typeof text === 'string' ? new TextEncoder().encode(text) : Uint8Array.from(text);
+  outer: for (let i = 0; i + needle.length <= bytes.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+    return true;
+  }
+  return false;
+};
+
+describe('findPersonalMetadata', () => {
+  it('removes Android-style GPS (3GPP loci) and keeps a valid video', async () => {
+    const original = fixture('android-gps.mp4');
+    assert.ok(contains(original, 'loci'));
+    const edits = await findPersonalMetadata(source(original));
+    assert.deepEqual(edits.map((edit) => edit.what), ['moov/udta']);
+    const clean = applyEdits(original, edits);
+    assert.equal(clean.byteLength, original.byteLength, 'same size, nothing moves');
+    assert.ok(!contains(clean, 'loci'), 'no location box left');
+    assert.deepEqual(await findPersonalMetadata(source(clean)), [], 'nothing personal left');
+    assert.equal((await check(clean)).ok, true, 'still a genuine video, every frame intact');
+  });
+
+  it("removes Apple's location, make and model keys", async () => {
+    const original = fixture('iphone-gps.mov');
+    assert.ok(contains(original, '+51.5072'));
+    const clean = applyEdits(original, await findPersonalMetadata(source(original)));
+    for (const text of ['+51.5072', 'com.apple.quicktime.location', 'iPhone 17', 'Apple']) assert.ok(!contains(clean, text), text);
+    assert.equal((await check(clean)).ok, true);
+  });
+
+  it('finds a metadata box directly in moov (the iPhone camera layout)', async () => {
+    const bytes = fixture('iphone-gps.mov').slice();
+    const udta = bytes.findIndex((_, i) => bytes[i] === 0x75 && bytes[i + 1] === 0x64 && bytes[i + 2] === 0x74 && bytes[i + 3] === 0x61);
+    bytes.set(new TextEncoder().encode('meta'), udta);
+    assert.deepEqual((await findPersonalMetadata(source(bytes))).map((edit) => edit.what), ['moov/meta']);
+  });
+
+  it('zeroes GPS telemetry tracks (GoPro gpmd)', async () => {
+    // The fixture's audio track, relabelled as a telemetry track.
+    const bytes = fixture('h264-aac.mp4').slice();
+    const entry = bytes.findIndex((_, i) => contains(bytes.subarray(i, i + 4), 'mp4a'));
+    bytes.set(new TextEncoder().encode('gpmd'), entry);
+    const edits = await findPersonalMetadata(source(bytes));
+    const telemetry = edits.filter((edit) => edit.what === 'gpmd samples');
+    assert.ok(telemetry.length > 0);
+    const clean = applyEdits(bytes, edits);
+    for (const edit of telemetry) assert.ok(clean.subarray(edit.start, edit.end).every((byte) => byte === 0));
+    assert.equal((await check(clean)).ok, true, 'the video track is untouched');
+  });
+
+  it('leaves a file without personal metadata alone', async () => {
+    const bytes = applyEdits(fixture('faststart.mp4'), await findPersonalMetadata(source(fixture('faststart.mp4'))));
+    assert.deepEqual(await findPersonalMetadata(source(bytes)), []);
   });
 });
 

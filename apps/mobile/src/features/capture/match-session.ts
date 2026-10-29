@@ -17,7 +17,7 @@ import { File, UploadType } from 'expo-file-system';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { SampledFrame } from './frame-processor';
-import { requireVideo } from './video-check';
+import { removePersonalMetadata, requireVideo } from './video-check';
 
 export interface MatchSetup {
   discipline: Discipline;
@@ -86,10 +86,10 @@ export async function uploadFrame(userId: string, matchId: string, frame: Sample
 }
 
 /**
- * Checks the whole video file (unless the caller already did), then streams
- * it from disk to Storage through a short-lived signed upload URL using the
- * platform's native uploader (no JS memory pressure, continues in the
- * background on iOS).
+ * Checks the whole video file (unless the caller already did), removes
+ * location and device metadata, then streams it from disk to Storage through
+ * a short-lived signed upload URL using the platform's native uploader (no JS
+ * memory pressure, continues in the background on iOS).
  */
 export async function uploadVideo(
   userId: string,
@@ -105,11 +105,26 @@ export async function uploadVideo(
       ...(options.signal ? { signal: options.signal } : {}),
     }));
   const isMov = verified.container === 'mov';
-  const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
-  const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
-  if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
+  // Location (GPS) and phone details never leave the phone.
+  const clean = await removePersonalMetadata(videoUri, verified.container);
+  try {
+    const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
+    const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
+    if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
+    await sendVideo(clean.uri, data.signedUrl, isMov, checkShare, options);
+  } finally {
+    if (clean.temporary) deleteLocalFile(clean.uri);
+  }
+}
 
-  const result = await new File(videoUri).upload(data.signedUrl, {
+async function sendVideo(
+  uri: string,
+  signedUrl: string,
+  isMov: boolean,
+  checkShare: number,
+  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
+): Promise<void> {
+  const result = await new File(uri).upload(signedUrl, {
     httpMethod: 'PUT',
     uploadType: UploadType.BINARY_CONTENT,
     headers: { 'Content-Type': isMov ? 'video/quicktime' : 'video/mp4', 'x-upsert': 'true' },

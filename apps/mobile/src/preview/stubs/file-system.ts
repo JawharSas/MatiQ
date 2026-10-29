@@ -52,6 +52,9 @@ export class File {
   delete() {
     written.delete(this.uri);
   }
+  copy(_destination: File) {
+    return Promise.resolve();
+  }
   write(content: string) {
     written.set(this.uri, content);
   }
@@ -70,6 +73,11 @@ export class File {
         const chunk = bytes.slice(this.offset, this.offset + length);
         this.offset += chunk.byteLength;
         return Promise.resolve(chunk);
+      },
+      // Writes (the metadata blanking on a copy) are accepted and dropped.
+      writeBytes(data: Uint8Array) {
+        this.offset += data.byteLength;
+        return Promise.resolve();
       },
       close() {},
     };

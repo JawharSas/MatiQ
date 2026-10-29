@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(16);
 
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
 begin
@@ -102,6 +102,25 @@ select throws_ok(
   $$insert into storage.objects (bucket_id, name)
     values ('match-videos', 'd1111111-1111-4111-8111-111111111111/daaaaaaa-0000-4000-8000-000000000001/upload.mp4')$$,
   '42501', null, 'and cannot upload into someone else''s match');
+
+-- A video published before metadata removal (older apps): owner only.
+reset role;
+insert into public.matches (id, owner_id, discipline, variant, source, duration_ms)
+  values ('daaaaaaa-0000-4000-8000-000000000002', 'd1111111-1111-4111-8111-111111111111', 'bjj', 'ibjjf', 'upload', 60000);
+insert into storage.objects (bucket_id, name, created_at)
+  values ('match-videos', 'd1111111-1111-4111-8111-111111111111/daaaaaaa-0000-4000-8000-000000000002/video.mp4', now() - interval '1 day');
+insert into public.posts (id, author_id, match_id, body)
+  values ('dbbbbbbb-0000-4000-8000-000000000002', 'd1111111-1111-4111-8111-111111111111', 'daaaaaaa-0000-4000-8000-000000000002', 'Old round');
+update private.settings set value = (now() - interval '1 hour')::text where key = 'videos_clean_since';
+
+select pg_temp.as_user('d2222222-2222-4222-8222-222222222222');
+select is(
+  (select count(*)::int from storage.objects where bucket_id = 'match-videos' and name like '%daaaaaaa-0000-4000-8000-000000000002%'),
+  0, 'viewers cannot watch a video uploaded before location metadata was removed');
+select pg_temp.as_user('d1111111-1111-4111-8111-111111111111');
+select is(
+  (select count(*)::int from storage.objects where bucket_id = 'match-videos' and name like '%daaaaaaa-0000-4000-8000-000000000002%'),
+  1, 'its owner still can');
 
 select * from finish();
 rollback;
