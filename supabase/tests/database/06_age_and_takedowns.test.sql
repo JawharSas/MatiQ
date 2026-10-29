@@ -4,7 +4,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(33);
 
 create function pg_temp.as_user(uid uuid) returns void language plpgsql as $$
 begin
@@ -74,6 +74,40 @@ select pg_temp.as_user('b1111111-1111-4111-8111-111111111111');
 select is(public.my_age_check(), true, 'the user sees that the check is done');
 select pg_temp.as_user('b2222222-2222-4222-8222-222222222222');
 select is(public.my_age_check(), false, 'another user does not');
+
+-- Nothing can be created before the age check -----------------------------------------
+select is(private.age_checked(), false, 'a user without an age check is not cleared');
+select throws_ok(
+  $$insert into public.matches (id, discipline, variant, source, duration_ms)
+    values ('baaaaaaa-0000-4000-8000-000000000002', 'bjj', 'ibjjf', 'upload', 60000)$$,
+  '42501', null, 'no matches before the age check');
+update public.profiles set bio = 'hello' where id = 'b2222222-2222-4222-8222-222222222222';
+reset role;
+select ok(
+  (select bio is distinct from 'hello' from public.profiles where id = 'b2222222-2222-4222-8222-222222222222'),
+  'no profile changes before the age check');
+select pg_temp.as_user('b2222222-2222-4222-8222-222222222222');
+select throws_ok(
+  $$insert into storage.objects (bucket_id, name) values ('avatars', 'b2222222-2222-4222-8222-222222222222/a.jpg')$$,
+  '42501', null, 'no uploads before the age check');
+select set_config('request.method', 'POST', true);
+select throws_ok($$select public.check_request()$$, '42501', 'age_check_required', 'the API refuses writes and RPCs');
+select set_config('request.method', 'GET', true);
+select lives_ok($$select public.check_request()$$, 'reads are still allowed');
+
+select pg_temp.as_user('b1111111-1111-4111-8111-111111111111');
+select set_config('request.method', 'POST', true);
+select lives_ok($$select public.check_request()$$, 'after the age check, writes are allowed');
+select lives_ok(
+  $$insert into public.matches (id, discipline, variant, source, duration_ms)
+    values ('baaaaaaa-0000-4000-8000-000000000001', 'bjj', 'ibjjf', 'upload', 60000)$$,
+  'and matches can be created');
+select throws_ok(
+  $$select public.svc_age_checked('b1111111-1111-4111-8111-111111111111')$$,
+  '42501', null, 'users cannot call svc_age_checked');
+select pg_temp.as_service();
+select is(public.svc_age_checked('b1111111-1111-4111-8111-111111111111'), true, 'functions see a completed age check');
+select is(public.svc_age_checked('b2222222-2222-4222-8222-222222222222'), false, 'and a missing one');
 
 -- Copyright takedowns -------------------------------------------------------------------
 reset role;

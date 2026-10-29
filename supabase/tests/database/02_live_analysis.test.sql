@@ -27,6 +27,8 @@ grant execute on all functions in schema pg_temp to authenticated, service_role;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('61111111-1111-4111-8111-111111111111', 'live-a@example.test', '{"username":"live_a"}'),
   ('62222222-2222-4222-8222-222222222222', 'live-b@example.test', '{"username":"live_b"}');
+-- Every test user has answered the age check (06 covers the check itself).
+insert into private.age_checks (user_id, birth_month) select id, date '1990-01-01' from auth.users on conflict do nothing;
 
 select pg_temp.as_user('61111111-1111-4111-8111-111111111111');
 insert into public.matches (id, discipline, variant, source, duration_ms)

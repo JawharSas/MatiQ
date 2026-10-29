@@ -199,6 +199,14 @@ repeat infringers in **Owner panel → Users**.
 - For everyone else the month is stored in `private.age_checks` (not exposed
   to the Data API, never shown to other users, included in the data export,
   deleted with the account).
+- The server enforces the order, not just the app: until a user has an
+  `age_checks` row their session can read but not create or change anything.
+  Restrictive RLS policies cover inserts and updates (tables and storage),
+  the PostgREST pre-request hook `public.check_request()` refuses every
+  non-GET request (so RPCs too), and the Edge Function middleware calls
+  `svc_age_checked` (all functions except `account`, which records the
+  answer and handles export and deletion). Clients built before 1.4.0 can
+  therefore no longer save anything until the person updates the app.
 - If a parent reports a child under 13, delete the account (Supabase
   dashboard → Authentication → Users, after removing their storage folder in
   the three buckets, or ask the person to use Settings → Delete account).

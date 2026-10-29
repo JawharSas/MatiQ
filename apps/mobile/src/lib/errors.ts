@@ -35,6 +35,7 @@ const MESSAGES: Record<string, string> = {
   busy: 'Ratings are being updated. Try again in a moment.',
   invalid_scorecard: 'This recording has no usable scorecard.',
   invalid_birth_month: 'Enter a real birth month and year.',
+  age_check_required: 'Enter your birth month and year first.',
   '22023': "That isn't possible right now. Refresh and try again.",
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",
@@ -51,8 +52,8 @@ export function messageFor(code: string | undefined, fallback = 'Something went 
 /** Normalises a PostgREST error ({ code, message }) into an AppError. */
 export function fromPostgrest(error: { code?: string; message: string } | null): AppError | null {
   if (!error) return null;
-  // The two-factor guard raises 42501 with a specific message.
-  const code = error.message === 'mfa_required' ? 'mfa_required' : (error.code ?? 'unknown');
+  // The two-factor and age guards raise 42501 with a specific message.
+  const code = error.message === 'mfa_required' || error.message === 'age_check_required' ? error.message : (error.code ?? 'unknown');
   return new AppError(code, messageFor(code));
 }
 

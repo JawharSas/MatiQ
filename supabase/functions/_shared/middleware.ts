@@ -2,7 +2,7 @@
  * Request pipeline shared by every Edge Function:
  *
  *   CORS preflight -> method allow-list -> JWT authentication ->
- *   per-user rate limit -> handler -> uniform error mapping
+ *   per-user rate limit -> age check -> handler -> uniform error mapping
  *
  * Unknown errors become a generic 500 with a request id; internal messages
  * and stack traces are logged (redacted) but never returned to the client.
@@ -33,6 +33,11 @@ export interface HandlerOptions {
   name: string;
   methods: readonly string[];
   rateLimit?: RateLimit;
+  /**
+   * Serve users who have not answered the age check yet. Only the account
+   * function, which records the answer and handles export and deletion.
+   */
+  allowBeforeAgeCheck?: boolean;
 }
 
 export type Handler = (ctx: RequestContext) => Promise<Response>;
@@ -48,6 +53,13 @@ export async function enforceRateLimit(admin: SupabaseClient, key: string, limit
   if (data !== true) {
     throw new HttpError(429, 'rate_limited', 'Too many requests', { 'Retry-After': String(limit.windowSeconds) });
   }
+}
+
+/** Users act only after answering the age check (mirrors `private.age_checked()`). */
+export async function requireAgeCheck(admin: SupabaseClient, userId: string): Promise<void> {
+  const { data, error } = await admin.rpc('svc_age_checked', { p_user_id: userId });
+  if (error) throw new Error(`age check lookup failed: ${error.message}`);
+  if (data !== true) throw new HttpError(403, 'age_check_required', 'Enter your birth month and year first');
 }
 
 export function createHandler(options: HandlerOptions, handler: Handler): (req: Request) => Promise<Response> {
@@ -68,6 +80,7 @@ export function createHandler(options: HandlerOptions, handler: Handler): (req: 
       const user = await authenticateRequest(req);
       const admin = adminClient();
       if (options.rateLimit) await enforceRateLimit(admin, `${options.name}:${user.id}`, options.rateLimit);
+      if (!options.allowBeforeAgeCheck) await requireAgeCheck(admin, user.id);
 
       const response = await handler({ req, url: new URL(req.url), user, admin, requestId, log: log.child({ userId: user.id }) });
       for (const [key, value] of Object.entries(cors)) response.headers.set(key, value);

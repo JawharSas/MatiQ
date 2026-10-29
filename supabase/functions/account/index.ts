@@ -183,7 +183,8 @@ async function removeUser(ctx: RequestContext): Promise<void> {
 }
 
 Deno.serve(
-  createHandler({ name: 'account', methods: ['GET', 'POST', 'DELETE'], rateLimit: { max: 30, windowSeconds: 3600 } }, (ctx) =>
-    ctx.req.method === 'DELETE' ? deleteAccount(ctx) : ctx.req.method === 'POST' ? recordAge(ctx) : exportData(ctx)
+  createHandler(
+    { name: 'account', methods: ['GET', 'POST', 'DELETE'], rateLimit: { max: 30, windowSeconds: 3600 }, allowBeforeAgeCheck: true },
+    (ctx) => ctx.req.method === 'DELETE' ? deleteAccount(ctx) : ctx.req.method === 'POST' ? recordAge(ctx) : exportData(ctx),
   ),
 );

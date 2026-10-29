@@ -39,12 +39,16 @@ pre-release channels are named in the release title.
   deletes the account and its storage at once. The device then blocks
   another attempt for 24 hours. Otherwise the month is kept in
   `private.age_checks` (export includes it, deleted with the account).
+- Enforced by the server as well: until the age is answered an account can
+  read but not create or change anything (RLS on writes, a Data API
+  pre-request hook for RPCs, and the Edge Function middleware), so an older
+  or modified app can't skip the screen.
 - One unticked "I agree to the Terms of Service and Privacy Policy" box
   replaces the three switches; the policy screen has **Cancel** (signs out).
 - Privacy Policy and Terms 2026-10-29: children's privacy section, minors
   need a parent's permission, copyright section.
 - Migration `20261029000200_age_checks_and_takedowns.sql`, pgTAP
-  `06_age_and_takedowns` (22 tests).
+  `06_age_and_takedowns` (33 tests).
 
 ### Copyright (DMCA)
 - Copyright Policy (notice and counter-notice requirements, repeat

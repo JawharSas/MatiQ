@@ -84,6 +84,107 @@ revoke execute on function public.my_age_check() from public, anon;
 grant execute on function public.my_age_check() to authenticated;
 
 -- -----------------------------------------------------------------------------
+-- Until the age check is answered, a session can read but not create or
+-- change anything, so nothing is collected before the age is known. The app
+-- shows the age screen first; this holds for any client:
+--
+--   * RESTRICTIVE RLS policies on inserts and updates of user-writable
+--     tables and storage objects (Data API, Storage API);
+--   * the PostgREST pre-request hook refuses every non-GET request
+--     (covers SECURITY DEFINER RPCs, which bypass RLS);
+--   * the Edge Function middleware checks `svc_age_checked` (all functions
+--     except `account`, which records the answer, exports and deletes).
+-- -----------------------------------------------------------------------------
+create or replace function private.age_checked()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select auth.uid() is null
+    or exists (select 1 from private.age_checks a where a.user_id = auth.uid());
+$$;
+
+revoke all on function private.age_checked() from public;
+grant execute on function private.age_checked() to authenticated, service_role;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['profiles', 'legal_acceptances', 'matches', 'blocks', 'posts', 'post_likes'] loop
+    execute format(
+      'create policy %I on public.%I as restrictive for insert to authenticated
+         with check ((select private.age_checked()))',
+      t || '_insert_require_age_check', t
+    );
+    execute format(
+      'create policy %I on public.%I as restrictive for update to authenticated
+         using ((select private.age_checked())) with check ((select private.age_checked()))',
+      t || '_update_require_age_check', t
+    );
+  end loop;
+end;
+$$;
+
+create policy objects_insert_require_age_check on storage.objects
+  as restrictive for insert to authenticated
+  with check ((select private.age_checked()));
+
+create policy objects_update_require_age_check on storage.objects
+  as restrictive for update to authenticated
+  using ((select private.age_checked()))
+  with check ((select private.age_checked()));
+
+-- Pre-request hook for every Data API request: two-factor rule, then the age
+-- check for anything but reads.
+create or replace function public.check_request()
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.check_request_mfa();
+  if coalesce(current_setting('request.method', true), '') in ('GET', 'HEAD') then
+    return;
+  end if;
+  if not private.age_checked() then
+    raise exception using errcode = '42501', message = 'age_check_required',
+      hint = 'Enter your birth month and year first.';
+  end if;
+end;
+$$;
+
+revoke all on function public.check_request() from public;
+grant execute on function public.check_request() to anon, authenticated, service_role;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'authenticator') then
+    alter role authenticator set pgrst.db_pre_request = 'public.check_request';
+    notify pgrst, 'reload config';
+  end if;
+end;
+$$;
+
+-- For the Edge Function middleware.
+create or replace function public.svc_age_checked(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from private.age_checks a where a.user_id = p_user_id);
+$$;
+
+revoke execute on function public.svc_age_checked(uuid) from public, anon, authenticated;
+grant execute on function public.svc_age_checked(uuid) to service_role;
+
+-- -----------------------------------------------------------------------------
 -- Copyright takedowns: the owner removes a post named in a notice. Audited
 -- with the author as target, which is also the record for the
 -- repeat-infringer policy (repeat infringers are suspended with

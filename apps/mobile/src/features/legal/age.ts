@@ -45,7 +45,8 @@ export async function rememberBirthMonthForSignup(email: string, birth: BirthMon
  * account is then already deleted).
  */
 export async function ageCheckStatus(email: string): Promise<'done' | 'needed' | 'not_eligible'> {
-  const { data, error } = await supabase.rpc('my_age_check');
+  // A GET request: the server refuses other requests until the age check is done.
+  const { data, error } = await supabase.rpc('my_age_check', undefined, { get: true });
   if (error) throw new Error(error.message);
   if (data === true) return 'done';
 

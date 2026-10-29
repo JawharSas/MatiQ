@@ -19,6 +19,8 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('a4444444-4444-4444-8444-444444444444', 'eve@example.test', json_build_object('full_name', 'Eve' || chr(8238) || 'txt')::jsonb),
   -- Longer than the 50-character limit.
   ('a5555555-5555-4555-8555-555555555555', 'long@example.test', json_build_object('full_name', repeat('x', 80))::jsonb);
+-- Every test user has answered the age check (06 covers the check itself).
+insert into private.age_checks (user_id, birth_month) select id, date '1990-01-01' from auth.users on conflict do nothing;
 
 select is((select display_name from public.profiles where id = 'a1111111-1111-4111-8111-111111111111'),
   'Grace Hopper', 'a Google sign-up uses full_name as the display name');
