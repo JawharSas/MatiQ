@@ -1,6 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { type Discipline, variantsFor } from '@matiq/rules-engine';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { Caption, Card, SectionHeader, Segmented, TextField, ToggleRow } from '@/ui/components';
 import { colors, spacing } from '@/ui/theme';
 import type { MatchSetup } from './match-session';
@@ -70,7 +71,8 @@ export function MatchSetupForm({
                   <Pressable
                     key={option.value}
                     accessibilityRole="radio"
-                    accessibilityState={{ selected }}
+                    accessibilityState={{ checked: selected }}
+                    aria-checked={selected}
                     accessibilityLabel={option.label}
                     onPress={() => onChange({ ...defaultSetup(option.value), title: value.title, uploadVideo: value.uploadVideo })}
                     style={[styles.sport, selected && styles.sportSelected]}

@@ -2,7 +2,9 @@ import { formatClock } from '@matiq/rules-engine';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { useMatch } from '@/features/analysis/useMatch';
 import { useAuth, useUserId } from '@/features/auth/AuthProvider';
 import { createPost, useProfile } from '@/features/social/api';
@@ -57,13 +59,26 @@ export default function ShareScreen() {
       {highlights.length > 0 ? (
         <Card>
           <Heading>Feature a highlight</Heading>
-          {highlights.map((item, index) => (
-            <Pressable key={item.t} onPress={() => setHighlight(highlight === index ? null : index)} accessibilityRole="radio" accessibilityState={{ checked: highlight === index }}>
-              <Text style={[font.body, highlight === index && { color: colors.accent, fontWeight: '700' }]}>
-                {formatClock(item.t)} · {item.label}
-              </Text>
-            </Pressable>
-          ))}
+          <View accessibilityRole="radiogroup" accessibilityLabel="Feature a highlight">
+            {[null, ...highlights.map((_, index) => index)].map((index) => {
+              const selected = highlight === index;
+              const text = index === null ? 'No highlight' : `${formatClock(highlights[index]!.t)} · ${highlights[index]!.label}`;
+              return (
+                <Pressable
+                  key={index ?? 'none'}
+                  onPress={() => setHighlight(index)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  aria-checked={selected}
+                  style={styles.option}
+                >
+                  {/* The ring shows the choice without relying on colour (WCAG 1.4.1). */}
+                  <Ionicons aria-hidden name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? colors.accent : colors.textMuted} />
+                  <Text style={[font.body, styles.fill, selected && { fontWeight: '700' }]}>{text}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
       ) : null}
       <Card>
@@ -82,6 +97,12 @@ export default function ShareScreen() {
       </Card>
       <ErrorText>{error}</ErrorText>
       <Button label="Post" onPress={() => void share()} loading={busy} />
+      <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => router.back()} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  fill: { flex: 1 },
+});

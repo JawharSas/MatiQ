@@ -1,5 +1,6 @@
 import type { Discipline } from '@matiq/rules-engine';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { colors, radius, spacing } from '@/ui/theme';
 import { useLiveScore } from './useLiveScore';
 

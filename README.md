@@ -9,11 +9,11 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Pre-Beta V1.3.1** · Android · free
+> **Pre-Beta V1.4.0** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.3.1-pre-beta/MatIQ-1.3.1-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.4.0-pre-beta/MatIQ-1.4.0-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.3.1-pre-beta) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.4.0-pre-beta) · iPhone: coming later
 
 ## What you can do
 
@@ -40,11 +40,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.3.1-pre-beta/MatIQ-1.3.1-android.apk).
-   Your browser saves `MatIQ-1.3.1-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.4.0-pre-beta/MatIQ-1.4.0-android.apk).
+   Your browser saves `MatIQ-1.4.0-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.3.1-android.apk`.
+   **Downloads** app and tap `MatIQ-1.4.0-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
@@ -56,14 +56,15 @@ free space.
 ## Get started
 
 1. **Create your account.** The quickest way: tap **Continue with Google**,
-   pick your Google account and accept the Terms and Privacy Policy. You're
-   in; change your username any time under **Profile → Edit profile**.
+   pick your Google account, enter your birth month and year, tick the box
+   to agree to the Terms and Privacy Policy and tap **Continue**. You're in;
+   change your username any time under **Profile → Edit profile**.
 
    Or with your email: tap **Create an account**, then enter your email,
    a password (at least 12 characters, with an uppercase letter, a lowercase
-   letter, a number and a symbol), a username and the name people will see.
-   Accept the Terms and Privacy Policy, confirm you're 13 or older and tap
-   **Create account**.
+   letter, a number and a symbol), a username, the name people will see and
+   your birth month and year. Tick the box to agree to the Terms and Privacy
+   Policy and tap **Create account**. You need to be at least 13.
 2. **Confirm your email** (email sign-up only). Open the link MatIQ emails you **on the same
    phone**, then sign in.
 3. **Analyse your first round.** Open the **Analyze** tab, pick the sport,
@@ -96,6 +97,21 @@ In the app, go to **Profile → Settings**. **Export my data** creates a file yo
 can save or share. To delete everything, type `DELETE MY ACCOUNT` under
 **Delete account** and tap **Delete my account**; your profile, matches and
 videos are removed.
+
+**Can I make the text bigger or turn on high contrast?**
+Yes: **Settings → Accessibility** (also on the sign-in screen) has text size,
+high contrast and reduced motion. MatIQ also follows your phone's font size,
+TalkBack / VoiceOver and Remove animations. Tell us at the support email in
+that screen if anything is hard to use.
+
+**Why do you ask for my birth month and year?**
+MatIQ is for people aged 13 and over, and the law (COPPA) requires us to
+check. It's never shown on your profile.
+
+**Someone posted my video or footage of me.**
+Open the post, tap **Report** and choose **Copyright infringement** or
+**Something else**. Copyright notices go to our designated agent; see the
+Copyright Policy in **Settings → Copyright and DMCA**.
 
 **Something isn't working.**
 This is a pre-beta, so expect a few rough edges. Make sure you have the

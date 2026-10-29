@@ -20,6 +20,8 @@ grant execute on all functions in schema pg_temp to authenticated;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('71111111-1111-4111-8111-111111111111', 'mfa-a@example.test', '{"username":"mfa_a"}'),
   ('72222222-2222-4222-8222-222222222222', 'mfa-b@example.test', '{"username":"mfa_b"}');
+-- Every test user has answered the age check (06 covers the check itself).
+insert into private.age_checks (user_id, birth_month) select id, date '1990-01-01' from auth.users on conflict do nothing;
 
 -- Both users own a match and an avatar.
 select pg_temp.as_user('71111111-1111-4111-8111-111111111111', 'aal1');

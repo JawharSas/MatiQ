@@ -2,7 +2,8 @@ import { type Discipline, newFighterState, tierFor } from '@matiq/rules-engine';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { type PersonRow, rankedActions, type RatingRow, useRankedAction, useRankedMatches, usePeople, useRatings } from '@/features/ranked/api';
 import { DISCIPLINE_LABELS, DISCIPLINE_OPTIONS, ProgressBar, TierBadge } from '@/features/ranked/components';
@@ -137,7 +138,7 @@ function Standing({ discipline, rating }: { discipline: Discipline; rating: Rati
       </View>
       {standing.nextAt !== null ? (
         <View style={{ gap: 6 }}>
-          <ProgressBar value={standing.progress} />
+          <ProgressBar label={`Progress to the next division at ${standing.nextAt}`} value={standing.progress} />
           <Caption>Next division at {standing.nextAt}</Caption>
         </View>
       ) : (
@@ -223,7 +224,6 @@ function RankedItem({ row, view, person }: { row: RankedMatchRow; view: RankedVi
     <Pressable
       onPress={open}
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${DISCIPLINE_LABELS[row.discipline]}, ${view.label}`}
       style={({ pressed }) => [styles.item, pressed && { backgroundColor: colors.surfaceRaised }]}
     >
       {content}

@@ -35,5 +35,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   text: { color: '#9AA4B5', fontSize: 14, fontWeight: '600' },
-  hint: { color: '#5F6878', fontSize: 12 },
+  hint: { color: '#A3ACBB', fontSize: 12 },
 });

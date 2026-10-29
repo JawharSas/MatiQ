@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
@@ -11,13 +12,14 @@ import {
   useAdminUsers,
   useAuditLog,
   useRankedDisputes,
+  useRemovePost,
   useResolveDispute,
   useSetUnlimited,
   useUpdateEntitlements,
   useUsageOverview,
 } from './api';
 
-type Tab = 'users' | 'overview' | 'disputes' | 'audit';
+type Tab = 'users' | 'overview' | 'disputes' | 'content' | 'audit';
 
 export function OwnerPanel() {
   const [tab, setTab] = useState<Tab>('users');
@@ -28,12 +30,23 @@ export function OwnerPanel() {
           { value: 'users', label: 'Users' },
           { value: 'overview', label: 'Usage' },
           { value: 'disputes', label: 'Disputes' },
+          { value: 'content', label: 'Content' },
           { value: 'audit', label: 'Audit log' },
         ]}
         value={tab}
         onChange={setTab}
       />
-      {tab === 'users' ? <UserSearch /> : tab === 'overview' ? <Overview /> : tab === 'disputes' ? <Disputes /> : <AuditLog />}
+      {tab === 'users' ? (
+        <UserSearch />
+      ) : tab === 'overview' ? (
+        <Overview />
+      ) : tab === 'disputes' ? (
+        <Disputes />
+      ) : tab === 'content' ? (
+        <ContentTakedown />
+      ) : (
+        <AuditLog />
+      )}
     </View>
   );
 }
@@ -244,6 +257,59 @@ function DisputeCard({ dispute }: { dispute: RankedDispute }) {
       </View>
       <ErrorText>{resolve.error ? errorMessage(resolve.error) : null}</ErrorText>
     </Card>
+  );
+}
+
+const POST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Copyright (DMCA) takedowns and other removals, by post ID from a notice or report. */
+function ContentTakedown() {
+  const remove = useRemovePost();
+  const [postId, setPostId] = useState('');
+  const [reason, setReason] = useState('');
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const confirmRemove = () => {
+    setDone(null);
+    setError(null);
+    if (!POST_ID.test(postId.trim())) return setError('Enter the post ID from the notice or report (for example 1b2c3d4e-...).');
+    if (!reason.trim()) return setError('Enter a reason, such as "DMCA notice from Example Films, 29 Oct".');
+    Alert.alert('Remove this post?', 'It is deleted for everyone and the removal is logged.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () =>
+          remove.mutate(
+            { postId, reason },
+            {
+              onSuccess: () => {
+                setDone(`Post ${postId.trim()} was removed. Tell the person who posted it and send them the notice.`);
+                setPostId('');
+                setReason('');
+              },
+              onError: (caught) => setError(errorMessage(caught)),
+            },
+          ),
+      },
+    ]);
+  };
+
+  return (
+    <View style={styles.stack}>
+      <Caption>
+        For copyright (DMCA) notices and other reports. Remove the post, tell the person who posted it and keep the notice. Suspend
+        repeat infringers under Users.
+      </Caption>
+      <Card>
+        <TextField label="Post ID" value={postId} onChangeText={setPostId} autoCapitalize="none" />
+        <TextField label="Reason" value={reason} onChangeText={setReason} maxLength={280} />
+        <ErrorText>{error}</ErrorText>
+        {done ? <Body>{done}</Body> : null}
+        <Button label="Remove post" variant="danger" icon="trash" loading={remove.isPending} onPress={confirmRemove} />
+      </Card>
+    </View>
   );
 }
 

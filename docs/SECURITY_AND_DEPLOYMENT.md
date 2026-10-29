@@ -158,6 +158,61 @@ asks them to accept the Terms and Privacy Policy and confirm their age.
 Signing in with Google on an email that already has a confirmed MatIQ
 account links to that account.
 
+### Copyright (DMCA) designated agent
+
+U.S. safe harbour (17 U.S.C. § 512(c)) needs a designated agent registered
+with the U.S. Copyright Office and the agent's contact details shown in the
+service. The app shows them in **Settings → Copyright and DMCA** and on the
+Report screen.
+
+1. Register at [dmca.copyright.gov](https://dmca.copyright.gov): create an
+   account, then **Designate agent**. You enter the service provider's full
+   legal name and address, any alternative names (MatIQ), and the agent's
+   name, postal address, phone and email. The fee is $6; the designation
+   expires after 3 years unless renewed, and must be amended when details
+   change.
+2. Add the same details as repository **variables** (Settings → Secrets and
+   variables → Actions → Variables): `EXPO_PUBLIC_DMCA_AGENT_NAME`,
+   `EXPO_PUBLIC_DMCA_AGENT_ADDRESS`, `EXPO_PUBLIC_DMCA_AGENT_EMAIL`,
+   `EXPO_PUBLIC_DMCA_AGENT_PHONE`, then build a release. Until they are set,
+   the name and email fall back to `EXPO_PUBLIC_LEGAL_ENTITY` and
+   `EXPO_PUBLIC_SUPPORT_EMAIL`, and the page offers to send the address by
+   email.
+
+Handling a notice: check it has the six elements listed in the Copyright
+Policy, remove the post in **Owner panel → Content** (by the post ID in the
+email; the removal is audited against the author), email the author a copy
+of the notice, and keep the notice. On a valid counter-notice, forward it to
+the sender and restore the material 10 to 14 business days later unless they
+file suit (re-post it from the author's match, or ask the author to). Suspend
+repeat infringers in **Owner panel → Users**.
+
+### Children's privacy (COPPA)
+
+- Everyone answers a neutral age screen (birth month and year, nothing
+  pre-selected, no hint of the cut-off) before using the app: on the email
+  sign-up form, and after the first Google sign-in.
+- Under 13 on the sign-up form: nothing is sent to the server. Under 13
+  after a Google sign-in: the `account` Edge Function deletes the account and
+  its storage at once and keeps nothing (`svc_record_age` stores no row).
+  Either way the device blocks another attempt for 24 hours.
+- For everyone else the month is stored in `private.age_checks` (not exposed
+  to the Data API, never shown to other users, included in the data export,
+  deleted with the account).
+- The server enforces the order, not just the app: until a user has an
+  `age_checks` row their session can read but not create or change anything.
+  Restrictive RLS policies cover inserts and updates (tables and storage),
+  the PostgREST pre-request hook `public.check_request()` refuses every
+  non-GET request (so RPCs too), and the Edge Function middleware calls
+  `svc_age_checked` (all functions except `account`, which records the
+  answer and handles export and deletion). Clients built before 1.4.0 can
+  therefore no longer save anything until the person updates the app.
+- If a parent reports a child under 13, delete the account (Supabase
+  dashboard → Authentication → Users, after removing their storage folder in
+  the three buckets, or ask the person to use Settings → Delete account).
+- MatIQ has no ads, trackers or analytics SDKs, which keeps it outside most
+  COPPA "support for internal operations" questions; keep it that way.
+
 ### Bootstrap the owner account
 
 Sign up in the app first, then run once in the SQL editor (as `postgres`):

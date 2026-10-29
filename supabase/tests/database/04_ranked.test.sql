@@ -50,6 +50,8 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('b2222222-2222-4222-8222-222222222222', 'rank-b@example.test', '{"username":"rank_b"}'),
   ('c3333333-3333-4333-8333-333333333333', 'rank-c@example.test', '{"username":"rank_c"}'),
   ('d4444444-4444-4444-8444-444444444444', 'rank-o@example.test', '{"username":"rank_o"}');
+-- Every test user has answered the age check (06 covers the check itself).
+insert into private.age_checks (user_id, birth_month) select id, date '1990-01-01' from auth.users on conflict do nothing;
 update public.profiles set visibility = 'public' where id = 'a1111111-1111-4111-8111-111111111111';
 update public.user_entitlements set role = 'owner' where user_id = 'd4444444-4444-4444-8444-444444444444';
 insert into public.friendships (user_low, user_high, requested_by, status)

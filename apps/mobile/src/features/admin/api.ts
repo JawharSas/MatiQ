@@ -146,6 +146,17 @@ function useAdminMutation<T>(fn: (input: T) => Promise<void>) {
   });
 }
 
+/**
+ * Removes a post named in a copyright notice (or another violation). Audited
+ * against the author, which is the record for the repeat-infringer policy.
+ */
+export function useRemovePost() {
+  return useAdminMutation(async ({ postId, reason }: { postId: string; reason: string }) => {
+    const { error } = await supabase.rpc('admin_remove_post', { p_post_id: postId.trim(), p_reason: cleanText(reason) });
+    if (error) throw fromPostgrest(error);
+  });
+}
+
 /** The owner's "Unlimited Access" switch (`is_unlimited`). */
 export function useSetUnlimited() {
   return useAdminMutation(async ({ userId, value, reason }: { userId: string; value: boolean; reason: string }) => {

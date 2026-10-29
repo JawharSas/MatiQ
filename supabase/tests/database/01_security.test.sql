@@ -54,6 +54,8 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('33333333-3333-4333-8333-333333333333', 'carol@example.test', '{"username":"no spaces allowed!"}'),
   ('44444444-4444-4444-8444-444444444444', 'dave@example.test', '{"username":"dave"}'),
   ('55555555-5555-4555-8555-555555555555', 'olivia@example.test', '{"username":"olivia"}');
+-- Every test user has answered the age check (06 covers the check itself).
+insert into private.age_checks (user_id, birth_month) select id, date '1990-01-01' from auth.users on conflict do nothing;
 
 update public.user_entitlements set role = 'owner' where user_id = '55555555-5555-4555-8555-555555555555';
 update public.profiles set visibility = 'public' where id = '44444444-4444-4444-8444-444444444444';

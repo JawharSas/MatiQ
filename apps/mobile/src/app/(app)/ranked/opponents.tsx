@@ -1,7 +1,8 @@
 import { type Discipline, previewMatch, variantsFor } from '@matiq/rules-engine';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { type OpponentRow, rankedActions, useOpponents, useRankedAction, useRatings } from '@/features/ranked/api';

@@ -1,14 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { emailSchema } from '@/lib/validation';
 import { LogoMark, Wordmark } from '@/ui/brand';
-import { Button, Caption, Card, ErrorText, Screen, TextField } from '@/ui/components';
+import { ageCheckLocked } from '@/features/legal/age';
+import { Body, Button, Caption, Card, ErrorText, inlineLink, Screen, TextField } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
 const HIGHLIGHTS: { icon: ComponentProps<typeof Ionicons>['name']; label: string }[] = [
@@ -24,6 +26,12 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notCreated, setNotCreated] = useState(false);
+
+  // After an age check that did not pass, say so here once more (neutrally).
+  useEffect(() => {
+    void ageCheckLocked().then(setNotCreated);
+  }, []);
 
   const signIn = async () => {
     setError(null);
@@ -60,6 +68,11 @@ export default function SignInScreen() {
           ))}
         </View>
       </View>
+      {notCreated ? (
+        <Card>
+          <Body>Sorry, we couldn't create a MatIQ account for you. If you already have one, sign in below.</Body>
+        </Card>
+      ) : null}
       <GoogleButton onError={setGoogleError} />
       <ErrorText>{googleError}</ErrorText>
       <AuthDivider label="or sign in with email" />
@@ -86,9 +99,17 @@ export default function SignInScreen() {
       </Card>
       <Button label="Create an account" variant="secondary" onPress={() => router.push('/sign-up')} />
       <Caption>
-        By using MatIQ you agree to the <Link href={{ pathname: '/legal/[doc]', params: { doc: 'terms' } }}>Terms</Link> and{' '}
-        <Link href={{ pathname: '/legal/[doc]', params: { doc: 'privacy' } }}>Privacy Policy</Link>. We never sell your data.
+        By using MatIQ you agree to the{' '}
+        <Link href={{ pathname: '/legal/[doc]', params: { doc: 'terms' } }} style={inlineLink}>
+          Terms
+        </Link>{' '}
+        and{' '}
+        <Link href={{ pathname: '/legal/[doc]', params: { doc: 'privacy' } }} style={inlineLink}>
+          Privacy Policy
+        </Link>
+        . We never sell your data.
       </Caption>
+      <Button label="Accessibility options" variant="ghost" icon="accessibility-outline" onPress={() => router.push('/accessibility')} />
     </Screen>
   );
 }

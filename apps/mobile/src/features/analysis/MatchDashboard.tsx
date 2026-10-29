@@ -1,8 +1,10 @@
 import { formatClock, type Highlight, type Phase, type Scorecard } from '@matiq/rules-engine';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { useA11y } from '@/features/accessibility/A11yProvider';
 import { useRef, useState } from 'react';
-import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Badge, Body, Caption, Card, Heading, Segmented } from '@/ui/components';
 import { athleteColor, colors, font, radius, spacing } from '@/ui/theme';
@@ -33,6 +35,7 @@ interface MatchDashboardProps {
 }
 
 export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardProps) {
+  const { reduceMotion } = useA11y();
   const scorecard = match.analysis?.scorecard;
   const [filter, setFilter] = useState<AthleteFilter>('both');
   const [clip, setClip] = useState<Clip | null>(null);
@@ -54,7 +57,11 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
     if (status !== 'readyToPlay' || !pendingClip.current) return;
     const first = pendingClip.current;
     pendingClip.current = null;
-    playClip(first, first.start);
+    // With reduced motion the highlight is cued up but waits for Play.
+    if (reduceMotion) {
+      setClip(first);
+      player.currentTime = first.start / 1000;
+    } else playClip(first, first.start);
   });
   useEventListener(player, 'timeUpdate', ({ currentTime }) => {
     if (clip && currentTime * 1000 >= clip.end) {
@@ -272,7 +279,7 @@ function TechniqueBreakdown({ sections, names, filter }: { sections: BreakdownSe
             <Text style={font.caption}>{section.title.toUpperCase()}</Text>
             {section.items.map((item) => (
               <View key={item.label} style={styles.breakdownRow} accessibilityLabel={`${item.label}: ${names.A} ${formatValue(section.unit, item.a)}, ${names.B} ${formatValue(section.unit, item.b)}`}>
-                <Text style={[font.body, styles.statA, filter === 'B' && styles.dimmed]}>{formatValue(section.unit, item.a)}</Text>
+                <Text style={[font.body, styles.statA, filter === 'B' && styles.dimmedText]}>{formatValue(section.unit, item.a)}</Text>
                 <View style={styles.breakdownMiddle}>
                   <Caption>{item.label}</Caption>
                   <View style={styles.breakdownBars}>
@@ -284,7 +291,7 @@ function TechniqueBreakdown({ sections, names, filter }: { sections: BreakdownSe
                     </View>
                   </View>
                 </View>
-                <Text style={[font.body, styles.statB, filter === 'A' && styles.dimmed]}>{formatValue(section.unit, item.b)}</Text>
+                <Text style={[font.body, styles.statB, filter === 'A' && styles.dimmedText]}>{formatValue(section.unit, item.b)}</Text>
               </View>
             ))}
           </View>
@@ -411,4 +418,6 @@ const styles = StyleSheet.create({
   halfBarB: { flex: 1, flexDirection: 'row' },
   halfFill: { height: 6, borderRadius: 3 },
   dimmed: { opacity: 0.3 },
+  // The other fighter's numbers stay readable (4.5:1) while filtered out.
+  dimmedText: { color: colors.textMuted },
 });

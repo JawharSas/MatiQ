@@ -2,6 +2,10 @@
  * Design tokens. Deep, borderless surfaces with the orange accent kept for the
  * one action that matters on a screen. Athlete A is blue and B is red, like
  * corner colours.
+ *
+ * WCAG 2.2 AA: every text colour has at least 4.5:1 contrast on every surface
+ * (including the tinted badge backgrounds), and `control` (input, switch and
+ * checkbox outlines) at least 3:1 against the card it sits on.
  */
 export const colors = {
   background: '#07090C',
@@ -12,20 +16,24 @@ export const colors = {
   hairline: 'rgba(255,255,255,0.06)',
   text: '#F5F7FA',
   textMuted: '#8D97A8',
-  textFaint: '#5D6676',
+  textFaint: '#8A93A2',
   accent: '#F97316',
   accentSoft: 'rgba(249,115,22,0.14)',
   accentText: '#0B0D10',
-  athleteA: '#3B82F6',
+  athleteA: '#60A5FA',
   athleteASoft: 'rgba(59,130,246,0.14)',
-  athleteB: '#EF4444',
+  athleteB: '#F87171',
   athleteBSoft: 'rgba(239,68,68,0.14)',
   success: '#22C55E',
   successSoft: 'rgba(34,197,94,0.14)',
   warning: '#EAB308',
   warningSoft: 'rgba(234,179,8,0.14)',
-  danger: '#EF4444',
+  danger: '#F87171',
   dangerSoft: 'rgba(239,68,68,0.12)',
+  /** Outline of inputs, switches and checkboxes (3:1 against cards). */
+  control: '#6B7280',
+  /** Keyboard focus ring. */
+  focus: '#F5F7FA',
 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;

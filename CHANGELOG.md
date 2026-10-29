@@ -3,6 +3,64 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.4.0] Pre-Beta, 2026-10-29
+
+### Accessibility (WCAG 2.2 AA)
+- Audit with axe-core 4.14 (WCAG 2.0/2.1/2.2 A and AA rules) on every screen
+  of the UI walkthrough, now 50 states including large text, high contrast,
+  landscape and 320 px; it runs in CI and in releases and fails on any
+  violation. The baseline found 26 violations on 19 screens; all are fixed.
+- Contrast: faint grey `#5D6676` → `#8A93A2`, red → `#F87171`, blue →
+  `#60A5FA` (all text ≥ 4.5:1 on every surface and badge); filtered-out
+  dashboard values stay readable; outlines ≥ 3:1 on inputs, switch tracks,
+  checkboxes, option chips and selected segments.
+- Names, roles and states: list rows are named by their visible title and
+  subtitle, like and highlight buttons include their visible text, radios
+  report `aria-checked`, progress bars have names and values, headings have
+  the header role, decorative icons and avatars are hidden from screen
+  readers, inline links are underlined.
+- Status and errors are announced (live regions); loading spinners are named;
+  text-only pages are keyboard-scrollable; visible focus ring.
+- In-app **Accessibility** settings: text size (up to 1.5×, on top of the
+  phone's), high contrast and reduced motion (also follows the phone's
+  setting: no transitions, press animations or highlight autoplay). Segmented
+  controls stack at large sizes instead of cutting words.
+- Orientation unlocked (1.3.4); autocomplete tokens on personal-data fields
+  (1.3.5); 44 pt minimum targets.
+- Emulator release test: every tappable control on sign-in and sign-up must
+  have a TalkBack label; the sign-in screen is checked at 200% font size and
+  in landscape.
+- `docs/ACCESSIBILITY.md`: criterion-by-criterion conformance report.
+
+### Age check (COPPA) and consent
+- Neutral age screen: birth month and year on email sign-up and, for Google
+  sign-ups and existing accounts, once before using the app. Under 13: the
+  sign-up sends nothing; after a Google sign-in the `account` function
+  deletes the account and its storage at once. The device then blocks
+  another attempt for 24 hours. Otherwise the month is kept in
+  `private.age_checks` (export includes it, deleted with the account).
+- Enforced by the server as well: until the age is answered an account can
+  read but not create or change anything (RLS on writes, a Data API
+  pre-request hook for RPCs, and the Edge Function middleware), so an older
+  or modified app can't skip the screen.
+- One unticked "I agree to the Terms of Service and Privacy Policy" box
+  replaces the three switches; the policy screen has **Cancel** (signs out).
+- Privacy Policy and Terms 2026-10-29: children's privacy section, minors
+  need a parent's permission, copyright section.
+- Migration `20261029000200_age_checks_and_takedowns.sql`, pgTAP
+  `06_age_and_takedowns` (33 tests).
+
+### Copyright (DMCA)
+- Copyright Policy (notice and counter-notice requirements, repeat
+  infringers) with the designated agent from `EXPO_PUBLIC_DMCA_AGENT_*`.
+- **Report** on posts: copyright notices go to the agent by email with the
+  post identified; anything else to support.
+- Owner panel **Content** tab: `admin_remove_post` (owner only, reason
+  required, audited against the author).
+
+### Other
+- **Cancel** on sign-up, the policy screen, Share and Report.
+
 ## [1.3.1] Pre-Beta, 2026-10-29
 
 ### Sign-in

@@ -3,7 +3,8 @@ import { formatClock } from '@matiq/rules-engine';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import type { MatchStatus } from '@/features/analysis/useMatch';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
@@ -73,10 +74,10 @@ export default function MatchesScreen() {
         const details = `${DISCIPLINE_LABELS[item.discipline]} · ${formatClock(item.duration_ms)} · ${new Date(item.recorded_at).toLocaleDateString()}`;
         return (
           <Link href={{ pathname: '/match/[id]', params: { id: item.id } }} asChild>
-            <Pressable accessibilityRole="link" accessibilityLabel={`${title}, ${details}, ${status.label}`}>
+            <Pressable accessibilityRole="link">
               <Card>
                 <View style={styles.row}>
-                  <View style={styles.icon}>
+                  <View style={styles.icon} aria-hidden>
                     <MaterialCommunityIcons name={DISCIPLINE_ICONS[item.discipline]} size={22} color={colors.accent} />
                   </View>
                   <View style={styles.text}>

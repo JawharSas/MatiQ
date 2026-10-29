@@ -16,7 +16,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/ui/text';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { useStoredKeys } from '@/features/api-keys/api';
 import { linkRankedMatch } from '@/features/ranked/api';
@@ -24,7 +25,7 @@ import { type RankedRecording, rankedSetup } from '@/features/ranked/recording';
 import { remainingAnalyses, useMyUsage } from '@/features/usage/useMyUsage';
 import { errorMessage } from '@/lib/errors';
 import { matchSetupSchema } from '@/lib/validation';
-import { Body, Button, Caption, Card, ErrorText, Heading, IconTile, Segmented } from '@/ui/components';
+import { Body, Button, Caption, Card, ErrorText, Heading, IconTile, ProgressBar, Segmented, StatusText } from '@/ui/components';
 import { font } from '@/ui/theme';
 import { LiveRecorder } from './LiveRecorder';
 import { defaultSetup, MatchSetupForm } from './MatchSetupForm';
@@ -289,7 +290,10 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
   if (phase.kind === 'processing') {
     return (
       <Card>
-        <Heading>{phase.step}…</Heading>
+        <StatusText>{phase.step}…</StatusText>
+        {phase.progress !== undefined ? (
+          <ProgressBar label={phase.step} value={phase.progress} />
+        ) : null}
         {phase.progress !== undefined ? <Body>{Math.round(phase.progress * 100)}%</Body> : null}
         <Caption>Keep MatIQ open until the analysis starts. Results then appear on the match screen automatically.</Caption>
         <Button label="Cancel" variant="secondary" onPress={() => void discard()} />
