@@ -1,6 +1,7 @@
 import { parseTotals, TITLES, isUnlocked } from '@matiq/rules-engine';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { rankedActions, useRankedAction, useRatings, useTitles } from '@/features/ranked/api';
@@ -54,7 +55,7 @@ export default function TitlesScreen() {
               />
             ) : (
               <>
-                <ProgressBar value={goal > 0 ? value / goal : 0} />
+                <ProgressBar label={`Progress towards ${title.name}`} value={goal > 0 ? value / goal : 0} />
                 <Caption>{blocked ? 'Requirement no longer met' : `${Math.min(value, goal)} / ${goal}`}</Caption>
               </>
             )}

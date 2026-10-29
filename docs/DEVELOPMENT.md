@@ -72,6 +72,7 @@ flowchart LR
 
 Details: [docs/ARCHITECTURE.md](ARCHITECTURE.md). Security model and
 deployment: [docs/SECURITY_AND_DEPLOYMENT.md](SECURITY_AND_DEPLOYMENT.md).
+Accessibility (WCAG 2.2 AA): [docs/ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Repository layout
 
@@ -108,7 +109,7 @@ deployment: [docs/SECURITY_AND_DEPLOYMENT.md](SECURITY_AND_DEPLOYMENT.md).
 │   ├── functions/                   Deno Edge Functions + shared middleware
 │   └── tests/                       pgTAP security tests (+ Docker-free harness)
 ├── scripts/                         rules-engine sync, local DB tests, KEK rotation
-├── docs/                            architecture and security/deployment guides
+├── docs/                            architecture, security/deployment and accessibility guides
 ├── CHANGELOG.md                     release notes
 └── .github/                         CI (tests, type checks, UI walkthrough, secret scan), release and backend deploy workflows
 ```
@@ -154,7 +155,7 @@ where user_id = (select id from auth.users where email = 'you@example.com');
 | `./scripts/test-db-local.sh` | the same tests against plain Postgres, no Docker |
 | `npm run functions:check` / `npm run functions:test` | Deno type check; 15 tests for vault crypto, live-batch frame selection, the two-factor claim check and ranked settlement payloads |
 | `npm run secrets:scan` | gitleaks secret scan |
-| `npm run preview:web && npm run preview:walkthrough` (in `apps/mobile`) | builds the browser UI preview with sample data and clicks through every screen with Playwright (36 steps, fails on any runtime error, saves screenshots) |
+| `npm run preview:web && npm run preview:walkthrough` (in `apps/mobile`) | builds the browser UI preview with sample data and clicks through every screen with Playwright (50 screenshots, including large text, high contrast, landscape and 320 px), checks each one with axe-core against WCAG 2.2 A/AA, and fails on any runtime error or violation ([accessibility report](ACCESSIBILITY.md)) |
 
 ## See the UI without a phone
 
@@ -185,7 +186,9 @@ Pushing a version tag runs [`.github/workflows/release.yml`](../.github/workflow
 it builds an installable Android APK (debug-signed, for testers),
 re-runs the UI walkthrough, installs and opens the APK on an Android 14
 emulator ([`scripts/android-launch-test.sh`](../scripts/android-launch-test.sh):
-sign-in and sign-up must render without a crash; screenshots are uploaded),
+sign-in and sign-up must render without a crash, every control needs a
+TalkBack label, and sign-in must work at 200% font size and in landscape;
+screenshots are uploaded),
 and only then publishes a GitHub release with the APK, its SHA-256 checksum
 and the screenshots. Tags with a suffix are published as
 pre-releases: `v1.2.9-pre-beta` becomes **Pre-Beta V1.2.9**.

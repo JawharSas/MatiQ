@@ -1,6 +1,7 @@
 import { formatClock } from '@matiq/rules-engine';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { colors, radius, spacing } from '@/ui/theme';
 import { type TelemetryStore, useTelemetry } from './capture-telemetry';
 

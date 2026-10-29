@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { envError } from '@/config/env';
+import { A11yProvider, useA11y } from '@/features/accessibility/A11yProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
@@ -54,11 +55,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       {state.kind === 'ready' ? (
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <RootNavigator />
-          </AuthProvider>
-        </QueryClientProvider>
+        <A11yProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <RootNavigator />
+            </AuthProvider>
+          </QueryClientProvider>
+        </A11yProvider>
       ) : state.kind === 'failed' ? (
         <Screen>
           <Title>MatIQ can't start</Title>
@@ -74,6 +77,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { session, initializing, mfaPending } = useAuth();
+  const { reduceMotion } = useA11y();
   if (initializing || (session && mfaPending === null)) return <Loading />;
   const signedIn = Boolean(session);
   const challenge = signedIn && mfaPending === true;
@@ -82,6 +86,7 @@ function RootNavigator() {
     <Stack
       screenOptions={{
         headerShown: false,
+        animation: reduceMotion ? 'none' : 'default',
         contentStyle: { backgroundColor: colors.background },
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
@@ -99,6 +104,7 @@ function RootNavigator() {
         <Stack.Screen name="(app)" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />
+      <Stack.Screen name="accessibility" options={{ headerShown: true, title: 'Accessibility', presentation: 'modal' }} />
       <Stack.Screen name="auth/callback" />
     </Stack>
   );

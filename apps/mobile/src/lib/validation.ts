@@ -54,9 +54,8 @@ export const signUpSchema = z.object({
   password: passwordSchema,
   username: usernameSchema,
   displayName: singleLine(50, 1),
-  acceptedTerms: z.literal(true, { message: 'Accept the Terms of Service to continue' }),
-  acceptedPrivacy: z.literal(true, { message: 'Accept the Privacy Policy to continue' }),
-  confirmedAge: z.literal(true, { message: 'You must meet the minimum age to use MatIQ' }),
+  // The age check (birth month and year) is validated separately in features/legal/age-rule.ts.
+  agreed: z.literal(true, { message: 'Tick the box to agree to the Terms of Service and Privacy Policy.' }),
 });
 
 export const profileSchema = z.object({

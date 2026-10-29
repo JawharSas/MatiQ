@@ -38,6 +38,11 @@ jobs:
       EXPO_PUBLIC_TLS_PINS: ${{ vars.EXPO_PUBLIC_TLS_PINS }}
       EXPO_PUBLIC_LEGAL_ENTITY: ${{ vars.EXPO_PUBLIC_LEGAL_ENTITY }}
       EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
+      # Copyright (DMCA) agent as registered with the U.S. Copyright Office.
+      EXPO_PUBLIC_DMCA_AGENT_NAME: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_NAME }}
+      EXPO_PUBLIC_DMCA_AGENT_ADDRESS: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_ADDRESS }}
+      EXPO_PUBLIC_DMCA_AGENT_EMAIL: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_EMAIL }}
+      EXPO_PUBLIC_DMCA_AGENT_PHONE: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_PHONE }}
       APP_VARIANT: production
     steps:
       - uses: actions/checkout@v7

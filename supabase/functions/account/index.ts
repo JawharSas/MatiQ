@@ -2,6 +2,9 @@
  * account: data-subject rights.
  *
  *   GET                                   -> export all of the caller's data (JSON)
+ *   POST   { birthYear, birthMonth }      -> age check (COPPA): records the month for
+ *                                            people who are at least 13; for anyone
+ *                                            younger it deletes the account at once
  *   DELETE { confirm: "DELETE MY ACCOUNT" } -> delete storage objects + the auth user
  *
  * Deleting the auth user cascades to every table (all foreign keys reference
@@ -62,6 +65,7 @@ async function exportData(ctx: RequestContext): Promise<Response> {
     titles,
     rankedAsChallenger,
     rankedAsOpponent,
+    ageCheck,
   ] = await Promise.all([
       query('profiles', 'id'),
       query('user_entitlements', 'user_id'),
@@ -80,6 +84,7 @@ async function exportData(ctx: RequestContext): Promise<Response> {
       query('user_titles', 'user_id'),
       query('ranked_matches', 'challenger_id'),
       query('ranked_matches', 'opponent_id'),
+      db.rpc('svc_export_age_check', { p_user_id: uid }).then(({ data }) => data?.[0] ?? null),
     ]);
 
   ctx.log.info('data export generated');
@@ -90,6 +95,7 @@ async function exportData(ctx: RequestContext): Promise<Response> {
       profile: profile?.[0] ?? null,
       entitlements: entitlements?.[0] ?? null,
       legalAcceptances: legal,
+      ageCheck,
       matches,
       analyses,
       posts,
@@ -113,6 +119,13 @@ async function exportData(ctx: RequestContext): Promise<Response> {
 
 const deleteSchema = z.object({ confirm: z.literal('DELETE MY ACCOUNT') }).strict();
 
+const ageSchema = z
+  .object({
+    birthYear: z.number().int().min(1900).max(2200),
+    birthMonth: z.number().int().min(1).max(12),
+  })
+  .strict();
+
 async function deleteAccount(ctx: RequestContext): Promise<Response> {
   await enforceRateLimit(ctx.admin, `account:delete:${ctx.user.id}`, { max: 3, windowSeconds: 3600 });
   await readJson(ctx.req, deleteSchema, 1024);
@@ -122,6 +135,41 @@ async function deleteAccount(ctx: RequestContext): Promise<Response> {
     throw new HttpError(409, 'owner_account', 'Transfer the owner role before deleting this account');
   }
 
+  await removeUser(ctx);
+  ctx.log.info('account deleted');
+  return json({ deleted: true });
+}
+
+/**
+ * Neutral age screen. The rule lives in the database (private.meets_minimum_age);
+ * when it says the person is under 13, nothing about them is kept: the account
+ * and everything in it are deleted before responding.
+ */
+async function recordAge(ctx: RequestContext): Promise<Response> {
+  await enforceRateLimit(ctx.admin, `account:age:${ctx.user.id}`, { max: 5, windowSeconds: 3600 });
+  const body = await readJson(ctx.req, ageSchema, 1024);
+  const { data, error } = await ctx.admin.rpc('svc_record_age', {
+    p_user_id: ctx.user.id,
+    p_year: body.birthYear,
+    p_month: body.birthMonth,
+  });
+  if (error) {
+    if (error.code === '22023') throw new HttpError(400, 'invalid_birth_month', 'Enter a valid birth month and year');
+    throw new Error(`age check failed: ${error.message}`);
+  }
+  if (data === 'ok') return json({ status: 'ok' });
+
+  const { data: entitlements } = await ctx.admin.from('user_entitlements').select('role').eq('user_id', ctx.user.id).maybeSingle();
+  if (entitlements?.role === 'owner') {
+    throw new HttpError(409, 'owner_account', 'The owner account cannot be removed this way');
+  }
+  await removeUser(ctx);
+  ctx.log.info('account removed by the age check');
+  return json({ status: 'not_eligible' });
+}
+
+/** Deletes the caller's storage objects, then the auth user (which cascades to every table). */
+async function removeUser(ctx: RequestContext): Promise<void> {
   for (const bucket of BUCKETS) {
     const paths = await listRecursive(ctx.admin, bucket, ctx.user.id);
     for (let i = 0; i < paths.length; i += 100) {
@@ -132,13 +180,10 @@ async function deleteAccount(ctx: RequestContext): Promise<Response> {
 
   const { error } = await ctx.admin.auth.admin.deleteUser(ctx.user.id);
   if (error) throw new Error(`deleting auth user failed: ${error.message}`);
-
-  ctx.log.info('account deleted');
-  return json({ deleted: true });
 }
 
 Deno.serve(
-  createHandler({ name: 'account', methods: ['GET', 'DELETE'], rateLimit: { max: 30, windowSeconds: 3600 } }, (ctx) =>
-    ctx.req.method === 'DELETE' ? deleteAccount(ctx) : exportData(ctx)
+  createHandler({ name: 'account', methods: ['GET', 'POST', 'DELETE'], rateLimit: { max: 30, windowSeconds: 3600 } }, (ctx) =>
+    ctx.req.method === 'DELETE' ? deleteAccount(ctx) : ctx.req.method === 'POST' ? recordAge(ctx) : exportData(ctx)
   ),
 );

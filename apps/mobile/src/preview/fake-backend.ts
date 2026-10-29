@@ -18,6 +18,7 @@ import {
   type Athlete,
 } from '@matiq/rules-engine';
 import { FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js';
+import { meetsMinimumAge } from '@/features/legal/age-rule';
 import { LEGAL_VERSIONS } from '@/features/legal/documents';
 import { createFixtures, DEMO_EMAIL, PREVIEW_PASSWORD, type Row, syntheticEvents } from './fixtures';
 
@@ -33,6 +34,8 @@ interface PreviewSession {
 }
 
 let session: PreviewSession | null = null;
+/** Users who have answered the age check (the real one lives in private.age_checks). */
+const ageChecked = new Set<string>();
 let tokenSeq = 0;
 const authListeners = new Set<(event: string, session: PreviewSession | null) => void>();
 
@@ -591,6 +594,7 @@ const requireOwner = () => (isOwner(me()) ? me()! : fail('42501', 'not authorize
 
 const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
   am_i_owner: (_args, viewer) => isOwner(viewer),
+  my_age_check: (_args, viewer) => ageChecked.has(viewer),
   get_my_usage: (_args, viewer) => [usageFor(viewer)],
 
   get_feed: ({ p_before, p_limit = 20, p_author, p_friends_only }, viewer) =>
@@ -858,6 +862,15 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     emit('ranked_matches', 'UPDATE', r);
     return r.status;
   },
+  admin_remove_post: ({ p_post_id, p_reason }) => {
+    requireOwner();
+    if (!String(p_reason ?? '').trim()) fail('22023', 'a reason is required');
+    const post = db.posts.find((row) => row.id === p_post_id);
+    if (!post) fail('P0002', 'post not found');
+    db.posts = db.posts.filter((row) => row.id !== p_post_id);
+    audit('remove_post', post!.author_id as string, { post_id: p_post_id }, {}, p_reason as string);
+    return null;
+  },
 };
 
 // Edge Functions -------------------------------------------------------------------------
@@ -917,7 +930,18 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string) => u
     db.api_keys.push({ user_id: viewer, provider: 'anthropic', last4: apiKey.slice(-4), label: body.label ?? null, created_at: now(), last_used_at: null });
     return { stored: true };
   },
-  account: (_body, method, viewer) => {
+  account: (body, method, viewer) => {
+    if (method === 'POST') {
+      const birth = { year: Number(body.birthYear), month: Number(body.birthMonth) };
+      if (meetsMinimumAge(birth)) {
+        ageChecked.add(viewer);
+        return { status: 'ok' };
+      }
+      db.users = db.users.filter((user) => user.id !== viewer);
+      session = null;
+      for (const listener of authListeners) listener('SIGNED_OUT', null);
+      return { status: 'not_eligible' };
+    }
     if (method === 'GET') {
       return { exportedAt: now(), profile: profileOf(viewer), matches: db.matches.filter((m) => m.owner_id === viewer), note: 'Preview export (sample data).' };
     }

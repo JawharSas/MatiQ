@@ -9,12 +9,16 @@
 
 import { env } from '@/config/env';
 
+/** Documents people accept (each acceptance is recorded per version). */
 export const LEGAL_VERSIONS = {
-  terms: '2026-10-23',
-  privacy: '2026-10-28',
+  terms: '2026-10-29',
+  privacy: '2026-10-29',
 } as const;
 
 export type LegalDocumentId = keyof typeof LEGAL_VERSIONS;
+
+/** Every legal page in the app: the accepted documents plus the Copyright Policy, which the Terms include. */
+export type LegalPageId = LegalDocumentId | 'copyright';
 
 export interface LegalSection {
   heading: string;
@@ -22,7 +26,7 @@ export interface LegalSection {
 }
 
 export interface LegalDocument {
-  id: LegalDocumentId;
+  id: LegalPageId;
   title: string;
   version: string;
   summary: string;
@@ -31,6 +35,7 @@ export interface LegalDocument {
 
 const entity = env.legalEntity;
 const contact = env.supportEmail;
+const agent = env.dmcaAgent;
 
 export const PRIVACY_POLICY: LegalDocument = {
   id: 'privacy',
@@ -49,6 +54,8 @@ export const PRIVACY_POLICY: LegalDocument = {
       heading: 'What we collect',
       paragraphs: [
         'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata.',
+        'Your birth month and year, asked once to check the minimum age. It is never shown on your profile or to other users.',
+        'If you sign in with Google: the name and email address of your Google account. We never receive your Google password.',
         'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes.',
         'Social data: friend requests, friendships, blocks, posts and likes.',
         'Ranked play: challenges, confirmed results, ratings, rating history and titles.',
@@ -105,9 +112,18 @@ export const PRIVACY_POLICY: LegalDocument = {
       ],
     },
     {
-      heading: 'Children',
+      heading: "Children's privacy",
       paragraphs: [
-        'MatIQ is not intended for children under 13 (or the higher minimum age required in your country). Do not record or upload footage of minors without the consent of a parent or legal guardian.',
+        'MatIQ is not directed to children under 13 and we do not knowingly collect personal information from children under 13 (or under the higher minimum age where you live). Everyone is asked for their birth month and year before an account can be used.',
+        'If the date shows someone is under 13, we do not create the account. If the account was started with Google, we delete it, and everything that came with it, straight away. We do not keep the date that was entered.',
+        `If you are a parent or guardian and believe your child under 13 has given us personal information, contact ${contact} and we will delete it.`,
+        'People aged 13 to 17 should use MatIQ with the permission of a parent or guardian. New accounts are private by default. Do not record or upload footage of minors without the consent of a parent or legal guardian.',
+      ],
+    },
+    {
+      heading: 'Copyright notices',
+      paragraphs: [
+        'If you send us a copyright notice or counter-notice, we use it to handle the claim, share it with the other party as the law allows, and keep it to apply our repeat-infringer policy. See the Copyright Policy.',
       ],
     },
     {
@@ -131,7 +147,8 @@ export const TERMS_OF_SERVICE: LegalDocument = {
     {
       heading: 'Eligibility',
       paragraphs: [
-        'You must be at least 13 years old, or the minimum age of digital consent in your country if higher, and able to form a binding agreement.',
+        'You must be at least 13 years old, or the minimum age of digital consent in your country if higher.',
+        'If you are under 18, you may use MatIQ only with the permission of a parent or legal guardian, who agrees to these Terms for you.',
       ],
     },
     {
@@ -139,6 +156,12 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       paragraphs: [
         'You keep ownership of the videos and content you upload. You grant us a limited licence to store, process and display it only to operate the app for you and the audience you choose.',
         'Sparring footage shows other people. You confirm that everyone identifiable in footage you record or upload has agreed to being recorded, analysed and, if you post it, shared with your chosen audience. Remove content promptly if someone withdraws consent.',
+      ],
+    },
+    {
+      heading: 'Copyright',
+      paragraphs: [
+        "Respect other people's copyright. We respond to notices of claimed infringement under the U.S. Digital Millennium Copyright Act as described in our Copyright Policy, which is part of these Terms. We remove infringing material and, in appropriate circumstances, terminate the accounts of repeat infringers.",
       ],
     },
     {
@@ -190,7 +213,87 @@ export const TERMS_OF_SERVICE: LegalDocument = {
   ],
 };
 
+const agentLines = [
+  `Name: ${agent.name}`,
+  agent.address ? `Postal address: ${agent.address}` : `Postal address: email ${agent.email} and we will send it.`,
+  `Email: ${agent.email}`,
+  ...(agent.phone ? [`Phone: ${agent.phone}`] : []),
+];
+
+export const COPYRIGHT_POLICY: LegalDocument = {
+  id: 'copyright',
+  title: 'Copyright Policy',
+  version: '2026-10-29',
+  summary:
+    'If you believe something on MatIQ infringes your copyright, send a notice to our designated agent. We remove infringing material and close the accounts of repeat infringers.',
+  sections: [
+    {
+      heading: 'Our policy',
+      paragraphs: [
+        `${entity} respects intellectual property and responds to notices of claimed copyright infringement under the U.S. Digital Millennium Copyright Act (17 U.S.C. § 512). This policy is part of our Terms of Service.`,
+      ],
+    },
+    {
+      heading: 'Designated agent',
+      paragraphs: [
+        'Send copyright notices and counter-notices to our designated agent, registered with the U.S. Copyright Office:',
+        ...agentLines,
+        'In the app you can also open a post, tap Report and choose Copyright infringement: it starts an email to the agent with the post already identified.',
+      ],
+    },
+    {
+      heading: 'What a notice must include',
+      paragraphs: [
+        '1. A physical or electronic signature of the copyright owner or a person authorised to act for them.',
+        '2. Identification of the copyrighted work you claim is infringed (or a representative list if several works are involved).',
+        '3. Identification of the material you claim is infringing and enough information for us to find it, such as the post ID from the Report screen or the username and date of the post.',
+        '4. Your name, postal address, telephone number and email address.',
+        '5. A statement that you have a good-faith belief that the use is not authorised by the copyright owner, its agent or the law.',
+        '6. A statement that the information in the notice is accurate and, under penalty of perjury, that you are the owner or authorised to act on the owner\'s behalf.',
+      ],
+    },
+    {
+      heading: 'What happens next',
+      paragraphs: [
+        'When we receive a complete notice we promptly remove or disable access to the material and tell the person who posted it, including a copy of the notice.',
+      ],
+    },
+    {
+      heading: 'Counter-notices',
+      paragraphs: [
+        'If your material was removed and you believe that was a mistake or a misidentification, you can send our agent a counter-notice that includes:',
+        '1. Your physical or electronic signature.',
+        '2. Identification of the material that was removed and where it appeared before removal.',
+        '3. A statement under penalty of perjury that you have a good-faith belief the material was removed as a result of mistake or misidentification.',
+        '4. Your name, address and telephone number, and a statement that you consent to the jurisdiction of the U.S. Federal District Court for the judicial district of your address (or, if you are outside the United States, any judicial district in which we may be found), and that you will accept service of process from the person who sent the original notice or their agent.',
+        'We forward the counter-notice to the person who sent the original notice. Unless they tell us within 10 business days that they have filed a court action, we may restore the material 10 to 14 business days after receiving the counter-notice.',
+      ],
+    },
+    {
+      heading: 'False claims',
+      paragraphs: [
+        'Anyone who knowingly makes a material misrepresentation in a notice or counter-notice may be liable for damages under 17 U.S.C. § 512(f). If you are not sure whether material infringes your copyright, consider getting legal advice first.',
+      ],
+    },
+    {
+      heading: 'Repeat infringers',
+      paragraphs: [
+        'We keep a record of notices. In appropriate circumstances we suspend and terminate the accounts of people who repeatedly infringe copyright.',
+      ],
+    },
+    {
+      heading: 'Other problems',
+      paragraphs: [`For anything that is not about copyright, such as harassment or someone filmed without consent, use Report > Something else or write to ${contact}.`],
+    },
+  ],
+};
+
 export const LEGAL_DOCUMENTS: Record<LegalDocumentId, LegalDocument> = {
   privacy: PRIVACY_POLICY,
   terms: TERMS_OF_SERVICE,
+};
+
+export const LEGAL_PAGES: Record<LegalPageId, LegalDocument> = {
+  ...LEGAL_DOCUMENTS,
+  copyright: COPYRIGHT_POLICY,
 };

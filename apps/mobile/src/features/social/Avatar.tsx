@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { colors } from '@/ui/theme';
 import { useAvatarUrl } from './avatar';
 
@@ -16,7 +17,8 @@ export function Avatar({ path, name, size = 40 }: { path: string | null | undefi
     return <Image source={{ uri: url.data }} style={[styles.image, shape]} accessibilityIgnoresInvertColors accessible={false} />;
   }
   return (
-    <View style={[styles.fallback, shape]} accessible={false}>
+    // Decorative: the name is always shown next to it, so screen readers skip the initials.
+    <View style={[styles.fallback, shape]} accessible={false} aria-hidden importantForAccessibility="no-hide-descendants">
       <Text style={[styles.initials, { fontSize: Math.round(size * 0.38) }]}>{initials(name)}</Text>
     </View>
   );

@@ -12,7 +12,7 @@ import { discardMatch, requestAnalysis } from '@/features/capture/match-session'
 import { useRankedForMatch } from '@/features/ranked/api';
 import { describeRanked } from '@/features/ranked/ranked-state';
 import { errorMessage, messageFor } from '@/lib/errors';
-import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen } from '@/ui/components';
+import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, StatusText } from '@/ui/components';
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
@@ -110,7 +110,8 @@ function MatchView({ id, clipStart, clipEnd }: { id: string; clipStart?: number;
       ) : null}
       {data.status === 'queued' || data.status === 'processing' ? (
         <Card>
-          <Heading>{data.status === 'queued' ? 'Queued for analysis' : 'Analysing your round…'}</Heading>
+          {/* Announced when it changes (WCAG 4.1.3); the results replace it when ready. */}
+          <StatusText>{data.status === 'queued' ? 'Queued for analysis' : 'Analysing your round…'}</StatusText>
           <Body muted>This usually takes a minute or two. This screen updates automatically.</Body>
         </Card>
       ) : null}

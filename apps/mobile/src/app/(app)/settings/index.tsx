@@ -2,7 +2,9 @@ import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Share, StyleSheet, Text } from 'react-native';
+import { Alert, Linking, Share, StyleSheet } from 'react-native';
+import { Text } from '@/ui/text';
+import { env } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { fromFunctionError, errorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +63,22 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
+      <SectionHeader title="General" />
+      <ListGroup>
+        <ListRow
+          icon="accessibility"
+          title="Accessibility"
+          subtitle="Text size, high contrast and motion"
+          onPress={() => router.push('/accessibility')}
+        />
+        <ListRow
+          icon="help-buoy"
+          title="Help and support"
+          subtitle={`Email ${env.supportEmail}`}
+          onPress={() => void Linking.openURL(`mailto:${env.supportEmail}?subject=${encodeURIComponent('MatIQ support')}`)}
+        />
+      </ListGroup>
+
       <SectionHeader title="Security" />
       <ListGroup>
         <ListRow
@@ -90,6 +108,13 @@ export default function SettingsScreen() {
           tone="blue"
           title="Terms of Service"
           onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'terms' } })}
+        />
+        <ListRow
+          icon="ribbon"
+          tone="blue"
+          title="Copyright and DMCA"
+          subtitle="Report infringement to our designated agent"
+          onPress={() => router.push({ pathname: '/legal/[doc]', params: { doc: 'copyright' } })}
         />
         <ListRow
           icon="download"

@@ -1,7 +1,8 @@
 import { titleById } from '@matiq/rules-engine';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { type LeaderboardRow, useLeaderboard } from '@/features/ranked/api';

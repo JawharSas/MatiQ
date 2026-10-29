@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useDeferredValue, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { type FriendEntry, searchProfiles, useFriendAction, useFriends } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';

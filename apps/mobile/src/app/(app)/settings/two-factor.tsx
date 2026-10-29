@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
-import { Alert, Linking, Platform, Text } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
+import { Text } from '@/ui/text';
 import { removeFactor, startTotpEnrollment, type TotpEnrollment, useVerifiedFactors, verifyTotp } from '@/features/auth/mfa';
 import { groupSecret } from '@/features/auth/totp';
 import { errorMessage } from '@/lib/errors';

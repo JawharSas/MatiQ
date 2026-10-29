@@ -1,5 +1,6 @@
 import { type Discipline, type TierId, tierFor, titleById } from '@matiq/rules-engine';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { Caption, Card, Heading } from '@/ui/components';
 import { colors, font, radius, spacing } from '@/ui/theme';
 import { useRatings, useTitles } from './api';
@@ -35,10 +36,15 @@ export function TierBadge({ rating, games, compact = false }: { rating: number; 
   );
 }
 
-export function ProgressBar({ value, color = colors.accent }: { value: number; color?: string }) {
+export function ProgressBar({ label, value, color = colors.accent }: { label: string; value: number; color?: string }) {
   const clamped = Math.min(1, Math.max(0, value));
   return (
-    <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}>
+    <View
+      style={styles.track}
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100), text: `${Math.round(clamped * 100)}%` }}
+    >
       <View style={[styles.fill, { width: `${clamped * 100}%`, backgroundColor: color }]} />
     </View>
   );

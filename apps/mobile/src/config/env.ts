@@ -26,6 +26,16 @@ const schema = z.object({
     .optional(),
   legalEntity: z.string().min(1).max(80),
   supportEmail: z.string().email(),
+  /**
+   * Designated agent for copyright (DMCA) notices, exactly as registered with
+   * the U.S. Copyright Office (dmca.copyright.gov). Public by law.
+   */
+  dmcaAgent: z.object({
+    name: z.string().min(1).max(120),
+    address: z.string().max(300),
+    email: z.string().email(),
+    phone: z.string().max(40),
+  }),
 });
 
 export type AppEnv = z.infer<typeof schema>;
@@ -45,6 +55,12 @@ const parsed = schema.safeParse({
   tlsPinsExpire: process.env.EXPO_PUBLIC_TLS_PINS_EXPIRE || undefined,
   legalEntity: process.env.EXPO_PUBLIC_LEGAL_ENTITY || 'MatIQ',
   supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'privacy@example.com',
+  dmcaAgent: {
+    name: process.env.EXPO_PUBLIC_DMCA_AGENT_NAME || process.env.EXPO_PUBLIC_LEGAL_ENTITY || 'MatIQ',
+    address: process.env.EXPO_PUBLIC_DMCA_AGENT_ADDRESS || '',
+    email: process.env.EXPO_PUBLIC_DMCA_AGENT_EMAIL || process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'privacy@example.com',
+    phone: process.env.EXPO_PUBLIC_DMCA_AGENT_PHONE || '',
+  },
 });
 
 export const envError: string | null = parsed.success
@@ -59,6 +75,7 @@ export const env: AppEnv = parsed.success
       tlsPins: [],
       legalEntity: 'MatIQ',
       supportEmail: 'privacy@example.com',
+      dmcaAgent: { name: 'MatIQ', address: '', email: 'privacy@example.com', phone: '' },
     };
 
 export const supabaseHost = (() => {

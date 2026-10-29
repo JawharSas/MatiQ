@@ -1,6 +1,7 @@
 import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
 import { Camera, useCameraPermission, useMicrophonePermission } from 'react-native-vision-camera';
 import { errorMessage } from '@/lib/errors';
 import { readPreference, writePreference } from '@/lib/storage';

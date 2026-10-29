@@ -1,43 +1,52 @@
 import * as Linking from 'expo-linking';
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
+import { ageCheckLocked, lockAgeCheck, rememberBirthMonthForSignup } from '@/features/legal/age';
+import { type BirthInput, meetsMinimumAge, parseBirthMonth } from '@/features/legal/age-rule';
+import { BirthMonthField } from '@/features/legal/BirthMonthField';
 import { rememberConsentForSignup } from '@/features/legal/consent';
 import { messageFor } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { firstIssue, signUpSchema } from '@/lib/validation';
 import { LogoMark } from '@/ui/brand';
-import { Body, Button, Caption, Card, ErrorText, Screen, TextField, Title, ToggleRow } from '@/ui/components';
+import { Body, Button, Caption, Card, Checkbox, ErrorText, inlineLink, Loading, Screen, TextField, Title } from '@/ui/components';
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const [form, setForm] = useState({
-    email: '',
-    password: '',
-    username: '',
-    displayName: '',
-    acceptedTerms: false,
-    acceptedPrivacy: false,
-    confirmedAge: false,
-  });
+  const [form, setForm] = useState({ email: '', password: '', username: '', displayName: '' });
+  const [birth, setBirth] = useState<BirthInput>({ month: null, year: '' });
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [blocked, setBlocked] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void ageCheckLocked().then(setBlocked);
+  }, []);
 
   const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   const submit = async () => {
     setError(null);
-    const parsed = signUpSchema.safeParse(form);
-    if (!parsed.success) {
-      setError(firstIssue(parsed.error));
+    const parsed = signUpSchema.safeParse({ ...form, agreed });
+    if (!parsed.success) return setError(firstIssue(parsed.error));
+    const birthMonth = parseBirthMonth(birth);
+    if (!birthMonth.ok) return setError(birthMonth.error);
+    if (!meetsMinimumAge(birthMonth.value)) {
+      // COPPA: nothing is sent, and this device cannot simply retry with another date.
+      await lockAgeCheck();
+      setBlocked(true);
       return;
     }
+
     setBusy(true);
     try {
       await rememberConsentForSignup(parsed.data.email);
+      await rememberBirthMonthForSignup(parsed.data.email, birthMonth.value);
       const { error: authError } = await supabase.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
@@ -56,6 +65,21 @@ export default function SignUpScreen() {
       setBusy(false);
     }
   };
+
+  if (blocked === null) return <Loading />;
+
+  if (blocked) {
+    return (
+      <Screen>
+        <View style={styles.header}>
+          <LogoMark size={44} />
+          <Title>Account not created</Title>
+        </View>
+        <Body>Sorry, we can't create a MatIQ account for you.</Body>
+        <Button label="Back to sign in" variant="secondary" onPress={() => router.replace('/sign-in')} />
+      </Screen>
+    );
+  }
 
   if (sent) {
     return (
@@ -79,8 +103,9 @@ export default function SignUpScreen() {
       <GoogleButton onError={setGoogleError} />
       <ErrorText>{googleError}</ErrorText>
       <AuthDivider label="or sign up with email" />
+      <Caption>All fields are required.</Caption>
       <Card>
-        <TextField label="Email" value={form.email} onChangeText={(v) => update('email', v)} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+        <TextField label="Email" value={form.email} onChangeText={(v) => update('email', v)} autoCapitalize="none" keyboardType="email-address" autoComplete="email" textContentType="emailAddress" />
         <TextField
           label="Password (12+ characters, upper, lower, number, symbol)"
           value={form.password}
@@ -89,26 +114,34 @@ export default function SignUpScreen() {
           textContentType="newPassword"
           autoComplete="new-password"
         />
-        <TextField label="Username" value={form.username} onChangeText={(v) => update('username', v)} autoCapitalize="none" maxLength={24} />
-        <TextField label="Display name" value={form.displayName} onChangeText={(v) => update('displayName', v)} maxLength={50} />
+        <TextField label="Username" value={form.username} onChangeText={(v) => update('username', v)} autoCapitalize="none" autoComplete={Platform.OS === 'web' ? 'username' : 'username-new'} maxLength={24} />
+        <TextField label="Display name" value={form.displayName} onChangeText={(v) => update('displayName', v)} autoComplete="name" textContentType="name" maxLength={50} />
       </Card>
       <Card>
-        <ToggleRow label="I accept the Terms of Service" value={form.acceptedTerms} onValueChange={(v) => update('acceptedTerms', v)} />
-        <ToggleRow label="I accept the Privacy Policy" value={form.acceptedPrivacy} onValueChange={(v) => update('acceptedPrivacy', v)} />
-        <ToggleRow
-          label="I am at least 13 (or the minimum age in my country)"
-          value={form.confirmedAge}
-          onValueChange={(v) => update('confirmedAge', v)}
-        />
+        <BirthMonthField value={birth} onChange={setBirth} />
+      </Card>
+      <Card>
+        <Checkbox label="I agree to the Terms of Service and Privacy Policy" checked={agreed} onChange={setAgreed} />
         <Caption>
-          Read the <Link href={{ pathname: '/legal/[doc]', params: { doc: 'terms' } }}>Terms</Link> and{' '}
-          <Link href={{ pathname: '/legal/[doc]', params: { doc: 'privacy' } }}>Privacy Policy</Link>. Your data, profile and
+          Read the{' '}
+          <Link href={{ pathname: '/legal/[doc]', params: { doc: 'terms' } }} style={inlineLink}>
+            Terms of Service
+          </Link>
+          , the{' '}
+          <Link href={{ pathname: '/legal/[doc]', params: { doc: 'privacy' } }} style={inlineLink}>
+            Privacy Policy
+          </Link>{' '}
+          and the{' '}
+          <Link href={{ pathname: '/legal/[doc]', params: { doc: 'copyright' } }} style={inlineLink}>
+            Copyright Policy
+          </Link>
+          . Your data, profile and
           videos are never sold or shared with data brokers. New accounts are private.
         </Caption>
       </Card>
       <ErrorText>{error}</ErrorText>
       <Button label="Create account" onPress={() => void submit()} loading={busy} />
-      <Button label="I already have an account" variant="secondary" onPress={() => router.replace('/sign-in')} />
+      <Button label="Cancel" variant="secondary" hint="Goes back to sign in" disabled={busy} onPress={() => router.replace('/sign-in')} />
     </Screen>
   );
 }

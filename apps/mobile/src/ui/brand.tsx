@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { Text } from './text';
 import { colors } from './theme';
 
 // Rendered from the vector mark by scripts/brand-assets.cjs.

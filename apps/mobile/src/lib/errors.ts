@@ -34,6 +34,7 @@ const MESSAGES: Record<string, string> = {
   not_ready: 'This result is still waiting for confirmation.',
   busy: 'Ratings are being updated. Try again in a moment.',
   invalid_scorecard: 'This recording has no usable scorecard.',
+  invalid_birth_month: 'Enter a real birth month and year.',
   '22023': "That isn't possible right now. Refresh and try again.",
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",

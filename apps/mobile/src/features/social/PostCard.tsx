@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatClock } from '@matiq/rules-engine';
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/ui/text';
+import { useUserId } from '@/features/auth/AuthProvider';
 import { Badge, Card } from '@/ui/components';
 import { athleteColor, colors, font, spacing } from '@/ui/theme';
 import { type FeedItem, useToggleLike } from './api';
@@ -25,6 +27,7 @@ function methodLabel(method: string): string {
 
 export function PostCard({ post }: { post: FeedItem }) {
   const like = useToggleLike();
+  const viewerId = useUserId();
   const names = { A: post.athlete_a_label ?? 'Fighter 1', B: post.athlete_b_label ?? 'Fighter 2' };
   const winner = post.result?.winner ?? null;
 
@@ -81,12 +84,12 @@ export function PostCard({ post }: { post: FeedItem }) {
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ selected: post.liked_by_me }}
-          accessibilityLabel={post.liked_by_me ? 'Unlike' : 'Like'}
+          accessibilityLabel={`${post.liked_by_me ? 'Unlike' : 'Like'} post, ${post.like_count} ${post.like_count === 1 ? 'like' : 'likes'}`}
           onPress={() => like.mutate({ postId: post.post_id, liked: post.liked_by_me })}
           style={styles.like}
           hitSlop={8}
         >
-          <Ionicons name={post.liked_by_me ? 'heart' : 'heart-outline'} size={22} color={post.liked_by_me ? colors.accent : colors.textMuted} />
+          <Ionicons aria-hidden name={post.liked_by_me ? 'heart' : 'heart-outline'} size={22} color={post.liked_by_me ? colors.accent : colors.textMuted} />
           <Text style={[styles.likeCount, post.liked_by_me && { color: colors.accent }]}>{post.like_count}</Text>
         </Pressable>
         {post.match_id && post.has_video && post.highlight_start_ms !== null ? (
@@ -101,9 +104,21 @@ export function PostCard({ post }: { post: FeedItem }) {
             }}
             asChild
           >
-            <Pressable accessibilityRole="link" accessibilityLabel="Play highlight" style={styles.playHighlight}>
-              <Ionicons name="play" size={14} color={colors.accent} />
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Play highlight · ${formatClock(post.highlight_start_ms)}`}
+              style={styles.playHighlight}
+            >
+              <Ionicons aria-hidden name="play" size={14} color={colors.accent} />
               <Text style={styles.playHighlightText}>Highlight · {formatClock(post.highlight_start_ms)}</Text>
+            </Pressable>
+          </Link>
+        ) : null}
+        {post.author_id !== viewerId ? (
+          <Link href={{ pathname: '/report/[postId]', params: { postId: post.post_id } }} asChild>
+            <Pressable accessibilityRole="link" accessibilityLabel="Report post" style={styles.report} hitSlop={6}>
+              <Ionicons aria-hidden name="flag-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.reportText}>Report</Text>
             </Pressable>
           </Link>
         ) : null}
@@ -151,7 +166,9 @@ const styles = StyleSheet.create({
   score: { fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
   scoreDivider: { fontSize: 22, fontWeight: '700', color: colors.textFaint },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  like: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs },
+  like: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, minWidth: 44 },
+  report: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: spacing.xs },
+  reportText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   likeCount: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
   playHighlight: {
     flexDirection: 'row',
