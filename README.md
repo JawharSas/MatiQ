@@ -9,11 +9,11 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Pre-Beta V1.4.0** · Android · free
+> **Pre-Beta V1.4.1** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.4.0-pre-beta/MatIQ-1.4.0-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.4.1-pre-beta/MatIQ-1.4.1-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.4.0-pre-beta) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.4.1-pre-beta) · iPhone: coming later
 
 ## What you can do
 
@@ -40,11 +40,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.4.0-pre-beta/MatIQ-1.4.0-android.apk).
-   Your browser saves `MatIQ-1.4.0-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.4.1-pre-beta/MatIQ-1.4.1-android.apk).
+   Your browser saves `MatIQ-1.4.1-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.4.0-android.apk`.
+   **Downloads** app and tap `MatIQ-1.4.1-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
@@ -107,6 +107,12 @@ that screen if anything is hard to use.
 **Why do you ask for my birth month and year?**
 MatIQ is for people aged 13 and over, and the law (COPPA) requires us to
 check. It's never shown on your profile.
+
+**Why was my video refused?**
+MatIQ checks every video on your phone before uploading it and only accepts
+real MP4 or MOV videos. A file that isn't a video, is damaged, or has extra
+data hidden inside is refused, and the message says which. Videos recorded
+with your phone's camera always work; so does recording live in MatIQ.
 
 **Someone posted my video or footage of me.**
 Open the post, tap **Report** and choose **Copyright infringement** or

@@ -1,6 +1,6 @@
 {
   "name": "@matiq/mobile",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -12,7 +12,7 @@
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
     "bundle:check": "expo export --platform android --output-dir .expo-export-check && rm -rf .expo-export-check",
     "doctor": "npx expo-doctor",
-    "preview:web": "EXPO_PUBLIC_SUPABASE_URL=https://preview.matiq.invalid EXPO_PUBLIC_SUPABASE_ANON_KEY=preview-anon-key-not-a-secret expo export --platform web --output-dir dist-preview --clear",
+    "preview:web": "EXPO_PUBLIC_SUPABASE_URL=https://preview.matiq.invalid EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_preview_not_a_real_key expo export --platform web --output-dir dist-preview --clear",
     "brand:assets": "node scripts/brand-assets.cjs",
     "preview:walkthrough": "node scripts/preview-walkthrough.cjs dist-preview preview-screenshots",
     "preview:serve": "node -e \"require('./scripts/preview-serve.cjs')('dist-preview', 8081).then(({ url }) => console.log('UI preview at ' + url))\""
@@ -50,6 +50,7 @@
     "react-native-ssl-public-key-pinning": "1.2.6",
     "react-native-vision-camera": "5.2.3",
     "react-native-vision-camera-worklets": "5.2.3",
+    "react-native-webview": "14.0.1",
     "react-native-worklets": "0.13.0",
     "zod": "4.6.7"
   },

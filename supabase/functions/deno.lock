@@ -1,12 +1,12 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:@anthropic-ai/sdk@0.132.1": "0.132.1_zod@4.6.5",
+    "npm:@anthropic-ai/sdk@0.132.1": "0.132.1_zod@4.6.7",
     "npm:@supabase/supabase-js@2.117.3": "2.117.3",
-    "npm:zod@4.6.5": "4.6.5"
+    "npm:zod@4.6.7": "4.6.7"
   },
   "npm": {
-    "@anthropic-ai/sdk@0.132.1_zod@4.6.5": {
+    "@anthropic-ai/sdk@0.132.1_zod@4.6.7": {
       "integrity": "sha512-Dg+Rd0effi+4FyNwgEx6JXl9COefsZ3C7BOPSKYIWboQOEIi9HXtu1WBdND0DIgMF7Qt1vuCSjsbs7sjUkzJuQ==",
       "dependencies": [
         "json-schema-to-ts",
@@ -95,15 +95,15 @@
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
     },
-    "zod@4.6.5": {
-      "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="
+    "zod@4.6.7": {
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
     }
   },
   "workspace": {
     "dependencies": [
       "npm:@anthropic-ai/sdk@0.132.1",
       "npm:@supabase/supabase-js@2.117.3",
-      "npm:zod@4.6.5"
+      "npm:zod@4.6.7"
     ]
   }
 }

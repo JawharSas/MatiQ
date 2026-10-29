@@ -17,6 +17,7 @@ import type { BatchOutput } from '../_shared/ai/schemas.ts';
 import { toBase64 } from '../_shared/crypto.ts';
 import type { Logger } from '../_shared/log.ts';
 import { analyzeMatch, type Discipline, MAX_EVENTS } from '../_shared/rules-engine/index.ts';
+import { isJpeg } from '../_shared/rules-engine/media/index.ts';
 
 const FRAMES_BUCKET = 'match-frames';
 const FRAME_NAME = /^(\d{1,8})\.jpg$/;
@@ -119,8 +120,8 @@ async function downloadFrame(admin: SupabaseClient, ref: FrameRef): Promise<Fram
   if (error || !data) throw new Error(`downloading frame failed: ${error?.message ?? 'empty'}`);
   if (data.size > MAX_FRAME_BYTES) throw new Error('frame exceeds size limit');
   const bytes = new Uint8Array(await data.arrayBuffer());
-  // JPEG magic number check: never forward arbitrary uploads to the model.
-  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new Error('frame is not a JPEG');
+  // Start and end markers: never forward arbitrary uploads to the model.
+  if (!isJpeg(bytes)) throw new Error('frame is not a JPEG');
   return { t: ref.t, data: toBase64(bytes) };
 }
 

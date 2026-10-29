@@ -8,6 +8,7 @@ import { fromFunctionError } from '@/lib/errors';
 import { openSecureStorage } from '@/lib/storage';
 import { supabase } from '@/lib/supabase';
 import type { BirthMonth } from './age-rule';
+import { recordPendingConsent } from './consent';
 
 const LOCK_KEY = 'age:locked-until';
 const LOCK_MS = 24 * 60 * 60 * 1000;
@@ -48,7 +49,10 @@ export async function ageCheckStatus(email: string): Promise<'done' | 'needed' |
   // A GET request: the server refuses other requests until the age check is done.
   const { data, error } = await supabase.rpc('my_age_check', undefined, { get: true });
   if (error) throw new Error(error.message);
-  if (data === true) return 'done';
+  if (data === true) {
+    await recordPendingConsent(email);
+    return 'done';
+  }
 
   const storage = await openSecureStorage();
   const pending = email ? storage.getString(pendingKey(email)) : undefined;
@@ -57,7 +61,10 @@ export async function ageCheckStatus(email: string): Promise<'done' | 'needed' |
     const birth = JSON.parse(pending) as BirthMonth;
     const result = await submitBirthMonth(birth);
     storage.remove(pendingKey(email));
-    return result === 'ok' ? 'done' : 'not_eligible';
+    if (result !== 'ok') return 'not_eligible';
+    // The "I agree" from the sign-up form can only be saved after the age check.
+    await recordPendingConsent(email);
+    return 'done';
   } catch {
     // Asked again in the gate if the stored month cannot be sent.
     storage.remove(pendingKey(email));

@@ -1,6 +1,6 @@
 import { Linking, Platform } from 'react-native';
-import { env } from '@/config/env';
 import { type MotionPreference, type TextSize, useA11y } from '@/features/accessibility/A11yProvider';
+import { contactSupport, supportEmail } from '@/features/legal/contact';
 import { Body, Button, Caption, Card, Heading, Screen, Segmented, ToggleRow } from '@/ui/components';
 
 const TEXT_SIZE_OPTIONS: { value: TextSize; label: string }[] = [
@@ -61,10 +61,10 @@ export default function AccessibilityScreen() {
         <Heading>Tell us what's hard to use</Heading>
         <Body>We aim to meet WCAG 2.2 level AA. If something in MatIQ is hard to see, hear, read or operate, we want to fix it.</Body>
         <Button
-          label="Email accessibility feedback"
+          label={supportEmail ? 'Email accessibility feedback' : 'Send feedback on GitHub'}
           variant="secondary"
-          icon="mail-outline"
-          onPress={() => void Linking.openURL(`mailto:${env.supportEmail}?subject=${encodeURIComponent('MatIQ accessibility feedback')}`)}
+          icon={supportEmail ? 'mail-outline' : 'open-outline'}
+          onPress={() => contactSupport('MatIQ accessibility feedback')}
         />
       </Card>
     </Screen>

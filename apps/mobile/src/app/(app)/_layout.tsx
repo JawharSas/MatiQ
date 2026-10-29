@@ -5,6 +5,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { ageCheckStatus } from '@/features/legal/age';
 import { missingAcceptances } from '@/features/legal/consent';
 import { ConsentGate, NotEligible } from '@/features/legal/ConsentGate';
+import { LEGAL_VERSIONS, type LegalDocumentId } from '@/features/legal/documents';
 import { Loading } from '@/ui/components';
 import { colors } from '@/ui/theme';
 
@@ -17,18 +18,23 @@ import { colors } from '@/ui/theme';
 // tabs underneath, so Back always has somewhere to go.
 export const unstable_settings = { anchor: '(tabs)' };
 
+const ALL_DOCUMENTS = Object.keys(LEGAL_VERSIONS) as LegalDocumentId[];
+
 export default function AppLayout() {
   const { session } = useAuth();
   const { reduceMotion } = useA11y();
   const email = session?.user.email ?? '';
-  const consent = useQuery({ queryKey: ['consent'], queryFn: missingAcceptances, staleTime: Infinity });
   const age = useQuery({ queryKey: ['age-check'], queryFn: () => ageCheckStatus(email), staleTime: Infinity });
+  // After the age check (even a failed lookup), which may save the consent
+  // given on the sign-up form.
+  const consent = useQuery({ queryKey: ['consent'], queryFn: missingAcceptances, staleTime: Infinity, enabled: !age.isPending });
 
   if (consent.isPending || age.isPending) return <Loading />;
   if (age.data === 'not_eligible') return <NotEligible />;
   // If the status cannot be read, ask: answering it again is harmless.
   const needsAge = age.data !== 'done';
-  const missing = consent.data ?? [];
+  // Likewise, if acceptances cannot be read, ask (saving them again is harmless).
+  const missing = consent.data ?? (consent.isError ? ALL_DOCUMENTS : []);
   if (needsAge || missing.length > 0) return <ConsentGate missing={missing} needsAge={needsAge} />;
 
   return (

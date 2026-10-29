@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Launch test for the release APK on a running Android emulator (used by
 # .github/workflows/release.yml). Installs the APK, opens MatIQ, waits for the
-# sign-in screen, opens sign-up, and fails on a crash or if nothing renders.
+# sign-in screen, opens sign-up and scrolls to its end, and fails on a crash or
+# if nothing renders.
 # Accessibility on the real device: every tappable control on both screens
 # must have a label for TalkBack, and the sign-in screen is checked at 200%
 # font size and in landscape.
@@ -114,13 +115,30 @@ if wait_for_text "Sign in" 180; then
   visible_text
   shot sign-in
   check_labels sign-in
-  if tap_text "Create an account" && wait_for_text "Create account" 30; then
+  # uiautomator only lists what is on screen, so the form is checked in two
+  # halves: the top (title, Google, fields) and, after scrolling, the bottom
+  # (birth month, the "I agree" box, Create account and Cancel).
+  if tap_text "Create an account" && wait_for_text "Create your account" 30; then
     echo "Sign-up screen is showing:"
     visible_text
     shot sign-up
     check_labels sign-up
+    adb shell input swipe 540 1900 540 500 400
+    sleep 1
+    adb shell input swipe 540 1900 540 500 400
+    if wait_for_text "Create account" 20; then
+      echo "End of the sign-up form:"
+      visible_text
+      shot sign-up-end
+      check_labels "sign-up (end of the form)"
+    else
+      echo "::error::The end of the sign-up form (Create account) did not appear"
+      shot sign-up-stuck
+      status=1
+    fi
   else
     echo "::error::Could not open the sign-up screen"
+    shot sign-up-stuck
     status=1
   fi
 else

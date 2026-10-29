@@ -36,6 +36,7 @@ const MESSAGES: Record<string, string> = {
   invalid_scorecard: 'This recording has no usable scorecard.',
   invalid_birth_month: 'Enter a real birth month and year.',
   age_check_required: 'Enter your birth month and year first.',
+  video_check_unavailable: "Your video couldn't be checked just now. Open the match and tap Retry analysis.",
   '22023': "That isn't possible right now. Refresh and try again.",
   // Postgres error codes surfaced by the Data API.
   '42501': "You don't have permission to do that.",

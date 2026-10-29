@@ -122,6 +122,11 @@ async function main() {
       await page.getByRole('checkbox', { name: /^I agree/ }).click();
       await shot('consent-gate-filled', { tall: true });
       await button('Continue').click();
+      // The owner role is looked up before the age check, while the server
+      // refuses everything but reads: it must still show straight away.
+      await tab('Profile').click();
+      await see('Owner panel');
+      await tab('Feed').click();
     });
 
     await step('feed', async () => {

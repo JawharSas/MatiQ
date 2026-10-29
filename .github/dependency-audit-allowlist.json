@@ -1,0 +1,9 @@
+[
+  {
+    "advisory": "GHSA-mrhx-c7xc-m3w5",
+    "scope": "app",
+    "path": "node_modules/@expo/cli/node_modules/zod",
+    "reason": "Build tool only: zod 3 inside the Expo command-line tool, which validates this repository's own app config at build time. It is not part of the app bundle (the app and the Edge Functions use zod 4.6.7). Remove once Expo ships a fixed zod.",
+    "review_by": "2027-01-31"
+  }
+]

@@ -8,6 +8,7 @@
  */
 
 import { env } from '@/config/env';
+import { ISSUES_URL, supportContactText } from './contact';
 
 /** Documents people accept (each acceptance is recorded per version). */
 export const LEGAL_VERSIONS = {
@@ -34,7 +35,7 @@ export interface LegalDocument {
 }
 
 const entity = env.legalEntity;
-const contact = env.supportEmail;
+const contact = supportContactText;
 const agent = env.dmcaAgent;
 
 export const PRIVACY_POLICY: LegalDocument = {
@@ -56,10 +57,11 @@ export const PRIVACY_POLICY: LegalDocument = {
         'Account data: email address, username, display name, optional bio and profile picture. Profile pictures are re-encoded on your device before upload, which removes location and camera metadata.',
         'Your birth month and year, asked once to check the minimum age. It is never shown on your profile or to other users.',
         'If you sign in with Google: the name and email address of your Google account. We never receive your Google password.',
-        'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes.',
+        'Training content: videos you record or upload, still frames sampled from them for analysis, match details you enter (discipline, titles, athlete labels) and the resulting events, scorecards and coaching notes. Before a video leaves your phone, the app removes the location (GPS) and phone make and model that cameras write into video files.',
         'Social data: friend requests, friendships, blocks, posts and likes.',
         'Ranked play: challenges, confirmed results, ratings, rating history and titles.',
         'Usage and security data: number of analyses per month, rate-limit counters, security logs needed to prevent abuse and, if you turn on two-factor authentication, your authenticator enrollment.',
+        'Network data: like any online service, our hosting provider sees the IP address your phone connects from and keeps it in security logs (for example to limit repeated sign-in attempts). IP addresses are never shown to other users, are not part of your profile and are not used for advertising or tracking. If you sign in with Google, or a security check appears at sign-in, Google or Cloudflare also see your IP address for that step.',
         'Optional API keys you choose to store for "bring your own key" analysis (encrypted, see below).',
       ],
     },
@@ -89,6 +91,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       paragraphs: [
         'New accounts are Private. Private accounts: posts, shared scorecards and highlights are visible only to friends you approve. Public accounts: shared posts are visible to all signed-in MatIQ users, unless you mark a post Friends only.',
         'Your matches, videos and analyses stay visible only to you unless you share them in a post. Your profile card (username, display name, avatar, bio) is visible to signed-in users so friends can find you. Blocking a user hides your profile and content from them.',
+        'Other users never see your email address, IP address or location. Videos uploaded with app versions before 1.4.1 may still contain location data, so only you can watch them.',
         'Ranked matches: when you record a ranked match, your opponent in that match can watch the recording and its scorecard so they can confirm or dispute the result. Your ranked ratings, record and titles follow your account privacy (everyone for Public accounts, friends only for Private accounts). If a ranked result is disputed, the MatIQ owner may watch that recording to resolve the dispute. This access ends when the dispute is resolved, and the decision is recorded in an audit log.',
       ],
     },
@@ -215,9 +218,12 @@ export const TERMS_OF_SERVICE: LegalDocument = {
 
 const agentLines = [
   `Name: ${agent.name}`,
-  agent.address ? `Postal address: ${agent.address}` : `Postal address: email ${agent.email} and we will send it.`,
-  `Email: ${agent.email}`,
+  ...(agent.address ? [`Postal address: ${agent.address}`] : agent.email ? [`Postal address: email ${agent.email} and we will send it.`] : []),
+  ...(agent.email ? [`Email: ${agent.email}`] : []),
   ...(agent.phone ? [`Phone: ${agent.phone}`] : []),
+  ...(!agent.address && !agent.email
+    ? [`Contact details: not published yet. Until they are, ask for them at ${ISSUES_URL} (a public page, so leave out personal details).`]
+    : []),
 ];
 
 export const COPYRIGHT_POLICY: LegalDocument = {

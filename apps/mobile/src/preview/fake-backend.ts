@@ -36,6 +36,15 @@ interface PreviewSession {
 let session: PreviewSession | null = null;
 /** Users who have answered the age check (the real one lives in private.age_checks). */
 const ageChecked = new Set<string>();
+/**
+ * Like the real server (RLS, the pre-request hook, the function middleware):
+ * until the age check is answered, only reads are allowed.
+ */
+const ageCheckPending = () => {
+  const viewer = me();
+  return viewer !== null && !ageChecked.has(viewer);
+};
+const AGE_CHECK_REQUIRED = { code: '42501', message: 'age_check_required', details: null, hint: 'Enter your birth month and year first.' };
 let tokenSeq = 0;
 const authListeners = new Set<(event: string, session: PreviewSession | null) => void>();
 
@@ -270,6 +279,7 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
   private run(): unknown {
     const viewer = me();
     if (!viewer && this.table !== 'profiles') fail('42501', 'permission denied');
+    if (this.action !== 'select' && ageCheckPending()) fail('42501', 'age_check_required');
     switch (this.action) {
       case 'select':
         return this.shape(this.matching(viewer));
@@ -1075,6 +1085,7 @@ function bucket(name: string) {
     },
     async upload(path: string) {
       await latency(30);
+      if (ageCheckPending()) return { data: null, error: { message: 'age_check_required' } };
       objects.add(path);
       return { data: { path }, error: null };
     },
@@ -1088,6 +1099,7 @@ function bucket(name: string) {
       return objects.has(path) ? { data: { signedUrl: `preview://${name}/${path}` }, error: null } : { data: null, error: { message: 'Object not found' } };
     },
     async createSignedUploadUrl(path: string) {
+      if (ageCheckPending()) return { data: null, error: { message: 'age_check_required' } };
       objects.add(path);
       return { data: { signedUrl: `preview://upload/${name}/${path}`, path, token: 'preview' }, error: null };
     },
@@ -1099,11 +1111,12 @@ function bucket(name: string) {
 const client = {
   auth,
   from: (table: string) => new QueryBuilder(table as TableName),
-  async rpc(name: string, args: Row = {}) {
+  async rpc(name: string, args: Row = {}, options: { get?: boolean } = {}) {
     await latency();
     const handler = RPCS[name];
     if (!handler) return { data: null, error: { code: 'PGRST202', message: `function ${name} not found`, details: null, hint: null } };
     if (!me()) return { data: null, error: { code: '42501', message: 'permission denied', details: null, hint: null } };
+    if (!options.get && ageCheckPending()) return { data: null, error: AGE_CHECK_REQUIRED };
     try {
       return { data: structuredClone(handler(args, me()!)), error: null };
     } catch (error) {
@@ -1117,6 +1130,7 @@ const client = {
       const handler = FUNCTIONS[fn ?? ''];
       if (!handler) return { data: null, error: functionError(404, 'not_found') };
       if (!me()) return { data: null, error: functionError(401, 'unauthorized') };
+      if (fn !== 'account' && ageCheckPending()) return { data: null, error: functionError(403, 'age_check_required') };
       void query;
       try {
         return { data: structuredClone(handler(options.body ?? {}, options.method ?? 'POST', me()!)), error: null };

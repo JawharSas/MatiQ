@@ -37,8 +37,10 @@ jobs:
           CI: '1'
           EXPO_NO_TELEMETRY: '1'
           EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_ci_placeholder_key
         run: npx expo export --platform android --output-dir ${{ runner.temp }}/bundle
+      - name: No secrets in the app bundle
+        run: node scripts/scan-bundle.mjs ${{ runner.temp }}/bundle
 
   database:
     name: Database security tests
@@ -99,6 +101,30 @@ jobs:
       - run: deno lint --config supabase/functions/deno.json supabase/functions/
       - run: deno check --config supabase/functions/deno.json supabase/functions/*/index.ts scripts/rotate-api-key-kek.ts
       - run: deno test --config supabase/functions/deno.json --allow-env supabase/functions/
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Known vulnerabilities (app and Edge Functions)
+        run: node scripts/audit-deps.mjs
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: New dependencies must not bring known vulnerabilities
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Build tool only; see .github/dependency-audit-allowlist.json.
+          allow-ghsas: GHSA-mrhx-c7xc-m3w5
 
   secrets:
     name: Secret scan

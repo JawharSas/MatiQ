@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, use, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { clearCache } from '@/lib/storage';
-import { recordPendingConsent } from '@/features/legal/consent';
 import { needsMfaChallenge } from './mfa';
 
 interface AuthState {
@@ -45,10 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryClient.clear();
         setIsOwner(false);
       }
-      if (event === 'SIGNED_IN' && next) {
-        // Defer Supabase calls out of the auth callback to avoid deadlocks.
-        setTimeout(() => void recordPendingConsent(next.user.email ?? ''), 0);
-      }
     });
 
     return () => {
@@ -78,7 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!accessToken || mfaPending !== false) return;
     let cancelled = false;
-    supabase.rpc('am_i_owner').then(({ data }) => {
+    // GET: answered even before the age check, when other requests are refused.
+    supabase.rpc('am_i_owner', undefined, { get: true }).then(({ data }) => {
       if (!cancelled) setIsOwner(data === true);
     });
     return () => {

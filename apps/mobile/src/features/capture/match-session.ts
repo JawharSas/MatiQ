@@ -6,14 +6,18 @@
  *
  * Storage paths are deterministic ({user}/{match}/...) and enforced by the
  * storage policies, so a client can only ever write into its own matches.
+ * Videos go to `upload.{mp4|mov}`; analyze-match checks that copy and
+ * publishes it as `video.*`, the only name anyone can watch.
  */
 
 import type { Discipline } from '@matiq/rules-engine';
+import { isJpeg, type VideoCheckPassed } from '@matiq/rules-engine/media';
 import * as Crypto from 'expo-crypto';
 import { File, UploadType } from 'expo-file-system';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { SampledFrame } from './frame-processor';
+import { removePersonalMetadata, requireVideo } from './video-check';
 
 export interface MatchSetup {
   discipline: Discipline;
@@ -72,6 +76,7 @@ export function deleteLocalFile(uri: string): void {
 /** Uploads one frame and deletes the local copy on success. */
 export async function uploadFrame(userId: string, matchId: string, frame: SampledFrame): Promise<void> {
   const bytes = await new File(frame.uri).arrayBuffer();
+  if (!isJpeg(new Uint8Array(bytes))) throw new AppError('upload_failed', 'A video frame could not be read');
   const { error } = await supabase.storage
     .from('match-frames')
     .upload(`${userId}/${matchId}/${frame.t}.jpg`, bytes, { contentType: 'image/jpeg', upsert: false });
@@ -81,27 +86,51 @@ export async function uploadFrame(userId: string, matchId: string, frame: Sample
 }
 
 /**
- * Streams the video file from disk to Storage through a short-lived signed
- * upload URL using the platform's native uploader (no JS memory pressure,
- * continues in the background on iOS).
+ * Checks the whole video file (unless the caller already did), removes
+ * location and device metadata, then streams it from disk to Storage through
+ * a short-lived signed upload URL using the platform's native uploader (no JS
+ * memory pressure, continues in the background on iOS).
  */
 export async function uploadVideo(
   userId: string,
   matchId: string,
   videoUri: string,
-  options: { mimeType?: string; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+  options: { verified?: VideoCheckPassed; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
 ): Promise<void> {
-  const isMov = options.mimeType === 'video/quicktime' || /\.mov$/i.test(videoUri);
-  const path = `${userId}/${matchId}/video.${isMov ? 'mov' : 'mp4'}`;
-  const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
-  if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
+  const checkShare = options.verified ? 0 : 0.2;
+  const verified =
+    options.verified ??
+    (await requireVideo(videoUri, {
+      onProgress: (fraction) => options.onProgress?.(fraction * checkShare),
+      ...(options.signal ? { signal: options.signal } : {}),
+    }));
+  const isMov = verified.container === 'mov';
+  // Location (GPS) and phone details never leave the phone.
+  const clean = await removePersonalMetadata(videoUri, verified.container);
+  try {
+    const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
+    const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
+    if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
+    await sendVideo(clean.uri, data.signedUrl, isMov, checkShare, options);
+  } finally {
+    if (clean.temporary) deleteLocalFile(clean.uri);
+  }
+}
 
-  const result = await new File(videoUri).upload(data.signedUrl, {
+async function sendVideo(
+  uri: string,
+  signedUrl: string,
+  isMov: boolean,
+  checkShare: number,
+  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
+): Promise<void> {
+  const result = await new File(uri).upload(signedUrl, {
     httpMethod: 'PUT',
     uploadType: UploadType.BINARY_CONTENT,
     headers: { 'Content-Type': isMov ? 'video/quicktime' : 'video/mp4', 'x-upsert': 'true' },
     sessionType: 'background',
-    onProgress: ({ bytesSent, totalBytes }) => options.onProgress?.(totalBytes > 0 ? bytesSent / totalBytes : 0),
+    onProgress: ({ bytesSent, totalBytes }) =>
+      options.onProgress?.(checkShare + (1 - checkShare) * (totalBytes > 0 ? bytesSent / totalBytes : 0)),
     ...(options.signal ? { signal: options.signal } : {}),
   });
   if (result.status < 200 || result.status >= 300) throw new AppError('upload_failed', 'The video upload failed');
