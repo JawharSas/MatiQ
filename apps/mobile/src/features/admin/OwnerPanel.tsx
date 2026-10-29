@@ -155,6 +155,14 @@ function UserRow({ user }: { user: AdminUserRow }) {
           {user.role !== 'owner' ? (
             <Button label={user.is_suspended ? 'Restore account' : 'Suspend account'} variant="danger" onPress={toggleSuspended} />
           ) : null}
+          <Button
+            label="Cancel"
+            variant="secondary"
+            onPress={() => {
+              setExpanded(false);
+              setLimit(String(user.monthly_analysis_limit));
+            }}
+          />
         </View>
       ) : (
         <Button label="Manage" variant="secondary" onPress={() => setExpanded(true)} />

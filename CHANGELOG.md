@@ -45,7 +45,31 @@ pre-release channels are named in the release title.
 - `docs/SECURITY_AND_DEPLOYMENT.md` section 10 maps the 21-point security
   checklist to these controls.
 
+### Fixed
+- Support, accessibility feedback, reports and the legal pages pointed at
+  the placeholder `privacy@example.com` when `EXPO_PUBLIC_SUPPORT_EMAIL` and
+  the `EXPO_PUBLIC_DMCA_AGENT_*` variables were not set. They now fall back
+  to the public issue tracker (copyright notices, which carry personal
+  details, never do), and the release build warns about each missing value.
+- The Owner panel could stay hidden for up to 15 minutes after the age
+  screen: the owner lookup is now a read (GET), which the server allows
+  before the age check.
+- Email sign-ups were asked to tick "I agree" again on first sign-in: the
+  consent from the sign-up form is now saved right after the age check
+  instead of before it (when the server refuses it).
+- **Cancel** on the ranked Dispute form and on the Owner panel's Manage
+  section.
+- The browser preview's sample backend now refuses writes before the age
+  check like the real server, and the walkthrough checks the Owner panel
+  right after the age screen.
+- The emulator release test scrolls the sign-up form and checks TalkBack
+  labels on both halves (the end of the form had moved below the fold).
+
 ## [1.4.0] Pre-Beta, 2026-10-29
+
+Not published on its own: the release's emulator check stopped it (the
+end of the longer sign-up form was below the fold for the test). Everything
+below ships in 1.4.1.
 
 ### Accessibility (WCAG 2.2 AA)
 - Audit with axe-core 4.14 (WCAG 2.0/2.1/2.2 A and AA rules) on every screen

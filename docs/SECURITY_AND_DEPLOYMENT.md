@@ -180,10 +180,14 @@ Report screen.
 2. Add the same details as repository **variables** (Settings → Secrets and
    variables → Actions → Variables): `EXPO_PUBLIC_DMCA_AGENT_NAME`,
    `EXPO_PUBLIC_DMCA_AGENT_ADDRESS`, `EXPO_PUBLIC_DMCA_AGENT_EMAIL`,
-   `EXPO_PUBLIC_DMCA_AGENT_PHONE`, then build a release. Until they are set,
-   the name and email fall back to `EXPO_PUBLIC_LEGAL_ENTITY` and
-   `EXPO_PUBLIC_SUPPORT_EMAIL`, and the page offers to send the address by
-   email.
+   `EXPO_PUBLIC_DMCA_AGENT_PHONE`, plus `EXPO_PUBLIC_SUPPORT_EMAIL` and
+   `EXPO_PUBLIC_LEGAL_ENTITY`, then build a release. The release build warns
+   about each one that is missing. Until they are set, the agent name falls
+   back to `EXPO_PUBLIC_LEGAL_ENTITY` and the email to
+   `EXPO_PUBLIC_SUPPORT_EMAIL`; with no email at all, support links open the
+   public issue tracker, and the Report screen and Copyright Policy say the
+   agent's details aren't published yet (copyright notices are never sent to
+   the public page). The app never shows a made-up address.
 
 Handling a notice: check it has the six elements listed in the Copyright
 Policy, remove the post in **Owner panel → Content** (by the post ID in the

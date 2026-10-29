@@ -2,10 +2,10 @@ import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Share, StyleSheet } from 'react-native';
+import { Alert, Share, StyleSheet } from 'react-native';
 import { Text } from '@/ui/text';
-import { env } from '@/config/env';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { contactSupport, supportEmail } from '@/features/legal/contact';
 import { fromFunctionError, errorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import { Button, Caption, Card, ErrorText, Heading, ListGroup, ListRow, Screen, SectionHeader, TextField } from '@/ui/components';
@@ -74,8 +74,8 @@ export default function SettingsScreen() {
         <ListRow
           icon="help-buoy"
           title="Help and support"
-          subtitle={`Email ${env.supportEmail}`}
-          onPress={() => void Linking.openURL(`mailto:${env.supportEmail}?subject=${encodeURIComponent('MatIQ support')}`)}
+          subtitle={supportEmail ? `Email ${supportEmail}` : 'Report a problem on GitHub'}
+          onPress={() => contactSupport('MatIQ support')}
         />
       </ListGroup>
 

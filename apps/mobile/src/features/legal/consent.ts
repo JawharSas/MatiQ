@@ -4,7 +4,8 @@
  *
  * With email confirmation enabled there is no session at sign-up time, so the
  * acceptance given on the sign-up form is remembered locally (encrypted
- * store) and written on the first sign-in.
+ * store) and written on the first sign-in, right after the age check (the
+ * server accepts no writes before it).
  */
 
 import { supabase } from '@/lib/supabase';

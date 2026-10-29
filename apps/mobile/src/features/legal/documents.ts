@@ -8,6 +8,7 @@
  */
 
 import { env } from '@/config/env';
+import { ISSUES_URL, supportContactText } from './contact';
 
 /** Documents people accept (each acceptance is recorded per version). */
 export const LEGAL_VERSIONS = {
@@ -34,7 +35,7 @@ export interface LegalDocument {
 }
 
 const entity = env.legalEntity;
-const contact = env.supportEmail;
+const contact = supportContactText;
 const agent = env.dmcaAgent;
 
 export const PRIVACY_POLICY: LegalDocument = {
@@ -215,9 +216,12 @@ export const TERMS_OF_SERVICE: LegalDocument = {
 
 const agentLines = [
   `Name: ${agent.name}`,
-  agent.address ? `Postal address: ${agent.address}` : `Postal address: email ${agent.email} and we will send it.`,
-  `Email: ${agent.email}`,
+  ...(agent.address ? [`Postal address: ${agent.address}`] : agent.email ? [`Postal address: email ${agent.email} and we will send it.`] : []),
+  ...(agent.email ? [`Email: ${agent.email}`] : []),
   ...(agent.phone ? [`Phone: ${agent.phone}`] : []),
+  ...(!agent.address && !agent.email
+    ? [`Contact details: not published yet. Until they are, ask for them at ${ISSUES_URL} (a public page, so leave out personal details).`]
+    : []),
 ];
 
 export const COPYRIGHT_POLICY: LegalDocument = {

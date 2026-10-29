@@ -143,6 +143,15 @@ function RankedMatchView({ id }: { id: string }) {
               disabled={reason.trim().length === 0}
               onPress={() => dispute.mutate([row.id, reason], { onSuccess: () => setDisputing(false) })}
             />
+            <Button
+              label="Cancel"
+              variant="secondary"
+              disabled={dispute.isPending}
+              onPress={() => {
+                setDisputing(false);
+                setReason('');
+              }}
+            />
             <Caption>Disputed results are reviewed by the MatIQ team, who may watch the recording to decide.</Caption>
           </>
         ) : null}

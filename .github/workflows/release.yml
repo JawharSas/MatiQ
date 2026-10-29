@@ -84,6 +84,19 @@ jobs:
               fi ;;
             *) echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY is not a Supabase publishable or anon key."; exit 1 ;;
           esac
+      - name: Check contact details
+        # Legal pages and support links use these. Without them the app falls
+        # back to the GitHub issue tracker and says the copyright agent isn't
+        # published yet, so warn rather than fail.
+        run: |
+          missing=()
+          for name in EXPO_PUBLIC_SUPPORT_EMAIL EXPO_PUBLIC_LEGAL_ENTITY EXPO_PUBLIC_DMCA_AGENT_NAME EXPO_PUBLIC_DMCA_AGENT_ADDRESS EXPO_PUBLIC_DMCA_AGENT_EMAIL; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Contact details not set: ${missing[*]}. Add them under Settings -> Secrets and variables -> Actions -> Variables (see docs/SECURITY_AND_DEPLOYMENT.md)."
+            { echo '### Contact details not set'; echo; printf -- '- `%s`\n' "${missing[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Generate the native Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install
