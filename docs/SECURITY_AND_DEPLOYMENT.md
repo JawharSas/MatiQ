@@ -31,8 +31,9 @@ the repository safely.
 |---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` | No (public by design) | `apps/mobile/.env` locally, EAS environment variables for builds |
 | `EXPO_PUBLIC_TLS_PINS` | No | same as above |
-| `ANTHROPIC_API_KEY` | **Yes** | `supabase secrets set` |
-| `MATIQ_KEK_V{n}`, `MATIQ_KEK_CURRENT` | **Yes** | `supabase secrets set` (and a password manager / vault for recovery) |
+| `SUPABASE_ACCESS_TOKEN` (and optionally `SUPABASE_DB_PASSWORD`) | **Yes** | GitHub Actions secret, used only by the Deploy backend workflow |
+| `ANTHROPIC_API_KEY` | **Yes** | GitHub Actions secret (the Deploy backend workflow copies it into the function secrets) or `supabase secrets set` |
+| `MATIQ_KEK_V{n}`, `MATIQ_KEK_CURRENT` | **Yes** | Function secrets: the Deploy backend workflow creates `MATIQ_KEK_V1` once if it is missing and never prints it; set it yourself first with `supabase secrets set` if you want a recovery copy in a password manager |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | injected automatically into Edge Functions; never anywhere else |
 | Signing keystores, App Store Connect keys | **Yes** | EAS credentials service |
 
@@ -65,6 +66,20 @@ npm run functions:serve
 
 ### Hosted project
 
+From the browser, with the
+[Deploy backend workflow](../.github/workflows/backend.yml):
+
+1. Repository variable `EXPO_PUBLIC_SUPABASE_URL` (also used by the app
+   build) and the Actions secrets `SUPABASE_ACCESS_TOKEN` (an access token
+   from supabase.com/dashboard/account/tokens) and, optionally,
+   `ANTHROPIC_API_KEY`.
+2. **Actions → Deploy backend → Run workflow**. It applies the migrations,
+   sets the Auth, Data API and storage settings below, creates the function
+   secrets and deploys every Edge Function. It runs again by itself whenever
+   a change under `supabase/` or `packages/rules-engine/src/` reaches `main`.
+
+Or with the CLI:
+
 ```bash
 supabase login
 supabase link --project-ref <project-ref>
@@ -73,22 +88,33 @@ supabase secrets set --env-file supabase/functions/.env
 npm run functions:deploy               # vendors the rules engine, then deploys
 ```
 
-Then in the dashboard, mirror `supabase/config.toml`:
+The workflow mirrors `supabase/config.toml` in the hosted project; with the
+CLI, set the same in the dashboard:
 
 - **Authentication**
   - Email confirmations on; secure password change on; minimum password
     length 12 with letters, digits and symbols; enable leaked-password
     protection (available on paid plans).
   - JWT expiry 900 s; refresh token rotation on with a 10 s reuse interval.
-  - Redirect URL allow-list: only `matiq://auth/callback` (plus your dev URL).
+  - Redirect URL allow-list: `matiq:///auth/callback` (what
+    `Linking.createURL` builds in a release build) and
+    `matiq://auth/callback`, plus your dev URL. The workflow sets the Site URL
+    to the repository page, so any other redirect lands on the download page.
   - MFA: enable TOTP (enroll + verify).
   - Disable providers and anonymous sign-ins you do not use.
   - Keep the auth rate limits at least as strict as `config.toml`.
+  - **Email delivery**: the built-in mailer only sends to members of the
+    Supabase team and a few emails an hour, so other people never receive
+    their confirmation email. Set up custom SMTP under Authentication →
+    Emails → SMTP Settings (for example Resend, which needs a domain you own)
+    before inviting anyone. The workflow leaves email confirmation and SMTP
+    as set in the dashboard.
 - **Data API**: exposed schemas = `public` only; max rows = 100.
 - **Database**: enforce SSL for direct connections, restrict network access
   to known IPs, enable Point-in-Time Recovery for production.
 - **Storage**: raise the global upload limit to at least 500 MB if you allow
-  long videos (bucket limits are set by the migration).
+  long videos (bucket limits are set by the migration). The Free plan caps
+  uploads at 50 MB; the workflow warns when it cannot raise the limit.
 - **Realtime**: the migrations add `public.matches`,
   `public.match_live_batches` and `public.ranked_matches` to
   `supabase_realtime`; Realtime applies RLS, so users only receive their own

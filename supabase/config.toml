@@ -41,7 +41,7 @@ file_size_limit = "500MiB"
 [auth]
 enabled = true
 site_url = "matiq://"
-additional_redirect_urls = ["matiq://auth/callback", "exp://127.0.0.1:8081/--/auth/callback"]
+additional_redirect_urls = ["matiq:///auth/callback", "matiq://auth/callback", "exp://127.0.0.1:8081/--/auth/callback"]
 # Short-lived access tokens; refresh tokens rotate on every use and a reused
 # refresh token (outside the reuse interval) revokes the whole session family.
 jwt_expiry = 900

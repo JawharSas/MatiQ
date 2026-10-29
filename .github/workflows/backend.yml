@@ -1,0 +1,179 @@
+name: Deploy backend
+
+# Sets up the Supabase project the app talks to and keeps it in step with this
+# repository: database tables and security rules (supabase/migrations), Auth
+# and Data API settings, Edge Function secrets and the Edge Functions. Safe to
+# run again at any time; it also runs by itself when a backend change reaches
+# main.
+#
+# Actions -> Deploy backend -> Run workflow. It reads, from Settings ->
+# Secrets and variables -> Actions:
+#   variable EXPO_PUBLIC_SUPABASE_URL  the project URL (also used by the app build)
+#   secret   SUPABASE_ACCESS_TOKEN     supabase.com/dashboard/account/tokens
+#   secret   ANTHROPIC_API_KEY         optional: the AI key analyses use when a
+#                                      person has not added their own
+#   secret   SUPABASE_DB_PASSWORD      optional: without it the Supabase CLI
+#                                      signs in with a short-lived role
+# See docs/SECURITY_AND_DEPLOYMENT.md, section 3.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - 'packages/rules-engine/src/**'
+      - '.github/workflows/backend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check configuration
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.check.outputs.ref }}
+    env:
+      HAS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+      SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+    steps:
+      - id: check
+        run: |
+          # Only reviewed code reaches the live project: a manual run started
+          # on another branch stops here.
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Deploy backend only deploys main. Start it with \"Use workflow from: main\" (this run is on $GITHUB_REF_NAME)."
+            exit 1
+          fi
+          if [ "$HAS_TOKEN" != true ]; then
+            message="Add the SUPABASE_ACCESS_TOKEN secret (from supabase.com/dashboard/account/tokens) under Settings -> Secrets and variables -> Actions, then run Deploy backend."
+            # A backend change merged before the backend is set up is not a failure.
+            if [ "$GITHUB_EVENT_NAME" = push ]; then echo "::notice::Backend not deployed. $message"; exit 0; fi
+            echo "::error::$message"
+            exit 1
+          fi
+          ref=$(sed -nE 's#^https://([a-z0-9]{20})\.supabase\.co/?$#\1#p' <<< "$SUPABASE_URL")
+          [ -n "$ref" ] || { echo "::error::EXPO_PUBLIC_SUPABASE_URL must look like https://<project-ref>.supabase.co"; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Supabase project: $ref"
+
+  deploy:
+    name: Deploy to Supabase
+    needs: check
+    if: needs.check.outputs.ref != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REF: ${{ needs.check.outputs.ref }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.0
+      - name: Connect to the project
+        run: |
+          if [ -n "$DB_PASSWORD" ]; then export SUPABASE_DB_PASSWORD="$DB_PASSWORD"; fi
+          supabase link --project-ref "$REF"
+      - name: Apply database changes
+        run: |
+          if [ -n "$DB_PASSWORD" ]; then export SUPABASE_DB_PASSWORD="$DB_PASSWORD"; fi
+          supabase db push
+      - name: Auth, Data API and storage settings
+        run: |
+          api() { # <method> <path>, JSON body on stdin
+            local out; out=$(mktemp)
+            if curl -sS --fail-with-body -o "$out" -X "$1" "https://api.supabase.com/v1/projects/$REF$2" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data-binary @-; then
+              rm -f "$out"
+            else
+              echo "Supabase API: $1 $2 failed: $(head -c 500 "$out")"
+              rm -f "$out"
+              return 1
+            fi
+          }
+          # Mirrors supabase/config.toml. Email links open the app
+          # (matiq:///auth/callback is what Linking.createURL builds in a release
+          # build); any other redirect falls back to this repository's download
+          # page. Email confirmation and SMTP stay as set in the dashboard.
+          jq -n --arg site "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" '{
+            site_url: $site,
+            uri_allow_list: "matiq:///auth/callback,matiq://auth/callback",
+            disable_signup: false,
+            external_anonymous_users_enabled: false,
+            external_phone_enabled: false,
+            security_manual_linking_enabled: false,
+            mailer_secure_email_change_enabled: true,
+            security_update_password_require_reauthentication: true,
+            password_min_length: 12,
+            password_required_characters: "abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789:!@#$%^&*()_+-=[]{};'\''\\:\"|<>?,./`~",
+            jwt_exp: 900,
+            refresh_token_rotation_enabled: true,
+            security_refresh_token_reuse_interval: 10,
+            mfa_totp_enroll_enabled: true,
+            mfa_totp_verify_enabled: true,
+            mfa_max_enrolled_factors: 10
+          }' | api PATCH /config/auth
+          jq -n '{db_schema: "public", db_extra_search_path: "public,extensions", max_rows: 100}' | api PATCH /postgrest
+          # Match videos can be up to 500 MB (bucket limit in the storage migration).
+          if ! jq -n '{fileSizeLimit: 524288000}' | api PATCH /config/storage; then
+            echo "::warning::Could not raise the upload limit to 500 MB; the Free plan allows 50 MB. Longer match videos will not upload: turn off \"Upload video\" when setting up a match, or move the project to the Pro plan."
+          fi
+      - name: Function secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          names=$(curl -sS --fail-with-body "https://api.supabase.com/v1/projects/$REF/secrets" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" | jq -er 'map(.name) | join(" ")')
+          has() { [[ " $names " == *" $1 "* ]]; }
+          payload='[]'
+          add() { payload=$(NAME="$1" VALUE="$2" jq -c '. + [{name: env.NAME, value: env.VALUE}]' <<< "$payload"); }
+          if ! has MATIQ_KEK_V1; then
+            # Encrypts the AI keys people save in the app. Made once, kept only
+            # as a Supabase secret and never printed. Replacing it would make the
+            # saved keys unreadable, so later runs leave it alone (rotation:
+            # docs/SECURITY_AND_DEPLOYMENT.md, section 4).
+            kek=$(openssl rand -base64 32)
+            echo "::add-mask::$kek"
+            add MATIQ_KEK_V1 "$kek"
+          fi
+          has MATIQ_KEK_CURRENT || add MATIQ_KEK_CURRENT 1
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            add ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
+          elif ! has ANTHROPIC_API_KEY; then
+            echo "::warning::ANTHROPIC_API_KEY is not set: only people who add their own AI key in the app (Settings -> API keys) can analyse matches."
+          fi
+          if [ "$payload" != '[]' ]; then
+            out=$(mktemp)
+            curl -sS --fail-with-body -o "$out" -X POST "https://api.supabase.com/v1/projects/$REF/secrets" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+              --data-binary @- <<< "$payload" || { echo "Supabase API: setting secrets failed: $(head -c 500 "$out")"; exit 1; }
+            rm -f "$out"
+            echo "Set: $(jq -r 'map(.name) | join(", ")' <<< "$payload")"
+          fi
+      - name: Deploy the Edge Functions
+        run: |
+          node scripts/sync-shared.mjs
+          supabase functions deploy --project-ref "$REF"
+      - name: Summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## Backend deployed
+
+          Database, settings, secrets and Edge Functions are up to date.
+
+          First time? Sign up in the app, then make yourself the owner: Supabase
+          dashboard → SQL Editor, replace the email and run:
+
+          ```sql
+          update public.user_entitlements
+          set role = 'owner', is_unlimited = true
+          where user_id = (select id from auth.users where email = 'you@example.com');
+          ```
+          EOF
