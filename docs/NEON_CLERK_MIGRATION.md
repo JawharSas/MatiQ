@@ -94,17 +94,47 @@ their verified email.
 
 ## Server functions
 
-Node.js 24 + Hono, one per old Edge Function, sharing the ported
-`_shared` code (AI providers, moderation, video and JPEG checks, rate
-limits, crypto). They verify the Clerk token with `@clerk/backend`, map it
-to the MatIQ UUID, and talk to Postgres through the injected
-`DATABASE_URL` (the `svc_*` functions are called with SQL instead of
-through PostgREST). Secrets (`CLERK_SECRET_KEY`, `MATIQ_KEK_V1`, AI keys)
-are Function environment variables set by the deploy workflow.
+One Neon Function, `api` (`neon/functions/api`, Node 24 + Hono), with a
+route per old Edge Function (`account`, `analyze-match`, `api-keys`,
+`moderation`, `ranked`) keeping their request and response shapes, plus
+`files/*` for storage and `jobs/clerk-sync` for a schedule.
 
-Network bans: functions record the caller's address (as Supabase's
-sign-in log did), and bans also call Clerk's `banUser`, so a banned
-account can't sign in at all.
+- Callers send the Clerk session token; the function checks it against
+  Clerk's JWKS (`jose`; issuer `CLERK_ISSUER`, browser tokens' `azp`
+  against `CLERK_AUTHORIZED_PARTIES`) and maps it to the MatIQ UUID with
+  `svc_user_for_clerk`. Then the same pipeline as before: bans (account
+  and network), rate limits, the age check. The address it sees is
+  recorded (`svc_record_address`) for network bans.
+- Postgres through the injected `DATABASE_URL` (`pg` pool). `shared/db.ts`
+  answers `rpc()` / `from()` the way PostgREST did, so the ported handlers
+  kept their code; `asUser()` runs work as the signed-in user (role
+  `authenticated` and their claims, `auth.session()` loaded first), so Row
+  Level Security decides.
+- Files: bytes in the Neon buckets, a row per file in `storage.objects`.
+  The `files` routes change the row as the user first, in one transaction
+  with the bytes, so the storage policies from the Supabase days still
+  decide (own folder, fixed names, age check, bans). Frames and pictures
+  pass through the function; videos get a PUT link signed for their exact
+  size and type. The service side (`shared/storage.ts`) keeps rows and
+  bytes in step when it moves, quarantines or deletes files.
+- Bans and deletions reach Clerk through the `private.clerk_sync` queue:
+  applied right after an account is deleted and by `jobs/clerk-sync` on a
+  schedule (a Function Trigger; Neon's proxy strips `x-neon-*` headers from
+  outside, so only Neon can call it). Without `CLERK_SECRET_KEY` they wait.
+- Function environment: `CLERK_ISSUER`, `CLERK_SECRET_KEY` (optional),
+  `CLERK_AUTHORIZED_PARTIES` (optional), `MATIQ_KEK_CURRENT` /
+  `MATIQ_KEK_V*`, the AI settings (`ANTHROPIC_API_KEY` or `AI_*`,
+  `ANALYSIS_*`), `ALLOWED_ORIGINS`. Neon injects `DATABASE_URL` and the
+  `AWS_*` storage variables.
+- Tests: the ported unit tests (`npm test --workspace @matiq/api`) and
+  integration tests against the Neon schema in Postgres
+  (`NEON_API_TESTS=1 ./scripts/test-db-neon.sh`, in CI): the adapter, the
+  token check, the storage rules through `files`, bans and the Clerk queue.
+
+Until the cutover the Supabase Edge Functions keep serving the released
+app, so a change to shared server logic is made in both
+`supabase/functions` and `neon/functions/api`; the Supabase copy is
+deleted at the cutover.
 
 ## Moving the data (workflow `migrate-to-neon.yml`, run by hand)
 
@@ -148,6 +178,9 @@ for mobile SSO redirect (Google sign-in returns there).
    email code, Google, two-factor with backup codes, new-device check),
    the app's data client pointed at the Data API, polling instead of
    Realtime, and the browser preview on a Clerk stand-in.
-3. Functions on Node + `files`; app storage and function calls switched.
+3. **Done.** The `api` Neon Function (the five functions on Node, `files`,
+   the Clerk sync job), tested against the Neon schema; the app's
+   storage and function calls point at it (videos send their size and
+   type for the signed link).
 4. `neon.ts`, deploy workflow, data-move workflow.
 5. Rehearsal, cutover, release.

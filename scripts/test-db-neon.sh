@@ -8,6 +8,9 @@
 #
 #   PGHOST=localhost PGPORT=5432 PGUSER=postgres ./scripts/test-db-neon.sh
 #
+# With NEON_API_TESTS=1 (after `npm ci`) it also runs the `api` function's
+# integration tests against the same database.
+#
 # The connecting role must be a superuser (it creates roles and schemas).
 set -euo pipefail
 
@@ -45,3 +48,10 @@ for test_file in "$ROOT"/supabase/tests/database/*.test.sql "$ROOT"/neon/tests/d
   neon_sql "$test_file" | sed '/create extension if not exists pgtap/d' | run -At | grep -E '^(ok|all) ' | tail -n 1
 done
 echo "==> Database tests passed"
+
+if [ "${NEON_API_TESTS:-0}" = 1 ]; then
+  echo "==> Running the api function's integration tests"
+  (cd "$ROOT/neon/functions/api" && \
+    DATABASE_URL="postgresql://${PGUSER:-postgres}:${PGPASSWORD:-}@${PGHOST:-localhost}:${PGPORT:-5432}/$DB" \
+    node --test --experimental-strip-types test/integration.test.ts)
+fi

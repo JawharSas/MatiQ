@@ -27,6 +27,10 @@ jobs:
         run: |
           npm run typecheck --workspace @matiq/rules-engine
           npm test --workspace @matiq/rules-engine
+      - name: Neon function (api) typecheck + unit tests
+        run: |
+          npm run typecheck --workspace @matiq/api
+          npm test --workspace @matiq/api
       - name: Mobile typecheck + unit tests
         run: |
           npm run typecheck --workspace @matiq/mobile
@@ -61,9 +65,16 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Apply migrations and run RLS / privilege tests
         run: ./scripts/test-db-local.sh
-      - name: The same on the Neon schema (Clerk accounts, docs/NEON_CLERK_MIGRATION.md)
+      - name: The same on the Neon schema (Clerk accounts, docs/NEON_CLERK_MIGRATION.md), plus the api function
+        env:
+          NEON_API_TESTS: '1'
         run: ./scripts/test-db-neon.sh
 
   ui-preview:

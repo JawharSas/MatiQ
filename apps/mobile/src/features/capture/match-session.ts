@@ -145,7 +145,9 @@ export async function uploadVideo(
     const clean = await removePersonalMetadata(uploadUri, verified.container);
     try {
       const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
-      const { data, error } = await backend.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
+      const { data, error } = await backend.storage
+        .from('match-videos')
+        .createSignedUploadUrl(path, { size: new File(clean.uri).size, contentType: videoType(isMov), upsert: true });
       if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
       options.onStage?.('uploading');
       await sendVideo(clean.uri, data.signedUrl, isMov, compressShare + checkShare, options);
@@ -156,6 +158,8 @@ export async function uploadVideo(
     if (compressed) deleteLocalFile(compressed.uri);
   }
 }
+
+const videoType = (isMov: boolean) => (isMov ? 'video/quicktime' : 'video/mp4');
 
 async function sendVideo(
   uri: string,
@@ -168,8 +172,8 @@ async function sendVideo(
   const result = await new File(uri).upload(signedUrl, {
     httpMethod: 'PUT',
     uploadType: UploadType.BINARY_CONTENT,
-    // The upload URL is signed for this content type.
-    headers: { 'Content-Type': isMov ? 'video/quicktime' : 'video/mp4' },
+    // The upload URL is signed for this content type (and the file's size).
+    headers: { 'Content-Type': videoType(isMov) },
     sessionType: 'background',
     onProgress: ({ bytesSent, totalBytes }) =>
       options.onProgress?.(done + (1 - done) * (totalBytes > 0 ? bytesSent / totalBytes : 0)),

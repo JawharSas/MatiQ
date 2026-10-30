@@ -76,9 +76,14 @@ function bucket(name: string) {
       }
       return result;
     },
-    /** A presigned PUT link for a large upload. */
-    createSignedUploadUrl(path: string, options: { upsert?: boolean } = {}) {
-      return json<{ signedUrl: string; path: string }>('sign-upload', { path, upsert: options.upsert ?? false });
+    /** A presigned PUT link for a large upload, valid only for this exact size and type. */
+    createSignedUploadUrl(path: string, file: { size: number; contentType: string; upsert?: boolean }) {
+      return json<{ signedUrl: string; path: string }>('sign-upload', {
+        path,
+        upsert: file.upsert ?? false,
+        size: file.size,
+        contentType: file.contentType,
+      });
     },
     createSignedUrl(path: string, expiresIn: number) {
       return json<{ signedUrl: string }>('sign-download', { path, expiresIn });

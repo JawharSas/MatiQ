@@ -5,7 +5,8 @@
   "description": "MatIQ: AI Martial Arts Analyzer & Social Hub (monorepo)",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "neon/functions/*"
   ],
   "scripts": {
     "mobile": "npm --workspace @matiq/mobile run start",
