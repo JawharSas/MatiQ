@@ -115,6 +115,8 @@ jobs:
         run: |
           url=$(npx -y "$NEON_CLI" functions get api --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH" --output json | jq -r '.invocation_url // .function.invocation_url // empty')
           if [ -z "$url" ]; then echo "::error::Could not read the function's address."; exit 1; fi
+          # The address ends in "/", and "//health" is not a route.
+          url="${url%/}"
           curl -fsS --retry 5 --retry-all-errors --retry-delay 5 "$url/health"
           echo
           echo "::notice::Functions URL for the app build (variable EXPO_PUBLIC_FUNCTIONS_URL): $url"
