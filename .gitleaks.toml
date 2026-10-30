@@ -24,4 +24,7 @@ regexes = [
   '''^pk_test_Y2ktcGxhY2Vob2xkZXIuaW52YWxpZCQ=$''',
   '''^pk_test_cHJldmlldy5tYXRpcS5pbnZhbGlkJA==$''',
   '''^pk_test_aW52YWxpZC5sb2NhbGhvc3Qk$''',
+  # Not a secret: the words "key: S3-compatible" in a code comment
+  # (neon/functions/api/src/shared/storage.ts, since reworded).
+  '''^S3-compatible$''',
 ]
