@@ -9,10 +9,7 @@
 
 import { useSSO } from '@clerk/expo';
 import * as Linking from 'expo-linking';
-import * as WebBrowser from 'expo-web-browser';
 import { clerkErrorMessage } from './clerk-errors';
-
-WebBrowser.maybeCompleteAuthSession();
 
 /** An error whose message can be shown to the person as is. */
 export class SignInError extends Error {

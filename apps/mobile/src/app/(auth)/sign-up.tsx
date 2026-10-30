@@ -177,6 +177,8 @@ export default function SignUpScreen() {
           videos are never sold or shared with data brokers. New accounts are private.
         </Caption>
       </Card>
+      {/* Where Clerk's bot protection shows its check, when it needs one. */}
+      <View nativeID="clerk-captcha" />
       <ErrorText>{error}</ErrorText>
       <Button label="Create account" onPress={() => void submit()} loading={busy} />
       <Button label="Cancel" variant="secondary" hint="Goes back to sign in" disabled={busy} onPress={() => router.replace('/sign-in')} />
