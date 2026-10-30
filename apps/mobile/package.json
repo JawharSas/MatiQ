@@ -22,7 +22,7 @@
     "@expo/vector-icons": "15.1.1",
     "@matiq/rules-engine": "*",
     "@supabase/postgrest-js": "2.117.3",
-    "@tanstack/react-query": "5.104.5",
+    "@tanstack/react-query": "5.105.0",
     "expo": "~58.0.21",
     "expo-auth-session": "~58.0.16",
     "expo-build-properties": "~58.0.11",
