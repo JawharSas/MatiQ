@@ -156,11 +156,32 @@ deleted at the cutover.
 
 ## What the deploy needs
 
-GitHub secrets: `NEON_API_KEY`, `CLERK_SECRET_KEY` (and, for the data move,
-the existing `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROJECT_REF`).
-GitHub variables: `EXPO_PUBLIC_DATA_API_URL`, `EXPO_PUBLIC_FUNCTIONS_URL`,
+`neon.ts` (repository root) declares the Neon side: the Data API checking
+Clerk's JWKS, the four private buckets, the `api` function with its
+settings, and a five-minute schedule for `jobs/clerk-sync`. The **Deploy
+Neon backend** workflow (`.github/workflows/neon.yml`, run by hand from
+`main`) applies the database schema (`scripts/neon-db.mjs`, only new
+migrations), shows `neon config plan`, runs `neon deploy`, and checks that
+the function answers, printing its address for `EXPO_PUBLIC_FUNCTIONS_URL`.
+Its bundle was checked locally with the CLI's own esbuild settings.
+
+GitHub secrets: `NEON_API_KEY`, `MATIQ_KEK_V1` (key-encryption key for the
+AI keys people store), `CLERK_SECRET_KEY` (bans and deletions in Clerk; the
+data move), optional AI keys as for Supabase (`ANTHROPIC_API_KEY` or
+`AI_API_KEY`).
+GitHub variables: `NEON_PROJECT_ID`, `CLERK_ISSUER` (Clerk Frontend API
+URL), optional `NEON_BRANCH`, `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL`,
+`ALLOWED_ORIGINS`, `CLERK_AUTHORIZED_PARTIES`; for the app build
+`EXPO_PUBLIC_DATA_API_URL`, `EXPO_PUBLIC_FUNCTIONS_URL`,
 `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (the release build checks all three and
-refuses a Clerk secret key), `NEON_PROJECT_ID`.
+refuses a Clerk secret key).
+
+Open question for the data move: Supabase's key-encryption key was made by
+the Supabase deploy and only exists as a Supabase function secret, which
+can't be read back. Without it the AI keys people stored can't be opened on
+Neon: either they enter them again after the move, or a one-off Supabase
+function re-wraps them for Neon's key before the cutover.
+
 Clerk Dashboard (already set on the development instance): email +
 password (12+ characters with upper, lower, number and symbol, breached
 passwords refused), email code verification, Google, authenticator app
@@ -182,5 +203,5 @@ for mobile SSO redirect (Google sign-in returns there).
    the Clerk sync job), tested against the Neon schema; the app's
    storage and function calls point at it (videos send their size and
    type for the signed link).
-4. `neon.ts`, deploy workflow, data-move workflow.
+4. `neon.ts` and the deploy workflow (**done**); the data-move workflow.
 5. Rehearsal, cutover, release.
