@@ -40,6 +40,11 @@ insert into auth.sessions (user_id, ip) values
   ('f1111111-1111-4111-8111-111111111111', '10.1.2.3'),           -- private range
   ('f1111111-1111-4111-8111-111111111111', '100.64.5.6'),         -- carrier-grade NAT
   ('f1111111-1111-4111-8111-111111111111', '203.0.113.50');       -- someone signed in here recently
+-- Sessions nobody used for 60 days don't count: not as this account's network
+-- (the address may belong to someone else now), not as a sign that home is shared.
+insert into auth.sessions (user_id, ip, created_at, updated_at) values
+  ('f1111111-1111-4111-8111-111111111111', '198.51.100.99', now() - interval '90 days', now() - interval '60 days'),
+  ('f4444444-4444-4444-8444-444444444444', '192.0.2.44', now() - interval '90 days', now() - interval '60 days');
 insert into auth.audit_log_entries (payload, ip_address, created_at) values
   (json_build_object('actor_id', 'f4444444-4444-4444-8444-444444444444'), '203.0.113.50', now() - interval '2 days'),
   -- Too long ago to count: home stays private.

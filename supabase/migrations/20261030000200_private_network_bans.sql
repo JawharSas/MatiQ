@@ -60,7 +60,8 @@ as $$
   ]::inet[]));
 $$;
 
--- The networks an account used in the last 30 days (sessions and sign-in log).
+-- The networks an account used in the last 30 days (sessions active in that
+-- time, and the sign-in log). Older addresses may belong to someone else now.
 create or replace function private.networks_used_by(p_user uuid)
 returns cidr[]
 language plpgsql
@@ -75,7 +76,8 @@ begin
   begin
     select coalesce(array_agg(distinct private.network_of(s.ip)), '{}') into more
     from auth.sessions s
-    where s.user_id = p_user and s.ip is not null;
+    where s.user_id = p_user and s.ip is not null
+      and coalesce(s.updated_at, s.created_at) > now() - interval '30 days';
     nets := nets || more;
   exception when undefined_column or undefined_table or insufficient_privilege then
     null;
@@ -107,6 +109,7 @@ begin
     if exists (
       select 1 from auth.sessions s
       where s.user_id <> p_user and s.ip is not null
+        and coalesce(s.updated_at, s.created_at) > now() - interval '30 days'
         and private.network_of(s.ip) = p_net
         and not private.is_banned(s.user_id)
     ) then

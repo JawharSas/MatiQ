@@ -194,8 +194,10 @@ export function createOpenAICompatibleProvider(options: {
 } & Transport): AnalysisProvider {
   const { apiKey, model, baseUrl, info } = options;
   let hostChecked: Promise<void> | null = null;
-  // The strongest structured-output mode this endpoint accepted so far.
-  let modeIndex = 0;
+  // Where requests start: the strongest structured-output mode this endpoint
+  // has accepted so far. Each request steps down on its own, so batches
+  // running at the same time can't use up each other's fallbacks.
+  let startMode = 0;
 
   async function complete(body: Record<string, unknown>): Promise<Reply> {
     if (options.checkHost) await (hostChecked ??= assertPublicHost(baseUrl));
@@ -207,6 +209,7 @@ export function createOpenAICompatibleProvider(options: {
   }
 
   async function structured<T>(name: string, schema: z.ZodType, system: string, user: ContentPart[], maxTokens: number, parse: (raw: unknown) => T): Promise<T | 'refused'> {
+    let modeIndex = startMode;
     for (;;) {
       const mode = MODES[modeIndex]!;
       const instruction = `Reply with only a JSON object, no markdown, that matches this JSON Schema:\n${JSON.stringify(jsonSchemaFor(schema))}`;
@@ -219,6 +222,7 @@ export function createOpenAICompatibleProvider(options: {
       if (mode === 'object') body.response_format = { type: 'json_object' };
       try {
         const reply = await complete(body);
+        startMode = Math.max(startMode, modeIndex);
         if (reply.refused) return 'refused';
         if (reply.truncated) throw new AnalysisError('ai_truncated', 'The AI response was truncated');
         return parse(extractJson(reply.text));

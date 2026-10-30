@@ -126,6 +126,27 @@ Deno.test('analysis steps down from strict schemas to JSON mode and keeps the mo
   assert(output.safety?.sexualContent === true, 'a flagged part flags the batch');
 });
 
+Deno.test('batches running at the same time each step down on their own', async () => {
+  const clean = JSON.stringify({ events: [], observations: [], safety: { sexualContent: false, confidence: 0.9 } });
+  // Strict schemas refused, JSON mode accepted: whatever order the replies arrive in.
+  const fetchFn = ((_input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      body.response_format?.type === 'json_schema' ? fail(400, 'json_schema is not supported') : reply(clean),
+    );
+  }) as typeof fetch;
+  const provider = createOpenAICompatibleProvider({
+    apiKey: 'sk-x',
+    model: 'm',
+    baseUrl: 'https://x.example.com',
+    info: PROVIDERS.together,
+    fetchFn,
+    retryDelayMs: 0,
+  });
+  const results = await Promise.allSettled([1, 2, 3, 4].map(() => provider.analyzeBatch(context, frames(1))));
+  assert(results.every((result) => result.status === 'fulfilled'), `all four succeed: ${JSON.stringify(results.map((r) => r.status))}`);
+});
+
 Deno.test('the content check is required, failures map to clear codes', async () => {
   const make = (responses: Response[]) =>
     createOpenAICompatibleProvider({
