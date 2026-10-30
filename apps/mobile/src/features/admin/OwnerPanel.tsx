@@ -333,8 +333,8 @@ function Moderation() {
     <View style={styles.stack}>
       <Caption>
         Sexual content in a recording or profile picture bans an account at once, and three posts that break the word filter in 30
-        days ban it too. A ban signs the person out, hides everything they posted and blocks the networks they used for 30 days
-        (only one-way fingerprints of the addresses are kept).
+        days ban it too. A ban signs the person out and hides everything they posted. Networks only that person used are blocked
+        for 30 days; shared ones (a gym's Wi-Fi, carrier and private addresses) never are. Only one-way fingerprints are kept.
       </Caption>
       <Heading>Bans</Heading>
       {bans.error ? <ErrorText>{errorMessage(bans.error)}</ErrorText> : null}
@@ -346,6 +346,10 @@ function Moderation() {
           <Caption>
             {CATEGORY_LABELS[ban.category] ?? ban.category} · {ban.source === 'automatic' ? 'automatic' : 'by you'} ·{' '}
             {new Date(ban.created_at).toLocaleString()}
+          </Caption>
+          <Caption>
+            {ban.networks_blocked === 1 ? '1 private network blocked' : `${ban.networks_blocked} private networks blocked`}
+            {ban.networks_shared > 0 ? ` · ${ban.networks_shared} shared left open` : ''}
           </Caption>
           <Button label="Lift ban" variant="secondary" onPress={() => confirmUnban(ban.user_id, ban.username)} />
         </Card>

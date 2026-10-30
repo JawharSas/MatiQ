@@ -89,8 +89,8 @@ export default function SettingsScreen() {
         />
         <ListRow
           icon="key"
-          title="API keys"
-          subtitle="Use your own AI provider key"
+          title="AI provider"
+          subtitle="Use your own key for Claude, ChatGPT, Gemini or any AI"
           onPress={() => router.push('/settings/api-keys')}
         />
       </ListGroup>

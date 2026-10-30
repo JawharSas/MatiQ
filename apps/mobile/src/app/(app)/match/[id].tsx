@@ -123,7 +123,7 @@ function MatchView({ id, clipStart, clipEnd }: { id: string; clipStart?: number;
             <>
               <Button label="Retry analysis" loading={retry.isPending} onPress={() => retry.mutate('platform')} />
               {hasStoredKey ? (
-                <Button label="Retry with my API key" variant="secondary" disabled={retry.isPending} onPress={() => retry.mutate('byok')} />
+                <Button label="Retry with my own AI" variant="secondary" disabled={retry.isPending} onPress={() => retry.mutate('byok')} />
               ) : null}
               <ErrorText>{retry.error ? errorMessage(retry.error) : null}</ErrorText>
             </>

@@ -12,8 +12,8 @@ import { ISSUES_URL, supportContactText } from './contact';
 
 /** Documents people accept (each acceptance is recorded per version). */
 export const LEGAL_VERSIONS = {
-  terms: '2026-10-29.2',
-  privacy: '2026-10-29.2',
+  terms: '2026-10-30',
+  privacy: '2026-10-30',
 } as const;
 
 export type LegalDocumentId = keyof typeof LEGAL_VERSIONS;
@@ -78,7 +78,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       paragraphs: [
         'When you request an analysis, still frames sampled from your video are sent over an encrypted connection to our AI provider solely to detect match events and generate your coaching summary. With live analysis, this happens in small batches while you record so the app can show a provisional score. Frames are deleted from our storage after a successful analysis.',
         'The same AI check also looks for sexual content in those frames, and in every profile picture you set, before anyone else can see it (see Moderation and safety).',
-        'We only use AI providers whose commercial terms prohibit using customer content to train their models. When you analyse with your own API key, your provider account and its terms apply to that request.',
+        'We only use AI providers whose commercial terms prohibit using customer content to train their models. You can also analyse with your own key for an AI provider you choose (for example Anthropic, OpenAI, Google, xAI, OpenRouter, Groq, Mistral, Together, or another service you enter). Then the frames of those analyses go to that provider, and your account with it and its terms apply. When you save such a key, one small test picture (not from your recordings) is sent to check the model works.',
       ],
     },
     {
@@ -101,7 +101,7 @@ export const PRIVACY_POLICY: LegalDocument = {
       paragraphs: [
         'Names, bios, match titles, dispute notes and posts are checked automatically against a list of words MatIQ does not allow. A post that matches is not shared. We keep its text (up to 280 characters) as a strike for up to 90 days; three strikes in 30 days ban the account.',
         'Sexual content found by the AI check in a recording or profile picture bans the account straight away. The owner of MatIQ can also ban accounts that break the Terms.',
-        'When an account is banned we keep the ban record (reason and date) while the ban lasts, and block the networks the account used in the last 30 days for 30 days. For that we store only one-way fingerprints (keyed hashes) of those IP addresses, which cannot be turned back into addresses, never the addresses themselves.',
+        'When an account is banned we keep the ban record (reason and date) while the ban lasts. For 30 days we also block the networks that only that account used in the last 30 days. A network someone else on MatIQ uses (for example the Wi-Fi at a gym) is never blocked, and neither are carrier-shared or private addresses. For that we store only one-way fingerprints (keyed hashes) of the blocked IP addresses, which cannot be turned back into addresses, never the addresses themselves.',
         'Content that broke the rules is moved to locked storage that only MatIQ can access, and kept only as long as needed to handle appeals and our legal duties. Where the law requires it, for example for child sexual abuse material, we report it to the authorities (in the United States, NCMEC) and preserve it as the law requires.',
         `If you think a ban is a mistake, contact ${contact}.`,
       ],
@@ -207,7 +207,7 @@ export const TERMS_OF_SERVICE: LegalDocument = {
       paragraphs: [
         'MatIQ is for training. No sexual content or nudity of any kind: it bans the account straight away and permanently. No hate speech, slurs, threats, harassment or encouraging self-harm.',
         'Names, bios, titles, notes and posts are checked automatically, also when letters are spaced out or swapped. A post that breaks the rules is not shared and counts as a strike; three strikes in 30 days ban the account. Recordings and profile pictures are checked by AI.',
-        `A ban signs you out, hides everything you posted and blocks the networks you used. Creating a new account to get around a ban is not allowed. If you think a ban is a mistake, contact ${contact}.`,
+        `A ban signs you out, hides everything you posted and blocks your own networks (never ones other people use). Creating a new account to get around a ban is not allowed. If you think a ban is a mistake, contact ${contact}.`,
       ],
     },
     {

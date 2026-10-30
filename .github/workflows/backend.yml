@@ -10,8 +10,12 @@ name: Deploy backend
 # Secrets and variables -> Actions:
 #   variable EXPO_PUBLIC_SUPABASE_URL  the project URL (also used by the app build)
 #   secret   SUPABASE_ACCESS_TOKEN     supabase.com/dashboard/account/tokens
-#   secret   ANTHROPIC_API_KEY         optional: the AI key analyses use when a
-#                                      person has not added their own
+#   secret   ANTHROPIC_API_KEY         optional: a Claude key for analyses people run
+#                                      with the MatIQ quota (and profile-picture checks)
+#   secret   AI_API_KEY                optional, instead: a key for any other AI provider,
+#   variable AI_PROVIDER               with its provider (openai, google, xai, openrouter,
+#   variable AI_MODEL                  groq, mistral, together or custom), a vision model
+#   variable AI_BASE_URL               and, for custom, the https address
 #   secret   SUPABASE_DB_PASSWORD      optional: without it the Supabase CLI
 #                                      signs in with a short-lived role
 # See docs/SECURITY_AND_DEPLOYMENT.md, section 3.
@@ -166,6 +170,10 @@ jobs:
       - name: Function secrets
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER || secrets.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL || secrets.AI_MODEL }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL || secrets.AI_BASE_URL }}
         run: |
           names=$(curl -sS --fail-with-body "https://api.supabase.com/v1/projects/$REF/secrets" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" | jq -er 'map(.name) | join(" ")')
@@ -182,10 +190,15 @@ jobs:
             add MATIQ_KEK_V1 "$kek"
           fi
           has MATIQ_KEK_CURRENT || add MATIQ_KEK_CURRENT 1
-          if [ -n "$ANTHROPIC_API_KEY" ]; then
-            add ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
-          elif ! has ANTHROPIC_API_KEY; then
-            echo "::warning::ANTHROPIC_API_KEY is not set: only people who add their own AI key in the app (Settings -> API keys) can analyse matches."
+          [ -n "$ANTHROPIC_API_KEY" ] && add ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
+          for name in AI_PROVIDER AI_API_KEY AI_MODEL AI_BASE_URL; do
+            [ -n "${!name}" ] && add "$name" "${!name}"
+          done
+          if [ -n "$AI_PROVIDER" ] && [ "$AI_PROVIDER" != anthropic ] && [ -z "$AI_MODEL" ] && ! has AI_MODEL; then
+            echo "::warning::AI_PROVIDER is $AI_PROVIDER but AI_MODEL is not set: set the variable AI_MODEL to a model that reads images."
+          fi
+          if [ -z "$ANTHROPIC_API_KEY$AI_API_KEY" ] && ! has ANTHROPIC_API_KEY && ! has AI_API_KEY; then
+            echo "::warning::No platform AI key (ANTHROPIC_API_KEY or AI_API_KEY): only people who add their own AI key in the app (Settings -> AI provider) can analyse matches, and profile pictures can't be changed."
           fi
           if [ "$payload" != '[]' ]; then
             out=$(mktemp)

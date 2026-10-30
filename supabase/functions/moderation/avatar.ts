@@ -9,7 +9,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AnalysisProvider } from '../_shared/ai/anthropic.ts';
+import type { AnalysisProvider } from '../_shared/ai/types.ts';
 import { toBase64 } from '../_shared/crypto.ts';
 import { HttpError } from '../_shared/http.ts';
 import type { Logger } from '../_shared/log.ts';

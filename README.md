@@ -9,11 +9,11 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Pre-Beta V1.5.0** · Android · free
+> **Pre-Beta V1.6.0** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.5.0-pre-beta/MatIQ-1.5.0-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.6.0-pre-beta/MatIQ-1.6.0-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.5.0-pre-beta) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.6.0-pre-beta) · iPhone: coming later
 
 ## What you can do
 
@@ -33,9 +33,12 @@ real opponents.
 - **Stay in control.** Accounts are private until you choose otherwise. Your
   data and videos are never sold or shared with data brokers, and you can
   download or delete everything from Settings.
+- **Use any AI.** Analyse with MatIQ's AI, or bring your own key for
+  Claude, ChatGPT, Gemini, Grok, OpenRouter, Groq, Mistral, Together or any
+  OpenAI-compatible service and pick the model.
 - **A clean community.** Posts, names and bios go through a word filter,
   the AI checks recordings and profile pictures for 18+ content, and people
-  who break the rules are banned along with the networks they used.
+  who break the rules are banned, along with networks only they use.
 
 ## Install it on your phone
 
@@ -43,11 +46,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.5.0-pre-beta/MatIQ-1.5.0-android.apk).
-   Your browser saves `MatIQ-1.5.0-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.6.0-pre-beta/MatIQ-1.6.0-android.apk).
+   Your browser saves `MatIQ-1.6.0-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.5.0-android.apk`.
+   **Downloads** app and tap `MatIQ-1.6.0-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
@@ -125,8 +128,16 @@ ban the account; talking about chokes, mounts and armbars is fine.
 **Why is my account banned?**
 Sexual content or nudity in a video or profile picture bans an account
 straight away, and so do repeated posts that break the rules. If you think
-it's a mistake, tap **Contact support** on the ban screen. If someone on your
-gym's Wi-Fi was banned, try mobile data, or contact support.
+it's a mistake, tap **Contact support** on the ban screen. Shared networks,
+like a gym's Wi-Fi, are never blocked because of someone else's ban.
+
+**Can I use my own AI, like ChatGPT or Gemini?**
+Yes: **Settings → AI provider**. Paste a key from Claude, ChatGPT, Gemini,
+Grok, OpenRouter, Groq, Mistral, Together or any OpenAI-compatible service.
+MatIQ recognises the key, lists the models it can use and tests the one you
+pick before saving it. Pick a model that can read images. Analyses with your
+key are billed to your account with that provider and don't use your monthly
+MatIQ analyses.
 
 **Someone posted my video or footage of me.**
 Open the post, tap **Report** and choose **Copyright infringement** or

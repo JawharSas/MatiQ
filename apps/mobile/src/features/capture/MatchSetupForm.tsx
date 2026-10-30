@@ -1,4 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import type { StoredKey } from '@/features/api-keys/api';
+import { providerOption } from '@/features/api-keys/providers';
 import { type Discipline, variantsFor } from '@matiq/rules-engine';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
@@ -42,12 +44,13 @@ export function defaultSetup(discipline: Discipline = 'bjj'): MatchSetup {
 export function MatchSetupForm({
   value,
   onChange,
-  hasOwnKey,
+  ownKey,
   rulesetLocked = false,
 }: {
   value: MatchSetup;
   onChange: (next: MatchSetup) => void;
-  hasOwnKey: boolean;
+  /** The person's own AI key analyses can use, if any. */
+  ownKey: StoredKey | null;
   /** Ranked matches fix the discipline and ruleset agreed in the challenge. */
   rulesetLocked?: boolean;
 }) {
@@ -139,15 +142,15 @@ export function MatchSetupForm({
           value={value.uploadVideo}
           onValueChange={(next) => set('uploadVideo', next)}
         />
-        {hasOwnKey ? (
+        {ownKey ? (
           <ToggleRow
-            label="Use my own API key"
-            description="Billed to your provider account; does not use your monthly MatIQ analyses."
+            label={`Use my own AI: ${providerOption(ownKey.provider).name}`}
+            description={`${ownKey.model ?? 'Default model'}. Billed to your provider account; doesn't use your monthly MatIQ analyses.`}
             value={value.keySource === 'byok'}
             onValueChange={(next) => set('keySource', next ? 'byok' : 'platform')}
           />
         ) : (
-          <Caption>Tip: add your own AI provider key in Settings for analyses beyond your monthly quota.</Caption>
+          <Caption>Tip: add your own key for Claude, ChatGPT, Gemini or any AI in Settings → AI provider for analyses beyond your monthly quota.</Caption>
         )}
       </Card>
     </>

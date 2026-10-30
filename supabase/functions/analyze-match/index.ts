@@ -17,9 +17,10 @@
  */
 
 import { z } from 'zod';
-import { AnalysisError, type AnalysisProvider, createAnthropicProvider } from '../_shared/ai/anthropic.ts';
+import { createPlatformProvider, createProvider as providerFor, isProviderId, PROVIDERS } from '../_shared/ai/providers.ts';
+import { AnalysisError, type AnalysisProvider } from '../_shared/ai/types.ts';
 import { decryptSecret } from '../_shared/crypto.ts';
-import { env } from '../_shared/env.ts';
+import { ConfigError, env } from '../_shared/env.ts';
 import { HttpError, json, readJson, sanitizeText } from '../_shared/http.ts';
 import { createHandler, enforceRateLimit, type RequestContext } from '../_shared/middleware.ts';
 import { type KeySource, reserveAnalysis, runInBackground, settleUsage, withAnalysisQuota } from '../_shared/quota.ts';
@@ -89,21 +90,33 @@ async function maxVideoMs(ctx: RequestContext): Promise<number> {
   return data.max_video_seconds * 1000;
 }
 
+/** The platform AI, or the person's own key (the one they saved or chose last). */
 async function createProvider(ctx: RequestContext, source: KeySource): Promise<AnalysisProvider> {
-  let apiKey: string;
   if (source === 'platform') {
-    apiKey = env.anthropicApiKey();
-  } else {
-    const { data, error } = await ctx.admin.rpc('svc_get_api_key', { p_user_id: ctx.user.id, p_provider: 'anthropic' });
-    if (error) throw new Error(`loading key failed: ${error.message}`);
-    const row = (Array.isArray(data) ? data[0] : data) as
-      | { id: string; ciphertext: string; iv: string; key_version: number }
-      | undefined;
-    if (!row) throw new HttpError(422, 'byok_key_missing', 'No API key stored for this provider');
-    apiKey = await decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, keyVersion: row.key_version }, ctx.user.id, 'anthropic');
-    await ctx.admin.rpc('svc_touch_api_key', { p_key_id: row.id });
+    try {
+      return createPlatformProvider();
+    } catch (error) {
+      if (!(error instanceof ConfigError)) throw error;
+      ctx.log.error('platform AI not configured', { error });
+      throw new HttpError(503, 'ai_not_configured', 'MatIQ analysis is not set up yet');
+    }
   }
-  return createAnthropicProvider({ apiKey, model: env.analysisModel(), effort: env.analysisEffort() });
+  const { data, error } = await ctx.admin.rpc('svc_get_active_api_key', { p_user_id: ctx.user.id });
+  if (error) throw new Error(`loading key failed: ${error.message}`);
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { id: string; provider: string; ciphertext: string; iv: string; key_version: number; model: string | null; base_url: string | null }
+    | undefined;
+  if (!row || !isProviderId(row.provider)) throw new HttpError(422, 'byok_key_missing', 'No API key stored');
+  const apiKey = await decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, keyVersion: row.key_version }, ctx.user.id, row.provider);
+  await ctx.admin.rpc('svc_touch_api_key', { p_key_id: row.id });
+  const model = row.model ?? (row.provider === 'anthropic' ? env.analysisModel() : null);
+  if (!model) throw new HttpError(422, 'byok_key_missing', `Choose a ${PROVIDERS[row.provider].label} model in Settings`);
+  try {
+    return providerFor({ provider: row.provider, apiKey, model, baseUrl: row.base_url });
+  } catch (caught) {
+    if (caught instanceof AnalysisError) throw new HttpError(422, caught.code, caught.message);
+    throw caught;
+  }
 }
 
 const batching = () => ({ framesPerRequest: env.analysisFramesPerRequest(), concurrency: env.analysisConcurrency() });
