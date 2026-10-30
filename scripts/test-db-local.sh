@@ -19,6 +19,7 @@ run() { psql -v ON_ERROR_STOP=1 -X -q -d "$DB" "$@"; }
 
 echo "==> Installing Supabase platform stub"
 run -f "$ROOT/supabase/tests/local/00_supabase_stub.sql"
+run -f "$ROOT/supabase/tests/local/01_pgtap_shim.sql"
 
 echo "==> Applying migrations"
 for migration in "$ROOT"/supabase/migrations/*.sql; do

@@ -108,6 +108,9 @@ select throws_ok(
 select pg_temp.as_service();
 select is(public.svc_age_checked('b1111111-1111-4111-8111-111111111111'), true, 'functions see a completed age check');
 select is(public.svc_age_checked('b2222222-2222-4222-8222-222222222222'), false, 'and a missing one');
+-- No API request from here on (on Neon, app.uid() applies the age check to
+-- API writes, as the request hook does).
+select set_config('request.method', '', true);
 
 -- Copyright takedowns -------------------------------------------------------------------
 reset role;

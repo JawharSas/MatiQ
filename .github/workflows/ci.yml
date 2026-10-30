@@ -62,6 +62,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Apply migrations and run RLS / privilege tests
         run: ./scripts/test-db-local.sh
+      - name: The same on the Neon schema (Clerk accounts, docs/NEON_CLERK_MIGRATION.md)
+        run: ./scripts/test-db-neon.sh
 
   ui-preview:
     name: UI walkthrough (browser preview)
