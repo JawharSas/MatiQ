@@ -191,6 +191,28 @@ test('running it again finds what is already there', async () => {
   assert.equal((await one('select count(*)::int as n from app.users where clerk_id is not null')).n, 3);
 });
 
+test('the real move turns Supabase read-only first; a dry run never does', async () => {
+  const source = new pg.Client({ connectionString: process.env.SOURCE_URL });
+  await source.connect();
+  try {
+    const readOnly = async () => (await source.query(`select private.read_only() as on`)).rows[0].on;
+    assert.equal((await move('--dry-run', '--freeze-source', '--skip-clerk', '--skip-files')).code, 0);
+    assert.equal(await readOnly(), false);
+    const result = await move('--freeze-source', '--skip-clerk', '--skip-files');
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Supabase read-only/);
+    assert.equal(await readOnly(), true);
+    // A second run (it is safe to repeat) still works with Supabase read-only.
+    assert.equal((await move('--freeze-source', '--skip-clerk', '--skip-files')).code, 0);
+    // The switch itself never reaches Neon, where it would refuse every write.
+    assert.equal((await one(`select count(*)::int as n from private.settings where key = 'read_only'`)).n, 0);
+    assert.equal((await one(`select min_version from app.release_policy`)).min_version, '1.7.0', 'Neon keeps its own minimum version');
+    await source.query(`delete from private.settings where key = 'read_only'`);
+  } finally {
+    await source.end();
+  }
+});
+
 test('someone who already signed up in Clerk with the same email keeps that user', async () => {
   // As if Sam had tried the new app before the move: a Clerk user without an external ID.
   const sam = clerk.users.find((u) => u.external_id === SAM);

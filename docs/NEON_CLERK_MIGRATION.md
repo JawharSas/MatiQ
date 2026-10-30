@@ -174,17 +174,29 @@ Start it by adding the label `neon-rehearsal` to the pull request, or by
 hand. The production branch is only filled from `main`, after deploying it,
 with the dry run off and the confirmation typed.
 
-## Cutover
+## Cutover (release 1.7.0 Alpha)
 
-1. Rehearsal: label the pull request `neon-rehearsal`; build the app
-   against the rehearsal branch (its Data API and function addresses) and
-   try it with real accounts: sign in with an old password, open matches
-   and videos, record, analyse, ranked.
-2. Turn on read-only mode on Supabase (a flag the request hook checks:
-   old app versions show "Update MatIQ to keep going").
-3. Merge, deploy production (Deploy Neon backend), run "Move data to Neon"
-   for production, set the app's variables, release 1.7.0.
-4. Supabase stays (read-only) as a fallback until it is switched off.
+1. GitHub secrets and variables in place ("What the deploy needs").
+2. Rehearsal (recommended): label the pull request `neon-rehearsal`; build
+   a test app against the rehearsal branch and try it with real accounts.
+3. Merge the pull request. "Deploy backend" (Supabase) runs by itself and
+   adds the read-only switch (off) and the 8-minute videos to Supabase.
+4. "Deploy Neon backend" for production; its notice gives the address for
+   `EXPO_PUBLIC_FUNCTIONS_URL` (the Data API address is in "Where things
+   are").
+5. "Move data to Neon" for production: a dry run, then the real run, which
+   first turns Supabase read-only (from then on 1.6 and older can only
+   read), then copies tables, accounts and files.
+6. Tag `v1.7.0-alpha`: the release builds the APK against Neon.
+
+Updating: 1.7 and later read a minimum version at start
+(`app.release_policy`, now 1.7.0) and show "Update MatIQ" with the download
+link when they are older. To make everyone update later:
+`update app.release_policy set min_version = '1.8.0', updated_at = now();`.
+Versions 1.6 and older have no such check and show fixed messages, so
+they can't be told to update in the app; read-only Supabase keeps their
+data safe, and the release notes tell people to install the new one.
+Supabase stays (read-only) as a fallback until it is switched off.
 
 ## What the deploy needs
 

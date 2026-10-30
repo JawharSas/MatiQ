@@ -11,6 +11,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { env, envError } from '@/config/env';
 import { A11yProvider, useA11y } from '@/features/accessibility/A11yProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { UpdateRequired } from '@/features/update/UpdateRequired';
+import { useUpdateRequired } from '@/features/update/useUpdateRequired';
 import { isBannedError } from '@/lib/errors';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
@@ -105,6 +107,9 @@ function RootNavigator() {
   useTheme();
   const { signedIn, initializing } = useAuth();
   const { reduceMotion } = useA11y();
+  const update = useUpdateRequired();
+  // A version too old to keep working shows only the way to the new one.
+  if (update.required) return <UpdateRequired downloadUrl={update.downloadUrl} />;
   if (initializing) return <Loading />;
 
   return (

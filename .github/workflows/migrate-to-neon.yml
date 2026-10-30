@@ -160,4 +160,12 @@ jobs:
           rm -f "$env_file"
           grep -q '^AWS_SECRET_ACCESS_KEY=' "$GITHUB_ENV" || { echo "::error::No storage credentials for the branch."; exit 1; }
       - name: Move
-        run: node scripts/move-to-neon.mjs ${{ needs.prepare.outputs.dry_run == 'true' && '--dry-run' || '' }}
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          PRODUCTION: ${{ needs.prepare.outputs.deploy == 'false' }}
+        run: |
+          flags=()
+          [ "$DRY_RUN" = true ] && flags+=(--dry-run)
+          # The real move: Supabase turns read-only first, so nothing written there is lost.
+          [ "$PRODUCTION" = true ] && [ "$DRY_RUN" != true ] && flags+=(--freeze-source)
+          node scripts/move-to-neon.mjs "${flags[@]}"

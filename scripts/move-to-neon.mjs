@@ -3,7 +3,12 @@
 // (docs/NEON_CLERK_MIGRATION.md, "Moving the data"). Run by the "Move data
 // to Neon" workflow; nothing on Supabase is changed.
 //
-//   node scripts/move-to-neon.mjs [--dry-run] [--skip-clerk] [--skip-files]
+//   node scripts/move-to-neon.mjs [--dry-run] [--freeze-source] [--skip-clerk] [--skip-files]
+//
+// --freeze-source (the real move) first turns on Supabase's read-only mode
+// (supabase/migrations/20261031000100_read_only_mode.sql): app versions still
+// on Supabase can only read from then on, so nothing written there after the
+// copy is lost.
 //
 // --dry-run writes nothing anywhere: the table copy is rolled back after
 // its counts are checked, Clerk is only searched, and files are only
@@ -23,7 +28,8 @@
 //    app.sessions and app.audit_log_entries. Not copied: the AI keys people
 //    stored (Supabase's key-encryption key can't be read back, so the app
 //    asks for them again), rate-limit counters, two-factor factors (Clerk's
-//    now) and Neon's own Clerk queue.
+//    now), Neon's own Clerk queue and minimum app version, and Supabase's
+//    read-only switch.
 // 2. Accounts into Clerk: found by external ID (the MatIQ UUID) or created
 //    with the account's bcrypt password hash, so passwords keep working;
 //    authenticator-app secrets come along when Supabase has them. Banned
@@ -46,16 +52,26 @@ const args = new Set(process.argv.slice(2));
 const DRY_RUN = args.has('--dry-run');
 const SKIP_CLERK = args.has('--skip-clerk');
 const SKIP_FILES = args.has('--skip-files');
+const FREEZE_SOURCE = args.has('--freeze-source') && !DRY_RUN;
 
 const BUCKETS = ['match-videos', 'match-frames', 'avatars', 'moderation-quarantine'];
 /** Tables that stay as they are on Neon. */
-const NOT_COPIED = new Set(['private.user_api_keys', 'private.rate_limits', 'private.clerk_sync', 'app.mfa_factors', 'storage.buckets']);
+const NOT_COPIED = new Set([
+  'private.user_api_keys',
+  'private.rate_limits',
+  'private.clerk_sync',
+  'app.mfa_factors',
+  'app.release_policy',
+  'storage.buckets',
+]);
 /** Neon table -> where its rows are on Supabase, and which of them move. */
 const SOURCES = {
   'app.users': { table: 'auth.users', where: 'deleted_at is null and coalesce(is_anonymous, false) = false' },
   'app.sessions': { table: 'auth.sessions', where: 'user_id in (select id from auth.users where deleted_at is null)' },
   'app.audit_log_entries': { table: 'auth.audit_log_entries' },
   'storage.objects': { table: 'storage.objects', where: `bucket_id in (${BUCKETS.map((b) => `'${b}'`).join(', ')})` },
+  // Supabase's read-only switch stays there: on Neon it would refuse every write.
+  'private.settings': { table: 'private.settings', where: `key <> 'read_only'` },
 };
 /** Rows per read: analyses carry large scorecards. */
 const PAGE = 200;
@@ -379,6 +395,15 @@ const neon = new pg.Client({ connectionString: need('DATABASE_URL') });
 await neon.connect();
 let failed = false;
 try {
+  if (FREEZE_SOURCE) {
+    log('==> Supabase read-only');
+    const [{ ready }] = await source.query(`select to_regprocedure('private.read_only()') is not null as ready`);
+    if (!ready) throw new Error("Supabase has no read-only mode yet: deploy its backend from main (Deploy backend) first");
+    await source.query(
+      `insert into private.settings (key, value) values ('read_only', 'on') on conflict (key) do update set value = excluded.value`,
+    );
+    log('  on: app versions still on Supabase can only read');
+  }
   log(`==> Tables${DRY_RUN ? ' (dry run)' : ''}`);
   const tables = await plan(neon);
   await copyTables(source, neon, tables);

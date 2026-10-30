@@ -40,9 +40,10 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef
-     and p.proname not in ('check_request', 'check_request_mfa')
+     -- The request hooks, and (on Neon) the app's minimum version, read before signing in.
+     and p.proname not in ('check_request', 'check_request_mfa', 'app_requirements')
      and has_function_privilege('anon', p.oid, 'execute')),
-  '', 'anonymous requests cannot run any privileged function (except the request hooks)');
+  '', 'anonymous requests cannot run any privileged function (except the request hooks and the minimum version)');
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace

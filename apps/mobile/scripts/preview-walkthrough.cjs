@@ -540,6 +540,17 @@ async function main() {
       await see("we couldn't create a MatIQ account");
       await shot('sign-in-after-age-check');
     });
+
+    await step('too old a version: update required', async () => {
+      // As if the server's minimum were newer than this build.
+      await page.addInitScript(() => {
+        window.__PREVIEW_MIN_VERSION = '9.0.0';
+      });
+      await page.goto(url);
+      await see('Update MatIQ');
+      await see('is no longer supported');
+      await shot('update-required');
+    });
   } finally {
     await browser.close();
     server.close();

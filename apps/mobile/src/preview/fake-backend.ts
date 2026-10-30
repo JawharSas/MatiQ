@@ -1379,6 +1379,11 @@ export const backend = {
   from: (table: string) => new QueryBuilder(table as TableName),
   async rpc(name: string, args: Row = {}, options: { get?: boolean } = {}) {
     await latency();
+    // Read before signing in. The walkthrough sets window.__PREVIEW_MIN_VERSION to show the update screen.
+    if (name === 'app_requirements') {
+      const minimum = (globalThis as { __PREVIEW_MIN_VERSION?: string }).__PREVIEW_MIN_VERSION ?? '1.0.0';
+      return { data: { min_version: minimum, download_url: 'https://github.com/JawharSas/MatiQ/releases' }, error: null };
+    }
     const handler = RPCS[name];
     if (!handler) return { data: null, error: { code: 'PGRST202', message: `function ${name} not found`, details: null, hint: null } };
     if (!me()) return { data: null, error: { code: '42501', message: 'permission denied', details: null, hint: null } };
