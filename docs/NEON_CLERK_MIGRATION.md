@@ -31,6 +31,14 @@ Schema on Neon: `DATABASE_URL=… node scripts/neon-db.mjs` applies
 `node scripts/test-db-neon-remote.mjs` runs every database test against a
 Neon database inside transactions that always roll back.
 
+Things to confirm against the live Data API with a real Clerk token (stage
+5 rehearsal): that it sets `request.method` (the age check on API writes
+relies on it; without it the RLS policies on user tables still apply) and
+`request.headers` (network bans on API requests). `pg_session_jwt` isn't
+preloaded on Neon: anything that sets `request.jwt.claims` itself (the
+tests, the functions' "as the user" checks) must call `auth.session()`
+first, or the claims are dropped when the extension loads.
+
 ## Identity: Clerk users keep their MatIQ ID
 
 Every table keys users by the UUID Supabase gave them, and Neon's

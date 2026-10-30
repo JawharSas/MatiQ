@@ -26,7 +26,11 @@ if (!url) {
 const { neon } = await import('@neondatabase/serverless');
 const sql = neon(url);
 
-const shim = splitSql(readFileSync(join(ROOT, 'supabase/tests/local/01_pgtap_shim.sql'), 'utf8'));
+// pg_session_jwt loads on first use, and loading it mid-transaction drops a
+// `request.jwt.claims` set before (the tests set it the way PostgREST does;
+// the Data API itself hands the extension the token). Load it first.
+const LOAD_EXTENSION = 'select auth.session()';
+const shim = [LOAD_EXTENSION, ...splitSql(readFileSync(join(ROOT, 'supabase/tests/local/01_pgtap_shim.sql'), 'utf8'))];
 const files = ['supabase/tests/database', 'neon/tests/database'].flatMap((dir) =>
   readdirSync(join(ROOT, dir))
     .filter((file) => file.endsWith('.test.sql'))

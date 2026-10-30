@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(24);
 
 -- A Clerk session token as the Data API sees it.
 create function pg_temp.as_clerk(sub text, claims jsonb default '{}', method text default 'GET') returns void language plpgsql as $$
@@ -57,6 +57,10 @@ select pg_temp.as_clerk('user_new1', '{}', 'POST');
 select ok(app.uid() is not null, 'writes are allowed after it');
 select pg_temp.as_clerk('user_new1', '{}', 'GET');
 select ok(app.uid() is not null, 'reads never needed it');
+select pg_temp.as_backend();
+insert into app.users (clerk_id) values ('user_no_age_check');
+select pg_temp.as_clerk('user_no_age_check', '{}', 'POST');
+select ok(public.register_user(null, null) is not null, 'a returning account without the age check can still sign in');
 
 -- Two-factor from Clerk's fva claim -----------------------------------------------------------
 select pg_temp.as_clerk('user_new1', '{"fva": [3, -1]}');
