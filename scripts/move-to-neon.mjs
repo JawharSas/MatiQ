@@ -62,6 +62,7 @@ const NOT_COPIED = new Set([
   'private.clerk_sync',
   'app.mfa_factors',
   'app.release_policy',
+  'app.schema_migrations', // scripts/neon-db.mjs's record of applied migrations
   'storage.buckets',
 ]);
 /** Neon table -> where its rows are on Supabase, and which of them move. */

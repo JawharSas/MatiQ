@@ -7,9 +7,10 @@ pre-release channels are named in the release title.
 
 ### Updates
 - A minimum app version on the server (`app.release_policy`, read before
-  signing in through `public.app_requirements()`): an older app shows
-  "Update MatIQ" with the download link instead of the app. Starts at
-  1.7.0; raise it to make everyone update.
+  signing in from the `api` function's `GET /app-requirements`, since the
+  Data API wants a token on every request): an older app shows "Update
+  MatIQ" with the download link instead of the app. Starts at 1.7.0;
+  raise it to make everyone update.
 - Versions 1.6 and older can't be told to update (they show fixed
   messages): at the move Supabase turns read-only (migration
   `20261031000100_read_only_mode.sql`, switched on by the real data move),

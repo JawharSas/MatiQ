@@ -42,6 +42,8 @@ dst -f "$ROOT/neon/tests/local/pg_session_jwt_stub.sql"
 dst -f "$ROOT/neon/compat.sql" >/dev/null
 for migration in "$ROOT"/supabase/migrations/*.sql; do node "$ROOT/scripts/neon-sql.mjs" "$migration" | dst >/dev/null; done
 for migration in "$ROOT"/neon/migrations/*.sql; do dst -f "$migration" >/dev/null; done
+# As scripts/neon-db.mjs leaves a real branch: it records what it applied here.
+dst -c 'create table app.schema_migrations (name text primary key, applied_at timestamptz not null default now())'
 
 echo "==> Moving"
 url() { echo "postgresql://${PGUSER:-postgres}:${PGPASSWORD:-}@${PGHOST:-localhost}:${PGPORT:-5432}/$1"; }

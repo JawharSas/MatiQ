@@ -68,9 +68,12 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
   - The database reads the user from Clerk's JWT through `pg_session_jwt`. RLS
     is on for every table.
 - **Forced updates.** `public.app_requirements()` on Neon returns
-  `min_version` and `download_url`. When the app is older, it shows only the
-  "Update MatIQ" screen. To raise the minimum, update `app.release_policy`
-  (SQL in `docs/NEON_CLERK_MIGRATION.md`).
+  `min_version` and `download_url`.
+  - The app reads it from the `api` function's `GET /app-requirements`.
+    That works signed out; the Data API needs a token on every request.
+  - When the app is older, it shows only the "Update MatIQ" screen.
+  - To raise the minimum, update `app.release_policy` (SQL in
+    `docs/NEON_CLERK_MIGRATION.md`).
 - **Migrations.** Never edit a migration that has shipped; add a new one with
   a later timestamp, and add database tests with it.
 - **Preview.** The web preview uses `src/preview/fake-backend.ts` and stubs.
