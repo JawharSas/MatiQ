@@ -91,7 +91,8 @@ async function functionShape(name: string): Promise<FunctionShape> {
                 from unnest(
                   p.proargnames,
                   coalesce(p.proallargtypes, p.proargtypes::oid[]),
-                  coalesce(p.proargmodes, array_fill('i'::"char", array[cardinality(p.proargnames)]))
+                  -- No arguments: proargnames is null, and array_fill refuses a null length.
+                  coalesce(p.proargmodes, array_fill('i'::"char", array[coalesce(cardinality(p.proargnames), 0)]))
                 ) as a(name, type, mode)
                where a.mode in ('i', 'b', 'v') and a.type in ('json'::regtype, 'jsonb'::regtype)
             ), '{}') as json

@@ -1,7 +1,8 @@
 /**
- * Whether this app version is still allowed (neon/migrations/20261101000300_app_requirements.sql).
- * Read before signing in; when it can't be read (offline, server trouble)
- * the app carries on, so a failed check never locks anyone out.
+ * Whether this app version is still allowed (neon/migrations/20261101000300_app_requirements.sql),
+ * from the function's `app-requirements` route, which answers signed out too.
+ * When it can't be read (offline, server trouble) the app carries on, so a
+ * failed check never locks anyone out.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -20,9 +21,9 @@ export function useUpdateRequired(): { required: false } | { required: true; dow
   const query = useQuery({
     queryKey: ['app-requirements'],
     queryFn: async () => {
-      const { data, error } = await backend.rpc('app_requirements', undefined, { get: true });
-      if (error) throw new Error(error.message);
-      return data as Requirements | null;
+      const { data, error } = await backend.functions.invoke<Requirements>('app-requirements', { method: 'GET' });
+      if (error) throw error;
+      return data;
     },
     staleTime: 60 * 60 * 1000,
     retry: 1,

@@ -114,6 +114,14 @@ describe('api on the Neon schema', { skip }, () => {
     assert.equal(failed.error?.code, '22023');
   });
 
+  test('the minimum app version is readable signed out', async () => {
+    const response = await app.request('https://api.matiq.test/app-requirements');
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.match(body.min_version, /^\d+\.\d+\.\d+$/);
+    assert.match(body.download_url, /^https:\/\//);
+  });
+
   test('from() selects, filters and returns one row or none', async () => {
     const one = await from('user_entitlements').select('role, is_suspended').eq('user_id', alex.id).maybeSingle();
     assert.equal(one.error, null);

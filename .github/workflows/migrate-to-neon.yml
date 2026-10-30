@@ -2,8 +2,10 @@ name: Move data to Neon
 
 # Copies MatIQ's data from Supabase to a Neon branch with
 # scripts/move-to-neon.mjs: tables (one transaction, counts checked), the
-# accounts into Clerk (passwords keep working) and the files. Nothing on
-# Supabase changes. See docs/NEON_CLERK_MIGRATION.md, "Moving the data".
+# accounts into Clerk (passwords keep working) and the files. Only the real
+# move changes Supabase: it turns it read-only first (--freeze-source), so
+# nothing written by 1.3 to 1.6 is lost after the copy. See
+# docs/NEON_CLERK_MIGRATION.md, "Moving the data".
 #
 # Rehearsal: add the label "neon-rehearsal" to the pull request, or run this
 # workflow with branch "rehearsal". The Neon branch "rehearsal" is reset
@@ -12,7 +14,7 @@ name: Move data to Neon
 #
 # The real move: deploy production first (Deploy Neon backend), then run
 # this from main with branch "production", dry run off and confirm
-# "MOVE MATIQ TO NEON", once Supabase is read-only.
+# "MOVE MATIQ TO NEON". It turns Supabase read-only before it copies.
 #
 # Reads, besides what Deploy Neon backend reads:
 #   variable EXPO_PUBLIC_SUPABASE_URL  the Supabase project (https://<ref>.supabase.co)
