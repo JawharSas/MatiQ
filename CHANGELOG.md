@@ -3,6 +3,36 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.7.0] Pre-Beta, 2026-10-30
+
+### Videos
+- Videos up to 8 minutes for every account (migration
+  `20261030000300_eight_minute_videos.sql`): `max_video_seconds` and the
+  default for new accounts are capped at 480 (existing values above it are
+  lowered; the owner panel can still set shorter limits).
+- Compression on the phone before upload: one re-encode with the hardware
+  HEVC encoder at a bit rate chosen from the picture size and frame rate
+  (`video-quality.ts`: about 5.6 Mbit/s for 1080p30 and 8.5 for 1080p60,
+  close to what phone cameras use for HEVC, and always under the 500 MB
+  limit for 8 minutes). The frame rate is kept, pictures stay as they are up
+  to 1080p (larger ones are scaled to 1080p), audio is copied and a keyframe
+  every 2 seconds keeps seeking quick. Typical Android recordings upload
+  about three times smaller.
+- Local native module `apps/mobile/modules/video-compressor`: AndroidX
+  Media3 Transformer 1.9.1 (the version expo-video uses) on Android,
+  AVFoundation's HEVC export preset on iOS. H.264 where HEVC is missing; the
+  original video when the phone can't encode it or the copy isn't smaller.
+  Videos that are already compact (an iPhone's own HEVC) are uploaded as
+  they are, so nothing is encoded twice.
+- Recording: iOS records HEVC at the upload rate; Android records a
+  high-quality H.264 copy that is compressed once before upload.
+- Checks: picking a video checks its structure (quick, up to 4 GB before
+  compression); the file that is uploaded is read in full as before, and
+  location and phone details are still removed. The video checker also
+  reports the video track's size, frame rate and bit rate.
+- The progress screen says which step is running: checking, compressing or
+  uploading the video.
+
 ## [1.6.0] Pre-Beta, 2026-10-30
 
 ### Any AI

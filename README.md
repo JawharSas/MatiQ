@@ -9,18 +9,19 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Pre-Beta V1.6.0** · Android · free
+> **Pre-Beta V1.7.0** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.6.0-pre-beta/MatIQ-1.6.0-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.7.0-pre-beta/MatIQ-1.7.0-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.6.0-pre-beta) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.7.0-pre-beta) · iPhone: coming later
 
 ## What you can do
 
 - **Analyse any round.** Record live with your phone's camera, or pick a video
-  from your gallery. Choose the sport and the rules (IBJJF, IBJJF with
-  reversals, submission only, folkstyle, freestyle or MMA) and get a full
-  scorecard for Fighter 1 and Fighter 2.
+  from your gallery (up to 8 minutes). Choose the sport and the rules (IBJJF,
+  IBJJF with reversals, submission only, folkstyle, freestyle or MMA) and get
+  a full scorecard for Fighter 1 and Fighter 2. Videos are compressed on your
+  phone before upload, at the same frame rate and picture quality.
 - **See what happened.** A timeline you can tap to jump through the video,
   highlight clips, head-to-head stats, a breakdown of every technique and
   coaching notes.
@@ -46,11 +47,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.6.0-pre-beta/MatIQ-1.6.0-android.apk).
-   Your browser saves `MatIQ-1.6.0-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.7.0-pre-beta/MatIQ-1.7.0-android.apk).
+   Your browser saves `MatIQ-1.7.0-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.6.0-android.apk`.
+   **Downloads** app and tap `MatIQ-1.7.0-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
