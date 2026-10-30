@@ -6,11 +6,13 @@ name: Deploy Neon backend
 # are applied), then neon.ts (Data API checking Clerk tokens, the storage
 # buckets, the `api` function and its schedule). Safe to run again.
 #
-# Actions -> Deploy Neon backend -> Run workflow (from main). It reads, from
-# Settings -> Secrets and variables -> Actions:
+# Actions -> Deploy Neon backend -> Run workflow. The production branch is
+# only deployed from main; another branch (a rehearsal) from any ref. The
+# "Move data to Neon" workflow also calls this one for its branch. It reads,
+# from Settings -> Secrets and variables -> Actions:
 #   secret   NEON_API_KEY        console.neon.tech -> Account settings -> API keys
 #   variable NEON_PROJECT_ID     the Neon project ID (Settings in the Neon Console)
-#   variable NEON_BRANCH         optional, default "production"
+#   variable NEON_BRANCH         optional: the production branch's name, default "production"
 #   variable CLERK_ISSUER        Clerk Frontend API URL (Clerk Dashboard -> API keys)
 #   secret   MATIQ_KEK_V1        key-encryption key for the AI keys people store
 #                                (openssl rand -base64 32); MATIQ_KEK_V2 and the
@@ -26,13 +28,19 @@ name: Deploy Neon backend
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: Neon branch to deploy (empty = production)
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
 
 permissions:
   contents: read
-
-concurrency:
-  group: neon
-  cancel-in-progress: false
 
 env:
   # The Neon CLI version this workflow was written against.
@@ -43,10 +51,15 @@ jobs:
     name: Schema, functions and storage
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # One deploy per Neon branch at a time.
+    concurrency:
+      group: neon-deploy-${{ inputs.branch || vars.NEON_BRANCH || 'production' }}
+      cancel-in-progress: false
     env:
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-      NEON_BRANCH: ${{ vars.NEON_BRANCH || 'production' }}
+      PRODUCTION_BRANCH: ${{ vars.NEON_BRANCH || 'production' }}
+      NEON_BRANCH: ${{ inputs.branch || vars.NEON_BRANCH || 'production' }}
       CLERK_ISSUER: ${{ vars.CLERK_ISSUER }}
       CLERK_AUTHORIZED_PARTIES: ${{ vars.CLERK_AUTHORIZED_PARTIES }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -62,9 +75,9 @@ jobs:
     steps:
       - name: Check configuration
         run: |
-          # Only reviewed code reaches the live project.
-          if [ "$GITHUB_REF" != refs/heads/main ]; then
-            echo "::error::Deploy Neon backend only deploys main. Start it with \"Use workflow from: main\" (this run is on $GITHUB_REF_NAME)."
+          # Only reviewed code reaches the live branch.
+          if [ "$NEON_BRANCH" = "$PRODUCTION_BRANCH" ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::The production branch is only deployed from main. Start it with \"Use workflow from: main\" (this run is on $GITHUB_REF_NAME), or name a rehearsal branch."
             exit 1
           fi
           missing=()

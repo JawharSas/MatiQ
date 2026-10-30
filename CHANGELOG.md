@@ -5,6 +5,22 @@ pre-release channels are named in the release title.
 
 ## [1.7.0] Pre-Beta, 2026-10-30
 
+### Backend: Neon and Clerk (docs/NEON_CLERK_MIGRATION.md)
+- Data on Neon in Frankfurt (Lakebase Postgres, the Data API, Object
+  Storage and one Neon Function, `api`), sign-in with Clerk. The Supabase
+  migrations stay the source of the schema, rewritten for Neon; all
+  database tests run on both.
+- App: Clerk sign-in (password with the device lockout, Google,
+  authenticator app and backup codes, a new-device email code), sign-up
+  with an email code, `lib/backend.ts` instead of supabase-js, polling
+  instead of Realtime.
+- Server functions on Node (`neon/functions/api`) with the same requests
+  and answers; files through `files/*` with the storage rules unchanged.
+- `neon.ts` and the "Deploy Neon backend" workflow; "Move data to Neon"
+  copies tables, accounts (passwords keep working) and files, with a
+  rehearsal branch first. Saved AI keys are not copied: Supabase's
+  key-encryption key can't be read back, so people add them again.
+
 ### Videos
 - Videos up to 8 minutes for every account (migration
   `20261030000300_eight_minute_videos.sql`): `max_video_seconds` and the

@@ -76,6 +76,8 @@ jobs:
         env:
           NEON_API_TESTS: '1'
         run: ./scripts/test-db-neon.sh
+      - name: Moving the data from Supabase to Neon (local databases, fake Clerk and storage)
+        run: ./scripts/test-move-to-neon.sh
 
   ui-preview:
     name: UI walkthrough (browser preview)

@@ -136,22 +136,54 @@ app, so a change to shared server logic is made in both
 `supabase/functions` and `neon/functions/api`; the Supabase copy is
 deleted at the cutover.
 
-## Moving the data (workflow `migrate-to-neon.yml`, run by hand)
+## Moving the data (workflow "Move data to Neon", run by hand)
 
-1. Dump `public` + `private` data from Supabase (schema comes from
-   `neon/migrations`), restore into Neon.
-2. Export `auth.users` (+ TOTP factors), import into Clerk, fill
-   `app.users`.
-3. Copy every object from the three Supabase buckets into the Neon buckets.
-4. Compare row and object counts; the run fails on any difference.
+`scripts/move-to-neon.mjs` reads Supabase through the Management API
+(`SUPABASE_ACCESS_TOKEN`; SQL and the service key) and changes nothing
+there. Into the Neon branch it copies:
+
+1. **Tables**, in one transaction: user triggers off, rows already there
+   deleted, Supabase's rows inserted in foreign-key order, identity
+   sequences moved past the copied IDs, triggers back on, and each table's
+   row count compared with Supabase's (any difference rolls everything
+   back). Supabase Auth's users, sessions and sign-in log become
+   `app.users`, `app.sessions` and `app.audit_log_entries`. Not copied: the
+   AI keys people saved (decided: they add them again; Supabase's
+   key-encryption key can't be read back), rate-limit counters, two-factor
+   factors (Clerk's now) and Neon's Clerk queue.
+2. **Accounts into Clerk**: found by external ID (the MatIQ UUID) or created
+   with the bcrypt password hash and `password_hasher: bcrypt`, so
+   passwords keep working; Google-only accounts without a password (Clerk
+   links their Google sign-in by the verified email); authenticator
+   secrets when Supabase has them readable (the run reports how many must
+   set two-factor up again). Banned accounts are banned in Clerk. Someone
+   who already signed up in Clerk with the same email keeps that Clerk
+   user. Accounts that never confirmed their email aren't imported.
+3. **Files**: each `storage.objects` row's bytes from Supabase Storage into
+   the Neon bucket, skipped when already there with the same size; a row
+   without a file is reported.
+
+`--dry-run` checks everything and writes nothing. Running it again is
+safe. `scripts/test-move-to-neon.sh` (in CI) runs it end to end on local
+databases with fakes for Clerk, Supabase Storage and S3: a dry run, the
+move, a second run, and an existing Clerk sign-up.
+
+The workflow resets a Neon branch `rehearsal` from production, deploys it
+(Deploy Neon backend, called with the branch) and moves the data into it.
+Start it by adding the label `neon-rehearsal` to the pull request, or by
+hand. The production branch is only filled from `main`, after deploying it,
+with the dry run off and the confirmation typed.
 
 ## Cutover
 
-1. Run the migration once as a rehearsal on a Neon branch; test the 1.7.0
-   APK against it.
+1. Rehearsal: label the pull request `neon-rehearsal`; build the app
+   against the rehearsal branch (its Data API and function addresses) and
+   try it with real accounts: sign in with an old password, open matches
+   and videos, record, analyse, ranked.
 2. Turn on read-only mode on Supabase (a flag the request hook checks:
    old app versions show "Update MatIQ to keep going").
-3. Final migration run into the main branch, release 1.7.0.
+3. Merge, deploy production (Deploy Neon backend), run "Move data to Neon"
+   for production, set the app's variables, release 1.7.0.
 4. Supabase stays (read-only) as a fallback until it is switched off.
 
 ## What the deploy needs
@@ -165,22 +197,17 @@ migrations), shows `neon config plan`, runs `neon deploy`, and checks that
 the function answers, printing its address for `EXPO_PUBLIC_FUNCTIONS_URL`.
 Its bundle was checked locally with the CLI's own esbuild settings.
 
-GitHub secrets: `NEON_API_KEY`, `MATIQ_KEK_V1` (key-encryption key for the
-AI keys people store), `CLERK_SECRET_KEY` (bans and deletions in Clerk; the
-data move), optional AI keys as for Supabase (`ANTHROPIC_API_KEY` or
-`AI_API_KEY`).
+GitHub secrets: `NEON_API_KEY`, `MATIQ_KEK_V1` (a new key-encryption key
+for the AI keys people store on Neon: `openssl rand -base64 32`),
+`CLERK_SECRET_KEY` (bans and deletions in Clerk; the data move), the
+existing `SUPABASE_ACCESS_TOKEN` (the data move reads Supabase with it),
+optional AI keys as for Supabase (`ANTHROPIC_API_KEY` or `AI_API_KEY`).
 GitHub variables: `NEON_PROJECT_ID`, `CLERK_ISSUER` (Clerk Frontend API
 URL), optional `NEON_BRANCH`, `AI_PROVIDER` / `AI_MODEL` / `AI_BASE_URL`,
 `ALLOWED_ORIGINS`, `CLERK_AUTHORIZED_PARTIES`; for the app build
 `EXPO_PUBLIC_DATA_API_URL`, `EXPO_PUBLIC_FUNCTIONS_URL`,
 `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (the release build checks all three and
 refuses a Clerk secret key).
-
-Open question for the data move: Supabase's key-encryption key was made by
-the Supabase deploy and only exists as a Supabase function secret, which
-can't be read back. Without it the AI keys people stored can't be opened on
-Neon: either they enter them again after the move, or a one-off Supabase
-function re-wraps them for Neon's key before the cutover.
 
 Clerk Dashboard (already set on the development instance): email +
 password (12+ characters with upper, lower, number and symbol, breached
@@ -203,5 +230,6 @@ for mobile SSO redirect (Google sign-in returns there).
    the Clerk sync job), tested against the Neon schema; the app's
    storage and function calls point at it (videos send their size and
    type for the signed link).
-4. `neon.ts` and the deploy workflow (**done**); the data-move workflow.
+4. **Done.** `neon.ts`, the deploy workflow and the data move (with its
+   rehearsal), tested end to end locally.
 5. Rehearsal, cutover, release.
