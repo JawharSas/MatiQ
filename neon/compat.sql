@@ -46,6 +46,9 @@ begin
 end;
 $$;
 
+-- The tests act as these roles (the owner already has every right they have).
+grant anon, service_role to current_user;
+
 grant usage on schema public to anon, anonymous, authenticated, service_role;
 
 create schema if not exists extensions;
@@ -129,10 +132,12 @@ revoke all on app.sessions, app.audit_log_entries, app.mfa_factors from public, 
 -- Claims of the request's token (Clerk session token, verified by the Data
 -- API). `aal` is what the migrations check for two-factor; Clerk reports
 -- it as `fva` (minutes since each factor was verified, -1 when never).
+-- Runs as the owner: API users can't use Neon's `auth` schema directly.
 create or replace function app.jwt()
 returns jsonb
 language sql
 stable
+security definer
 set search_path = ''
 as $$
   select case
@@ -149,6 +154,7 @@ create or replace function app.role()
 returns text
 language sql
 stable
+security definer
 set search_path = ''
 as $$
   select coalesce(

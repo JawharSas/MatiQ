@@ -9,6 +9,9 @@
 create schema auth;
 grant usage on schema auth to public;
 
+-- The Data API's login role exists on Neon (owned by the platform).
+create role authenticator login noinherit;
+
 create function auth.session() returns jsonb
 language sql stable as $$
   select coalesce(nullif(current_setting('request.jwt.claims', true), ''), 'null')::jsonb;

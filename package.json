@@ -26,5 +26,8 @@
   "overrides": {
     "react": "19.3.0",
     "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@neondatabase/serverless": "1.2.0"
   }
 }

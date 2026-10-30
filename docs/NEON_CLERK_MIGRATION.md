@@ -16,6 +16,21 @@ before then.
 Frankfurt because Object Storage and Functions are not offered in
 `aws-eu-west-2` (London).
 
+## Where things are
+
+| | |
+| --- | --- |
+| Neon project | `MatIQ Frankfurt` (`young-poetry-71915783`), AWS `eu-central-1`, Postgres 17, branch `production` (`br-empty-forest-b9dmqj7f`), database `neondb` |
+| Data API | `https://ep-soft-mode-b9v0ldxc.apirest.c-7.eu-central-1.aws.neon.tech/neondb/rest/v1`, schema `public`, anonymous role `anonymous`, max 1000 rows, tokens checked against Clerk's JWKS |
+| Clerk | application `app_3LPF8Bs7c4zq8KT6NE4JWS7grpM` (development instance `funny-locust-4840.clerk.accounts.dev`; JWKS `https://funny-locust-4840.clerk.accounts.dev/.well-known/jwks.json`) |
+| Old London project | `MatIQ` (`falling-morning-42423177`, `aws-eu-west-2`): not used (no Object Storage or Functions there) |
+
+Schema on Neon: `DATABASE_URL=… node scripts/neon-db.mjs` applies
+`neon/compat.sql`, the rewritten Supabase migrations and `neon/migrations`
+(recorded in `app.schema_migrations`, so it only adds new ones).
+`node scripts/test-db-neon-remote.mjs` runs every database test against a
+Neon database inside transactions that always roll back.
+
 ## Identity: Clerk users keep their MatIQ ID
 
 Every table keys users by the UUID Supabase gave them, and Neon's
@@ -101,9 +116,10 @@ Clerk Dashboard: email + password, Google, authenticator app enabled.
 
 ## Stages
 
-1. Database for Neon: `app.users`, `app.uid()`, the baseline schema in
-   `neon/migrations`, pgTAP on a local Postgres with a `pg_session_jwt`
-   stand-in.
+1. **Done.** Database for Neon: `app.users`, `app.uid()`, the Supabase
+   migrations rewritten for Neon plus `neon/migrations`; all 291 database
+   tests pass locally (with a `pg_session_jwt` stand-in) and on the
+   Frankfurt database.
 2. Clerk sign-in in the app (sign-up with the age check, Google, two-factor).
 3. Functions on Node + `files`; app storage and function calls switched.
 4. `neon.ts`, deploy workflow, data-move workflow.

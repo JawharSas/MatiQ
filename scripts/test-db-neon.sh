@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DB="matiq_neon_test_$$"
 
 createdb -E UTF8 -T template0 --locale=C.UTF-8 "$DB"
-trap 'dropdb --if-exists "$DB" >/dev/null 2>&1 || true; psql -d postgres -qc "drop role if exists anon, anonymous, authenticated, service_role" >/dev/null 2>&1 || true' EXIT
+trap 'dropdb --if-exists "$DB" >/dev/null 2>&1 || true; psql -d postgres -qc "drop role if exists anon, anonymous, authenticated, service_role, authenticator" >/dev/null 2>&1 || true' EXIT
 
 run() { psql -v ON_ERROR_STOP=1 -X -q -d "$DB" "$@"; }
 neon_sql() { node "$ROOT/scripts/neon-sql.mjs" "$1"; }
