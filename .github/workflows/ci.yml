@@ -27,6 +27,10 @@ jobs:
         run: |
           npm run typecheck --workspace @matiq/rules-engine
           npm test --workspace @matiq/rules-engine
+      - name: Neon function (api) typecheck + unit tests
+        run: |
+          npm run typecheck --workspace @matiq/api
+          npm test --workspace @matiq/api
       - name: Mobile typecheck + unit tests
         run: |
           npm run typecheck --workspace @matiq/mobile
@@ -36,8 +40,9 @@ jobs:
         env:
           CI: '1'
           EXPO_NO_TELEMETRY: '1'
-          EXPO_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_ci_placeholder_key
+          EXPO_PUBLIC_DATA_API_URL: https://ci-placeholder.invalid/neondb/rest/v1
+          EXPO_PUBLIC_FUNCTIONS_URL: https://ci-placeholder.invalid/api
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktcGxhY2Vob2xkZXIuaW52YWxpZCQ=
         run: npx expo export --platform android --output-dir ${{ runner.temp }}/bundle
       - name: No secrets in the app bundle
         run: node scripts/scan-bundle.mjs ${{ runner.temp }}/bundle
@@ -60,8 +65,19 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Apply migrations and run RLS / privilege tests
         run: ./scripts/test-db-local.sh
+      - name: The same on the Neon schema (Clerk accounts, docs/NEON_CLERK_MIGRATION.md), plus the api function
+        env:
+          NEON_API_TESTS: '1'
+        run: ./scripts/test-db-neon.sh
+      - name: Moving the data from Supabase to Neon (local databases, fake Clerk and storage)
+        run: ./scripts/test-move-to-neon.sh
 
   ui-preview:
     name: UI walkthrough (browser preview)

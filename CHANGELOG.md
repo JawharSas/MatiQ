@@ -3,6 +3,86 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.7.0] Alpha, 2026-10-30
+
+### Updates
+- A minimum app version on the server (`app.release_policy`, read before
+  signing in through `public.app_requirements()`): an older app shows
+  "Update MatIQ" with the download link instead of the app. Starts at
+  1.7.0; raise it to make everyone update.
+- Versions 1.6 and older can't be told to update (they show fixed
+  messages): at the move Supabase turns read-only (migration
+  `20261031000100_read_only_mode.sql`, switched on by the real data move),
+  so they can still read but nothing new is written where it would be lost.
+
+### Backend: Neon and Clerk (docs/NEON_CLERK_MIGRATION.md)
+- Data on Neon in Frankfurt (Lakebase Postgres, the Data API, Object
+  Storage and one Neon Function, `api`), sign-in with Clerk. The Supabase
+  migrations stay the source of the schema, rewritten for Neon; all
+  database tests run on both.
+- App: Clerk sign-in (password with the device lockout, Google,
+  authenticator app and backup codes, a new-device email code), sign-up
+  with an email code, `lib/backend.ts` instead of supabase-js, polling
+  instead of Realtime.
+- Server functions on Node (`neon/functions/api`) with the same requests
+  and answers; files through `files/*` with the storage rules unchanged.
+- `neon.ts` and the "Deploy Neon backend" workflow; "Move data to Neon"
+  copies tables, accounts (passwords keep working) and files, with a
+  rehearsal branch first. Saved AI keys are not copied: Supabase's
+  key-encryption key can't be read back, so people add them again.
+
+### App
+- Themes: Light, Dark (the original look) and Midnight (true black with
+  navy-tinted surfaces), or System (follows the phone). Every text colour
+  meets WCAG AA in every theme; the walkthrough checks Light and Midnight
+  with axe too. Chosen in Settings → Appearance and stored on the device.
+  `colors`, `font` and `themedStyles` follow the theme; files that read it
+  opt out of React Compiler (`'use no memo'`), whose caching would keep the
+  old colours. Camera and video overlays keep their fixed dark colours, and
+  the logo has a dark-"M" version for Light.
+- A Settings tab with everything essential: email, password, Google,
+  two-factor, theme, accessibility, AI provider, help, legal, data export,
+  sign-out and account deletion.
+- Password: change it (or set one for a Google-only account) in Settings;
+  "Forgot password?" on sign-in resets it with an email code, signs out
+  other devices, then continues with two-factor when it's on.
+- Google: connect it to an email account (or disconnect it once a password
+  is set) in Settings → Google.
+- Sensitive changes (password, Google, two-factor) ask the person to confirm
+  it's them in the app (password, email code, then authenticator or backup
+  code) when Clerk wants that, instead of asking them to sign in again.
+
+### Videos
+- Videos up to 8 minutes for every account (migration
+  `20261030000300_eight_minute_videos.sql`): `max_video_seconds` and the
+  default for new accounts are capped at 480 (existing values above it are
+  lowered; the owner panel can still set shorter limits).
+- Compression on the phone before upload: one re-encode with the hardware
+  HEVC encoder at a bit rate chosen from the picture size and frame rate
+  (`video-quality.ts`: about 5.6 Mbit/s for 1080p30 and 8.5 for 1080p60,
+  close to what phone cameras use for HEVC, and always under the 500 MB
+  limit for 8 minutes). The frame rate is kept, pictures stay as they are up
+  to 1080p (larger ones are scaled to 1080p), audio is copied and a keyframe
+  every 2 seconds keeps seeking quick. Typical Android recordings upload
+  about three times smaller.
+- Local native module `apps/mobile/modules/video-compressor`: AndroidX
+  Media3 Transformer 1.9.1 (the version expo-video uses) on Android,
+  AVFoundation's HEVC export preset on iOS. H.264 where HEVC is missing; the
+  original video when the phone can't encode it or the copy isn't smaller.
+  A copy still over the 500 MB limit is never kept; a video that must shrink
+  to fit gets one more try at 720p within the size budget (on iOS, whose
+  export presets choose their own bit rate, H.264 1280x720).
+  Videos that are already compact (an iPhone's own HEVC) are uploaded as
+  they are, so nothing is encoded twice.
+- Recording: iOS records HEVC at the upload rate; Android records a
+  high-quality H.264 copy that is compressed once before upload.
+- Checks: picking a video checks its structure (quick, up to 4 GB before
+  compression); the file that is uploaded is read in full as before, and
+  location and phone details are still removed. The video checker also
+  reports the video track's size, frame rate and bit rate.
+- The progress screen says which step is running: checking, compressing or
+  uploading the video.
+
 ## [1.6.0] Pre-Beta, 2026-10-30
 
 ### Any AI

@@ -5,6 +5,8 @@
 .env.*
 !.env.example
 !**/.env.example
+# Neon CLI's local project/branch pointer
+.neon
 *.pem
 *.key
 *.p8

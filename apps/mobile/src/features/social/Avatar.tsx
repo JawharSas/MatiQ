@@ -1,6 +1,9 @@
-import { Image, StyleSheet, View } from 'react-native';
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
+import { Image, View } from 'react-native';
 import { Text } from '@/ui/text';
-import { colors } from '@/ui/theme';
+import { colors, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { useAvatarUrl } from './avatar';
 
 function initials(name: string): string {
@@ -11,6 +14,7 @@ function initials(name: string): string {
 
 /** Profile picture through a short-lived signed URL, with an initials fallback. */
 export function Avatar({ path, name, size = 40 }: { path: string | null | undefined; name: string; size?: number }) {
+  useTheme();
   const url = useAvatarUrl(path);
   const shape = { width: size, height: size, borderRadius: size / 2 };
   if (url.data) {
@@ -24,8 +28,8 @@ export function Avatar({ path, name, size = 40 }: { path: string | null | undefi
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   image: { backgroundColor: colors.surfaceRaised },
   fallback: { backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   initials: { color: colors.textMuted, fontWeight: '700' },
-});
+}));

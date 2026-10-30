@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { titleById } from '@matiq/rules-engine';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -10,7 +12,8 @@ import { DISCIPLINE_LABELS, TierBadge } from '@/features/ranked/components';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { Caption, ErrorText, Segmented } from '@/ui/components';
-import { colors, font, radius, spacing } from '@/ui/theme';
+import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ discipline: z.enum(['bjj', 'wrestling', 'mma']).catch('bjj') });
 const SCOPES = [
@@ -19,6 +22,7 @@ const SCOPES = [
 ] as const;
 
 export default function LeaderboardScreen() {
+  useTheme();
   const { discipline } = paramsSchema.parse(useLocalSearchParams());
   const userId = useUserId();
   const [scope, setScope] = useState<'global' | 'friends'>('global');
@@ -48,6 +52,7 @@ export default function LeaderboardScreen() {
 }
 
 function LadderRow({ row, isMe }: { row: LeaderboardRow; isMe: boolean }) {
+  useTheme();
   const title = row.featured_title ? titleById(row.featured_title) : undefined;
   return (
     <Link href={{ pathname: '/user/[id]', params: { id: row.user_id } }} asChild>
@@ -73,7 +78,7 @@ function LadderRow({ row, isMe }: { row: LeaderboardRow; isMe: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   list: { padding: spacing.lg, gap: spacing.sm },
   header: { gap: spacing.sm, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
@@ -82,4 +87,4 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   right: { alignItems: 'flex-end', gap: 2 },
   rating: { color: colors.text, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
-});
+}));

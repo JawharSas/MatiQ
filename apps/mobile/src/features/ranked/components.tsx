@@ -1,8 +1,11 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { type Discipline, type TierId, tierFor, titleById } from '@matiq/rules-engine';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/ui/text';
 import { Caption, Card, Heading } from '@/ui/components';
-import { colors, font, radius, spacing } from '@/ui/theme';
+import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { useRatings, useTitles } from './api';
 
 export const DISCIPLINE_LABELS: Record<Discipline, string> = { bjj: 'BJJ', wrestling: 'Wrestling', mma: 'MMA' };
@@ -23,6 +26,7 @@ const BELT_COLORS: Record<TierId, { fill: string; text: string }> = {
 };
 
 export function TierBadge({ rating, games, compact = false }: { rating: number; games: number; compact?: boolean }) {
+  useTheme();
   const standing = tierFor(rating, games);
   const palette = BELT_COLORS[standing.tier];
   const text = standing.placement ? `Placement ${5 - standing.placementRemaining}/5` : compact ? standing.label : `${standing.label} · ${standing.belt}`;
@@ -37,6 +41,7 @@ export function TierBadge({ rating, games, compact = false }: { rating: number; 
 }
 
 export function ProgressBar({ label, value, color = colors.accent }: { label: string; value: number; color?: string }) {
+  useTheme();
   const clamped = Math.min(1, Math.max(0, value));
   return (
     <View
@@ -51,6 +56,7 @@ export function ProgressBar({ label, value, color = colors.accent }: { label: st
 }
 
 export function TitleChip({ titleId, featured = false }: { titleId: string; featured?: boolean }) {
+  useTheme();
   const title = titleById(titleId);
   if (!title) return null;
   return (
@@ -62,6 +68,7 @@ export function TitleChip({ titleId, featured = false }: { titleId: string; feat
 
 /** Ratings per discipline and titles, for profile screens. RLS hides them when not visible. */
 export function RankedSummary({ userId, emptyText }: { userId: string; emptyText?: string }) {
+  useTheme();
   const ratings = useRatings(userId);
   const titles = useTitles(userId);
   const played = (ratings.data ?? []).filter((row) => row.games > 0);
@@ -101,7 +108,7 @@ export function RankedSummary({ userId, emptyText }: { userId: string; emptyText
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   badge: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   grandmasterBorder: { borderWidth: 1, borderColor: colors.accent },
   badgeText: { fontSize: 12, fontWeight: '800' },
@@ -114,4 +121,4 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   discipline: { width: 84, fontWeight: '700' },
   rating: { fontWeight: '800', fontVariant: ['tabular-nums'], marginLeft: 'auto' },
-});
+}));

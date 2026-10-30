@@ -78,6 +78,9 @@ select set_config('request.headers', '{"x-forwarded-for":"192.0.2.44"}', true);
 select throws_ok($$select public.check_request()$$, '42501', 'banned', 'the home network is blocked for a new account');
 select set_config('request.headers', '{"cf-connecting-ip":"2001:db8:aa:bb::77"}', true);
 select throws_ok($$select public.check_request()$$, '42501', 'banned', 'and its IPv6 /64');
+-- The owner below isn't on these networks (on Neon, app.uid() applies network
+-- bans to API requests, as the request hook does).
+select set_config('request.headers', '', true);
 
 select pg_temp.as_user('f3333333-3333-4333-8333-333333333333');
 select is(

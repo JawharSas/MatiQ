@@ -8,7 +8,7 @@
  * server accepts no writes before it).
  */
 
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { openSecureStorage } from '@/lib/storage';
 import { LEGAL_VERSIONS, type LegalDocumentId } from './documents';
 
@@ -20,7 +20,7 @@ export async function rememberConsentForSignup(email: string): Promise<void> {
 
 export async function acceptCurrentVersions(documents: LegalDocumentId[] = ['terms', 'privacy']): Promise<void> {
   const rows = documents.map((document) => ({ document, version: LEGAL_VERSIONS[document] }));
-  const { error } = await supabase.from('legal_acceptances').upsert(rows, {
+  const { error } = await backend.from('legal_acceptances').upsert(rows, {
     onConflict: 'user_id,document,version',
     ignoreDuplicates: true,
   });
@@ -42,7 +42,7 @@ export async function recordPendingConsent(email: string): Promise<void> {
 
 /** Documents whose current version the signed-in user has not accepted. */
 export async function missingAcceptances(): Promise<LegalDocumentId[]> {
-  const { data, error } = await supabase.from('legal_acceptances').select('document, version');
+  const { data, error } = await backend.from('legal_acceptances').select('document, version');
   if (error) throw new Error(error.message);
   const accepted = new Set((data ?? []).map((row) => `${row.document}:${row.version}`));
   return (Object.keys(LEGAL_VERSIONS) as LegalDocumentId[]).filter(

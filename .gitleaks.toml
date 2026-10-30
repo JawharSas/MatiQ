@@ -14,4 +14,17 @@ regexes = [
   # ({"alg":"HS256"}.{"sub":"1234567890"}.signature-value) that the log
   # redaction test must mask.
   '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.c2lnbmF0dXJlLXZhbHVl$''',
+  # The same tests' fake Anthropic key (supabase/functions and its Neon copy
+  # in neon/functions/api).
+  '''^sk-ant-api03-test-key-0123456789abcdefghijklmnop$''',
+  # Clerk publishable keys are public by design; these three are placeholders
+  # whose encoded host can't exist: the CI bundle check (ci-placeholder.invalid),
+  # the browser preview (preview.matiq.invalid) and the app's stand-in when
+  # none is configured (invalid.localhost).
+  '''^pk_test_Y2ktcGxhY2Vob2xkZXIuaW52YWxpZCQ=$''',
+  '''^pk_test_cHJldmlldy5tYXRpcS5pbnZhbGlkJA==$''',
+  '''^pk_test_aW52YWxpZC5sb2NhbGhvc3Qk$''',
+  # Not a secret: the words "key: S3-compatible" in a code comment
+  # (neon/functions/api/src/shared/storage.ts, since reworded).
+  '''^S3-compatible$''',
 ]

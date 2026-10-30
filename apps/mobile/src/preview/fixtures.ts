@@ -239,7 +239,7 @@ export function createFixtures(): PreviewDb {
       role: key === 'alex' ? 'owner' : 'user',
       is_unlimited: key === 'ivy',
       monthly_analysis_limit: 10,
-      max_video_seconds: 600,
+      max_video_seconds: 480,
       is_suspended: false,
       suspended_reason: null,
     });

@@ -1,16 +1,14 @@
 /**
  * Match + analysis data with live status updates.
  *
- * The `matches` row is subscribed through Supabase Realtime (RLS applies to
- * Realtime too, so only visible rows stream). Polling is a fallback while
- * the analysis is queued/processing in case the socket is unavailable.
+ * The `matches` row is polled while the analysis is queued or processing;
+ * nothing else about a match changes on the server meanwhile.
  */
 
 import type { Discipline, Scorecard } from '@matiq/rules-engine';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { fromPostgrest } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 
 export type MatchStatus = 'draft' | 'live' | 'queued' | 'processing' | 'completed' | 'failed';
 
@@ -41,7 +39,7 @@ const COLUMNS =
   'id, owner_id, discipline, variant, title, athlete_a_label, athlete_b_label, source, status, duration_ms, has_video, error_code, recorded_at, match_analyses(scorecard, coaching_summary, model, ruleset_version, created_at)';
 
 async function fetchMatch(id: string): Promise<MatchDetail> {
-  const { data, error } = await supabase.from('matches').select(COLUMNS).eq('id', id).single();
+  const { data, error } = await backend.from('matches').select(COLUMNS).eq('id', id).single();
   if (error) throw fromPostgrest(error);
   const { match_analyses: analyses, ...match } = data as Omit<MatchDetail, 'analysis'> & {
     match_analyses: MatchDetail['analysis'] | MatchDetail['analysis'][];
@@ -51,8 +49,8 @@ async function fetchMatch(id: string): Promise<MatchDetail> {
 }
 
 export function useMatch(id: string) {
-  const queryClient = useQueryClient();
-  const query = useQuery({
+  // Polled while the analysis runs; it is the only change made elsewhere.
+  return useQuery({
     queryKey: ['match', id],
     queryFn: () => fetchMatch(id),
     refetchInterval: (current) => {
@@ -60,20 +58,6 @@ export function useMatch(id: string) {
       return status === 'queued' || status === 'processing' ? 5000 : false;
     },
   });
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`match:${id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${id}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: ['match', id] });
-      })
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [id, queryClient]);
-
-  return query;
 }
 
 /** Short-lived signed URL for the match video (storage RLS decides access). */
@@ -84,10 +68,10 @@ export function useMatchVideoUrl(match: MatchDetail | undefined) {
     staleTime: 50 * 60 * 1000,
     queryFn: async () => {
       const folder = `${match!.owner_id}/${match!.id}`;
-      const { data: objects } = await supabase.storage.from('match-videos').list(folder, { limit: 5 });
+      const { data: objects } = await backend.storage.from('match-videos').list(folder, { limit: 5 });
       const file = objects?.find((object) => object.name === 'video.mp4' || object.name === 'video.mov');
       if (!file) return null;
-      const { data, error } = await supabase.storage.from('match-videos').createSignedUrl(`${folder}/${file.name}`, 3600);
+      const { data, error } = await backend.storage.from('match-videos').createSignedUrl(`${folder}/${file.name}`, 3600);
       if (error) throw fromPostgrest({ message: error.message });
       return data.signedUrl;
     },

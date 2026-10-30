@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   type CameraSessionConfig,
   CommonResolutions,
@@ -71,7 +71,8 @@ export function useLiveCapture(options: LiveCaptureOptions) {
 
   const videoOutput = useVideoOutput({
     targetResolution: CommonResolutions.FHD_16_9,
-    targetBitRate: bitRateFor(options.fpsPreference),
+    // iOS records HEVC; Android records H.264 (compressed to HEVC before upload).
+    targetBitRate: bitRateFor(options.fpsPreference, { maxDurationMs: options.maxDurationMs, recordsHevc: Platform.OS === 'ios' }),
     enableAudio: options.enableAudio,
     fileType: 'mp4',
   });

@@ -1,0 +1,120 @@
+name: Deploy Neon backend
+
+# Applies this repository to the Neon project the app talks to after the
+# move (docs/NEON_CLERK_MIGRATION.md): the database schema (neon/compat.sql,
+# the Supabase migrations rewritten for Neon, neon/migrations; only new ones
+# are applied), then neon.ts (Data API checking Clerk tokens, the storage
+# buckets, the `api` function and its schedule). Safe to run again.
+#
+# Actions -> Deploy Neon backend -> Run workflow. The production branch is
+# only deployed from main; another branch (a rehearsal) from any ref. The
+# "Move data to Neon" workflow also calls this one for its branch. It reads,
+# from Settings -> Secrets and variables -> Actions:
+#   secret   NEON_API_KEY        console.neon.tech -> Account settings -> API keys
+#   variable NEON_PROJECT_ID     the Neon project ID (Settings in the Neon Console)
+#   variable NEON_BRANCH         optional: the production branch's name, default "production"
+#   variable CLERK_ISSUER        Clerk Frontend API URL (Clerk Dashboard -> API keys)
+#   secret   MATIQ_KEK_V1        key-encryption key for the AI keys people store
+#                                (openssl rand -base64 32); MATIQ_KEK_V2 and the
+#                                variable MATIQ_KEK_CURRENT after a rotation
+#   secret   CLERK_SECRET_KEY    optional: applies bans and account deletions in Clerk
+#   secret   ANTHROPIC_API_KEY   optional: a Claude key for analyses on the MatIQ quota
+#   secret   AI_API_KEY          optional, instead: a key for any other AI provider,
+#   variable AI_PROVIDER         with its provider, model and, for custom, address
+#   variable AI_MODEL
+#   variable AI_BASE_URL
+#   variable ALLOWED_ORIGINS     optional: browser origins allowed by CORS
+#   variable CLERK_AUTHORIZED_PARTIES  optional: origins of browser sessions
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Neon branch to deploy (empty = production)
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # The Neon CLI version this workflow was written against.
+  NEON_CLI: neon@8.10.0
+
+jobs:
+  deploy:
+    name: Schema, functions and storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # One deploy per Neon branch at a time.
+    concurrency:
+      group: neon-deploy-${{ inputs.branch || vars.NEON_BRANCH || 'production' }}
+      cancel-in-progress: false
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+      PRODUCTION_BRANCH: ${{ vars.NEON_BRANCH || 'production' }}
+      NEON_BRANCH: ${{ inputs.branch || vars.NEON_BRANCH || 'production' }}
+      CLERK_ISSUER: ${{ vars.CLERK_ISSUER }}
+      CLERK_AUTHORIZED_PARTIES: ${{ vars.CLERK_AUTHORIZED_PARTIES }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      MATIQ_KEK_CURRENT: ${{ vars.MATIQ_KEK_CURRENT }}
+      MATIQ_KEK_V1: ${{ secrets.MATIQ_KEK_V1 }}
+      MATIQ_KEK_V2: ${{ secrets.MATIQ_KEK_V2 }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
+      AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+      AI_MODEL: ${{ vars.AI_MODEL }}
+      AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+    steps:
+      - name: Check configuration
+        run: |
+          # Only reviewed code reaches the live branch.
+          if [ "$NEON_BRANCH" = "$PRODUCTION_BRANCH" ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::The production branch is only deployed from main. Start it with \"Use workflow from: main\" (this run is on $GITHUB_REF_NAME), or name a rehearsal branch."
+            exit 1
+          fi
+          missing=()
+          for name in NEON_API_KEY NEON_PROJECT_ID CLERK_ISSUER MATIQ_KEK_V1; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. Add them under Settings -> Secrets and variables -> Actions (see the top of .github/workflows/neon.yml)."
+            exit 1
+          fi
+          case "$CLERK_ISSUER" in
+            https://*) ;;
+            *) echo "::error::CLERK_ISSUER must be the https:// Frontend API URL from Clerk Dashboard -> API keys."; exit 1 ;;
+          esac
+          case "$CLERK_SECRET_KEY" in
+            ''|sk_test_*|sk_live_*) ;;
+            *) echo "::error::CLERK_SECRET_KEY is not a Clerk secret key (sk_test_... or sk_live_...)."; exit 1 ;;
+          esac
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Database schema
+        run: |
+          url=$(npx -y "$NEON_CLI" connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name neondb_owner)
+          echo "::add-mask::$url"
+          DATABASE_URL="$url" node scripts/neon-db.mjs
+      - name: What will change
+        run: npx -y "$NEON_CLI" config plan --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH"
+      - name: Deploy neon.ts
+        run: npx -y "$NEON_CLI" deploy --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH" --yes --no-env-pull
+      - name: Check the function answers
+        run: |
+          url=$(npx -y "$NEON_CLI" functions get api --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH" --output json | jq -r '.invocation_url // .function.invocation_url // empty')
+          if [ -z "$url" ]; then echo "::error::Could not read the function's address."; exit 1; fi
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 5 "$url/health"
+          echo
+          echo "::notice::Functions URL for the app build (variable EXPO_PUBLIC_FUNCTIONS_URL): $url"

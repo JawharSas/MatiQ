@@ -1,11 +1,12 @@
 {
   "name": "matiq",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "MatIQ: AI Martial Arts Analyzer & Social Hub (monorepo)",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "neon/functions/*"
   ],
   "scripts": {
     "mobile": "npm --workspace @matiq/mobile run start",
@@ -26,5 +27,9 @@
   "overrides": {
     "react": "19.3.0",
     "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@neon/config": "1.9.6",
+    "@neondatabase/serverless": "1.2.0"
   }
 }

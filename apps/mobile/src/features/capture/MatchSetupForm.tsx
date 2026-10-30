@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { StoredKey } from '@/features/api-keys/api';
 import { providerOption } from '@/features/api-keys/providers';
@@ -5,7 +7,8 @@ import { type Discipline, variantsFor } from '@matiq/rules-engine';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { Caption, Card, SectionHeader, Segmented, TextField, ToggleRow } from '@/ui/components';
-import { colors, spacing } from '@/ui/theme';
+import { colors, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import type { MatchSetup } from './match-session';
 
 const DISCIPLINES = [
@@ -54,6 +57,7 @@ export function MatchSetupForm({
   /** Ranked matches fix the discipline and ruleset agreed in the challenge. */
   rulesetLocked?: boolean;
 }) {
+  useTheme();
   const set = <K extends keyof MatchSetup>(key: K, next: MatchSetup[K]) => onChange({ ...value, [key]: next });
 
   return (
@@ -157,7 +161,7 @@ export function MatchSetupForm({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   sports: { flexDirection: 'row', gap: spacing.sm },
   sport: {
     flex: 1,
@@ -175,4 +179,4 @@ const styles = StyleSheet.create({
   cornerBar: { width: 4, borderRadius: 2 },
   cornerFields: { flex: 1, gap: spacing.md },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
-});
+}));

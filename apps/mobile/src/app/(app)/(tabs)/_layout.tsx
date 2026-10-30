@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -5,6 +7,7 @@ import type { ComponentProps } from 'react';
 import type { ColorValue } from 'react-native';
 import { BrandLockup } from '@/ui/brand';
 import { colors } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -15,6 +18,7 @@ function tabIcon(name: IconName, focusedName: IconName) {
 }
 
 export default function TabsLayout() {
+  useTheme();
   // Room for icon + label above the home indicator on every platform.
   const insets = useSafeAreaInsets();
   return (
@@ -47,6 +51,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="ranked" options={{ title: 'Ranked', tabBarIcon: tabIcon('trophy-outline', 'trophy') }} />
       <Tabs.Screen name="matches" options={{ title: 'Matches', tabBarIcon: tabIcon('stats-chart-outline', 'stats-chart') }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: tabIcon('person-circle-outline', 'person-circle') }} />
+      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: tabIcon('settings-outline', 'settings') }} />
     </Tabs>
   );
 }

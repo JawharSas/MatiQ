@@ -2,7 +2,7 @@
  * Live (incremental) analysis client.
  *
  * While recording, every ~20 uploaded frames are sent to the server as one
- * batch; results stream back through Realtime (`match_live_batches`) and are
+ * batch; results are polled from `match_live_batches` (useLiveScore) and are
  * scored on the device with the same rules engine the server uses, so the
  * athlete sees a provisional score during the round. At the end only the
  * frames no batch covered are analysed, then the server scores everything
@@ -10,13 +10,13 @@
  */
 
 import { fromFunctionError } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type { MatchSetup } from './match-session';
 
 export const FRAMES_PER_LIVE_BATCH = 20;
 
 async function invoke<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>('analyze-match', { body });
+  const { data, error } = await backend.functions.invoke<T>('analyze-match', { body });
   if (error || !data) throw await fromFunctionError(error);
   return data;
 }

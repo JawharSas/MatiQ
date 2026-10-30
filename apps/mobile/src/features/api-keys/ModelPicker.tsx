@@ -1,9 +1,12 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Caption, usePressStyle } from '@/ui/components';
 import { Text } from '@/ui/text';
-import { colors, font, radius, spacing } from '@/ui/theme';
+import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import type { ModelChoice } from './api';
 
 const SHORT_LIST = 6;
@@ -22,6 +25,7 @@ export function ModelPicker({
   value: string | null;
   onChange: (id: string) => void;
 }) {
+  useTheme();
   const pressStyle = usePressStyle();
   const [showAll, setShowAll] = useState(false);
   const usable = models.filter((model) => model.vision !== false);
@@ -69,7 +73,7 @@ export function ModelPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   stack: { gap: spacing.sm },
   fill: { flex: 1 },
   row: {
@@ -86,4 +90,4 @@ const styles = StyleSheet.create({
   },
   rowSelected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   rowDisabled: { opacity: 0.55 },
-});
+}));

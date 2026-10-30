@@ -57,6 +57,15 @@ export async function enforceRateLimit(admin: SupabaseClient, key: string, limit
   }
 }
 
+/**
+ * During the move to Neon the old backend takes nothing new (migration
+ * 20261031000100_read_only_mode.sql). Any error reading it means "not read-only".
+ */
+async function readOnly(admin: SupabaseClient): Promise<boolean> {
+  const { data, error } = await admin.rpc('svc_read_only');
+  return !error && data === true;
+}
+
 /** Users act only after answering the age check (mirrors `private.age_checked()`). */
 export async function requireAgeCheck(admin: SupabaseClient, userId: string): Promise<void> {
   const { data, error } = await admin.rpc('svc_age_checked', { p_user_id: userId });
@@ -83,6 +92,9 @@ export function createHandler(options: HandlerOptions, handler: Handler): (req: 
       const admin = adminClient();
       if (await accessDenied(admin, user.id, requestIps(req))) {
         throw new HttpError(403, 'banned', 'This account or network is banned from MatIQ');
+      }
+      if (req.method !== 'GET' && (await readOnly(admin))) {
+        throw new HttpError(503, 'update_required', 'MatIQ has moved. Install the latest version to keep going.');
       }
       if (options.rateLimit) await enforceRateLimit(admin, `${options.name}:${user.id}`, options.rateLimit);
       if (!options.allowBeforeAgeCheck) await requireAgeCheck(admin, user.id);

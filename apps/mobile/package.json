@@ -1,6 +1,6 @@
 {
   "name": "@matiq/mobile",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -12,17 +12,19 @@
     "test": "node --test --experimental-strip-types 'src/**/*.test.ts'",
     "bundle:check": "expo export --platform android --output-dir .expo-export-check && rm -rf .expo-export-check",
     "doctor": "npx expo-doctor",
-    "preview:web": "EXPO_PUBLIC_SUPABASE_URL=https://preview.matiq.invalid EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_preview_not_a_real_key expo export --platform web --output-dir dist-preview --clear",
+    "preview:web": "EXPO_PUBLIC_DATA_API_URL=https://preview.matiq.invalid/rest/v1 EXPO_PUBLIC_FUNCTIONS_URL=https://preview.matiq.invalid/api EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_cHJldmlldy5tYXRpcS5pbnZhbGlkJA== expo export --platform web --output-dir dist-preview --clear",
     "brand:assets": "node scripts/brand-assets.cjs",
     "preview:walkthrough": "node scripts/preview-walkthrough.cjs dist-preview preview-screenshots",
     "preview:serve": "node -e \"require('./scripts/preview-serve.cjs')('dist-preview', 8081).then(({ url }) => console.log('UI preview at ' + url))\""
   },
   "dependencies": {
+    "@clerk/expo": "4.14.4",
     "@expo/vector-icons": "15.1.1",
     "@matiq/rules-engine": "*",
-    "@supabase/supabase-js": "2.117.3",
+    "@supabase/postgrest-js": "2.117.3",
     "@tanstack/react-query": "5.104.5",
     "expo": "~58.0.21",
+    "expo-auth-session": "~58.0.16",
     "expo-build-properties": "~58.0.11",
     "expo-constants": "~58.0.14",
     "expo-crypto": "~58.0.7",

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fromPostgrest } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 
 export interface MyUsage {
   used: number;
@@ -23,7 +23,7 @@ export function useMyUsage() {
   return useQuery({
     queryKey: ['my-usage'],
     queryFn: async (): Promise<MyUsage | undefined> => {
-      const { data, error } = await supabase.rpc('get_my_usage');
+      const { data, error } = await backend.rpc('get_my_usage');
       if (error) throw fromPostgrest(error);
       return (data as MyUsage[] | null)?.[0];
     },

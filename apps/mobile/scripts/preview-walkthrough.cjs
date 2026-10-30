@@ -25,6 +25,8 @@ const DIST = path.resolve(process.argv[2] ?? 'dist-preview');
 const OUT = path.resolve(process.argv[3] ?? 'preview-screenshots');
 const EMAIL = 'demo@matiq.app';
 const PASSWORD = 'matiq-preview';
+const CHANGED_PASSWORD = 'Fresh-Mats-2026!';
+const RESET_PASSWORD = 'Reset-Mats-2026!';
 const PHONE = { width: 390, height: 844 };
 
 // Messages React and libraries log in development builds that are not app errors.
@@ -103,10 +105,10 @@ async function main() {
       await page.getByLabel('Email').waitFor();
       await shot('sign-in');
       await page.getByLabel('Email').fill(EMAIL);
-      await page.getByLabel('Password').fill('wrong-password');
+      await page.getByLabel('Password', { exact: true }).fill('wrong-password');
       await button('Sign in').click();
       await see('Incorrect email or password');
-      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Sign in').click();
     });
 
@@ -277,8 +279,7 @@ async function main() {
     });
 
     await step('settings and two-factor', async () => {
-      await see('Settings');
-      await button('Settings').click();
+      await tab('Settings').click();
       await see('Delete account');
       await shot('settings', { tall: true });
       await button('Two-factor authentication').click();
@@ -290,8 +291,8 @@ async function main() {
       await see('That code is incorrect');
       await page.getByLabel('6-digit code').fill('123456');
       await button('Turn on').click();
-      await see('On · added');
-      await shot('two-factor-on');
+      await see('Backup codes');
+      await shot('two-factor-on', { tall: true });
       await page.goBack();
       await button('AI provider').click();
       await see('Use any AI');
@@ -330,8 +331,73 @@ async function main() {
       await page.goBack();
     });
 
-    await step('owner panel', async () => {
+    await step('account: password and Google', async () => {
+      await tab('Settings').click();
+      await button('Password').click();
+      await see('Choose a new password');
+      await field('Current password').fill('wrong-password');
+      await field('New password').fill(CHANGED_PASSWORD);
+      await field('Repeat the new password').fill(CHANGED_PASSWORD);
+      await button('Change password').click();
+      await see('Your current password is incorrect');
+      await shot('password-change', { tall: true });
+      await field('Current password').fill(PASSWORD);
+      await button('Change password').click();
+      await see('Password changed.');
+      await shot('password-changed');
+      await button('Done').click();
+      await button('Google').click();
+      await see('Not connected');
+      await shot('google-not-connected');
+      await button('Connect Google').click();
+      await see('Connected as');
+      await shot('google-connected');
+      await button('Disconnect Google').click();
+      await see('Not connected');
       await page.goBack();
+    });
+
+    await step('themes: light and midnight', async () => {
+      await button('Theme').click();
+      await see('True black');
+      await shot('appearance');
+      await page.getByRole('radio', { name: /^Light/ }).click();
+      await shot('appearance-light');
+      await page.goBack();
+      await see('Delete account');
+      await shot('settings-light', { tall: true });
+      await tab('Feed').click();
+      await shot('feed-light', { tall: true });
+      await tab('Matches').click();
+      await matchLink('Tuesday open mat').click();
+      await see('Technique breakdown');
+      await shot('dashboard-light', { tall: true });
+      await page.goBack();
+      await tab('Ranked').click();
+      await shot('ranked-light', { tall: true });
+      await tab('Profile').click();
+      await shot('profile-light', { tall: true });
+      await tab('Settings').click();
+      await button('Theme').click();
+      await page.getByRole('radio', { name: /^Midnight/ }).click();
+      await page.goBack();
+      await shot('settings-midnight', { tall: true });
+      await tab('Feed').click();
+      await shot('feed-midnight', { tall: true });
+      await tab('Matches').click();
+      await matchLink('Tuesday open mat').click();
+      await see('Technique breakdown');
+      await shot('dashboard-midnight', { tall: true });
+      await page.goBack();
+      // Back to the phone's setting (dark in this browser).
+      await tab('Settings').click();
+      await button('Theme').click();
+      await page.getByRole('radio', { name: /^System/ }).click();
+      await page.goBack();
+    });
+
+    await step('owner panel', async () => {
+      await tab('Profile').click();
       await see('Owner panel');
       await button('Owner panel').click();
       await see('All owner actions are recorded');
@@ -380,23 +446,39 @@ async function main() {
       await page.goBack();
     });
 
-    await step('sign out and two-factor sign-in', async () => {
-      await button('Settings').click();
+    await step('sign out, forgotten password and two-factor sign-in', async () => {
+      await tab('Settings').click();
       await button('Sign out').click();
       await page.getByLabel('Email').waitFor();
       // Tomás was banned in the owner panel.
       await page.getByLabel('Email').fill('tomas_ruiz@example.com');
-      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Sign in').click();
       await see('This account is banned from MatIQ');
       await shot('sign-in-banned');
+      // Alex changed the password in Settings: the old one fails, so reset it by email.
       await page.getByLabel('Email').fill(EMAIL);
-      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Sign in').click();
-      await see('Two-factor verification');
+      await see('Incorrect email or password');
+      await button('Forgot password?').click();
+      await see('Reset your password');
+      await shot('reset-password');
+      await button('Send code').click();
+      await see('we sent a code to it');
+      await page.getByLabel('Code', { exact: true }).fill('000000');
+      await field('New password').fill(RESET_PASSWORD);
+      await field('Repeat the new password').fill(RESET_PASSWORD);
+      await button('Set new password').click();
+      await see("That code isn't right");
+      await shot('reset-password-code', { tall: true });
+      await page.getByLabel('Code', { exact: true }).fill('123456');
+      await button('Set new password').click();
+      // Two-factor is on, so the reset continues with the authenticator code.
+      await see('Enter the 6-digit code from your authenticator app');
       await shot('mfa-challenge');
-      await page.getByLabel('Code').fill('123456');
-      await button('Verify').click();
+      await page.getByLabel('Code', { exact: true }).fill('123456');
+      await button('Continue').click();
       // Sam's "Three takedowns" post was removed in the owner panel.
       await see('rear naked choke');
     });
@@ -412,11 +494,10 @@ async function main() {
     });
 
     await step('three strikes ban an account', async () => {
-      await tab('Profile').click();
-      await button('Settings').click();
+      await tab('Settings').click();
       await button('Sign out').click();
       await page.getByLabel('Email').fill('sam_okafor@example.com');
-      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Sign in').click();
       await see('Before you continue');
       await button('Continue').click();
@@ -458,6 +539,17 @@ async function main() {
       await button('Back to sign in').click();
       await see("we couldn't create a MatIQ account");
       await shot('sign-in-after-age-check');
+    });
+
+    await step('too old a version: update required', async () => {
+      // As if the server's minimum were newer than this build.
+      await page.addInitScript(() => {
+        window.__PREVIEW_MIN_VERSION = '9.0.0';
+      });
+      await page.goto(url);
+      await see('Update MatIQ');
+      await see('is no longer supported');
+      await shot('update-required');
     });
   } finally {
     await browser.close();

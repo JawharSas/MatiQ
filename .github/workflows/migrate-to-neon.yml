@@ -1,0 +1,171 @@
+name: Move data to Neon
+
+# Copies MatIQ's data from Supabase to a Neon branch with
+# scripts/move-to-neon.mjs: tables (one transaction, counts checked), the
+# accounts into Clerk (passwords keep working) and the files. Nothing on
+# Supabase changes. See docs/NEON_CLERK_MIGRATION.md, "Moving the data".
+#
+# Rehearsal: add the label "neon-rehearsal" to the pull request, or run this
+# workflow with branch "rehearsal". The Neon branch "rehearsal" is reset
+# from production, gets the schema, functions and storage (Deploy Neon
+# backend), then the data. Point a test build of the app at it.
+#
+# The real move: deploy production first (Deploy Neon backend), then run
+# this from main with branch "production", dry run off and confirm
+# "MOVE MATIQ TO NEON", once Supabase is read-only.
+#
+# Reads, besides what Deploy Neon backend reads:
+#   variable EXPO_PUBLIC_SUPABASE_URL  the Supabase project (https://<ref>.supabase.co)
+#   secret   SUPABASE_ACCESS_TOKEN     supabase.com/dashboard/account/tokens
+#   secret   CLERK_SECRET_KEY          the Clerk instance the app signs in with
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Neon branch to fill ("rehearsal" is reset from production first)
+        required: true
+        default: rehearsal
+        type: string
+      dry_run:
+        description: Check everything, write nothing
+        required: true
+        default: true
+        type: boolean
+      confirm:
+        description: For the production branch, type MOVE MATIQ TO NEON
+        required: false
+        type: string
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-move
+  cancel-in-progress: false
+
+env:
+  NEON_CLI: neon@8.10.0
+
+jobs:
+  prepare:
+    name: Check and prepare the branch
+    # A label on a pull request from this repository starts a rehearsal.
+    if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'neon-rehearsal' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.check.outputs.branch }}
+      ref: ${{ steps.check.outputs.ref }}
+      dry_run: ${{ steps.check.outputs.dry_run }}
+      deploy: ${{ steps.check.outputs.deploy }}
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+      PRODUCTION_BRANCH: ${{ vars.NEON_BRANCH || 'production' }}
+      SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      HAS_SUPABASE_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+      HAS_CLERK_KEY: ${{ secrets.CLERK_SECRET_KEY != '' }}
+      INPUT_BRANCH: ${{ inputs.branch || 'rehearsal' }}
+      INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      INPUT_CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - id: check
+        run: |
+          missing=()
+          [ -n "$NEON_API_KEY" ] || missing+=(NEON_API_KEY)
+          [ -n "$NEON_PROJECT_ID" ] || missing+=(NEON_PROJECT_ID)
+          [ "$HAS_SUPABASE_TOKEN" = true ] || missing+=(SUPABASE_ACCESS_TOKEN)
+          [ "$HAS_CLERK_KEY" = true ] || missing+=(CLERK_SECRET_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing: ${missing[*]}. Add them under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          ref=$(sed -nE 's#^https://([a-z0-9]{20})\.supabase\.co/?$#\1#p' <<< "$SUPABASE_URL")
+          [ -n "$ref" ] || { echo "::error::EXPO_PUBLIC_SUPABASE_URL must look like https://<project-ref>.supabase.co"; exit 1; }
+          if ! [[ "$INPUT_BRANCH" =~ ^[A-Za-z0-9._/-]{1,60}$ ]]; then
+            echo "::error::Invalid branch name."; exit 1
+          fi
+          # The real move needs main, a deliberate confirmation and no dry run guard.
+          if [ "$INPUT_BRANCH" = "$PRODUCTION_BRANCH" ]; then
+            [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::Fill the production branch only from main."; exit 1; }
+            if [ "$INPUT_DRY_RUN" != true ] && [ "$INPUT_CONFIRM" != "MOVE MATIQ TO NEON" ]; then
+              echo "::error::To fill the production branch, type MOVE MATIQ TO NEON in confirm (or keep the dry run on)."; exit 1
+            fi
+          fi
+          {
+            echo "branch=$INPUT_BRANCH"
+            echo "ref=$ref"
+            echo "dry_run=$INPUT_DRY_RUN"
+            # Production is deployed on its own (Deploy Neon backend), never by a move.
+            echo "deploy=$([ "$INPUT_BRANCH" = "$PRODUCTION_BRANCH" ] && echo false || echo true)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Supabase project $ref -> Neon branch $INPUT_BRANCH (dry run: $INPUT_DRY_RUN)"
+      - name: Fresh rehearsal branch from production
+        if: steps.check.outputs.branch == 'rehearsal'
+        run: |
+          if npx -y "$NEON_CLI" branches get rehearsal --project-id "$NEON_PROJECT_ID" > /dev/null 2>&1; then
+            npx -y "$NEON_CLI" branches reset rehearsal --parent --project-id "$NEON_PROJECT_ID"
+          else
+            npx -y "$NEON_CLI" branches create --name rehearsal --parent "$PRODUCTION_BRANCH" --project-id "$NEON_PROJECT_ID" --no-secrets
+          fi
+
+  deploy:
+    name: Schema, functions and storage
+    needs: prepare
+    if: needs.prepare.outputs.deploy == 'true'
+    uses: ./.github/workflows/neon.yml
+    with:
+      branch: ${{ needs.prepare.outputs.branch }}
+    secrets: inherit
+
+  move:
+    name: Data, accounts and files
+    needs: [prepare, deploy]
+    if: always() && needs.prepare.result == 'success' && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+      NEON_BRANCH: ${{ needs.prepare.outputs.branch }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ needs.prepare.outputs.ref }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Connect to the Neon branch
+        run: |
+          url=$(npx -y "$NEON_CLI" connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name neondb_owner)
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          # The branch's storage credentials (AWS_* variables).
+          env_file=".env.neon-storage"
+          npx -y "$NEON_CLI" env pull --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH" --services object-storage --file "$env_file" > /dev/null
+          while IFS='=' read -r name value; do
+            case "$name" in
+              AWS_*)
+                value="${value%\"}"; value="${value#\"}"
+                echo "::add-mask::$value"
+                echo "$name=$value" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < "$env_file"
+          rm -f "$env_file"
+          grep -q '^AWS_SECRET_ACCESS_KEY=' "$GITHUB_ENV" || { echo "::error::No storage credentials for the branch."; exit 1; }
+      - name: Move
+        env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          PRODUCTION: ${{ needs.prepare.outputs.deploy == 'false' }}
+        run: |
+          flags=()
+          [ "$DRY_RUN" = true ] && flags+=(--dry-run)
+          # The real move: Supabase turns read-only first, so nothing written there is lost.
+          [ "$PRODUCTION" = true ] && [ "$DRY_RUN" != true ] && flags+=(--freeze-source)
+          node scripts/move-to-neon.mjs "${flags[@]}"

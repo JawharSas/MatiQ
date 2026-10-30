@@ -6,7 +6,7 @@
 
 import { fromFunctionError } from '@/lib/errors';
 import { openSecureStorage } from '@/lib/storage';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type { BirthMonth } from './age-rule';
 import { recordPendingConsent } from './consent';
 
@@ -18,7 +18,7 @@ export type AgeResult = 'ok' | 'not_eligible';
 
 /** Sends the birth month. 'not_eligible' means the server has already deleted the account. */
 export async function submitBirthMonth(birth: BirthMonth): Promise<AgeResult> {
-  const { data, error } = await supabase.functions.invoke<{ status: AgeResult }>('account', {
+  const { data, error } = await backend.functions.invoke<{ status: AgeResult }>('account', {
     method: 'POST',
     body: { birthYear: birth.year, birthMonth: birth.month },
   });
@@ -47,7 +47,7 @@ export async function rememberBirthMonthForSignup(email: string, birth: BirthMon
  */
 export async function ageCheckStatus(email: string): Promise<'done' | 'needed' | 'not_eligible'> {
   // A GET request: the server refuses other requests until the age check is done.
-  const { data, error } = await supabase.rpc('my_age_check', undefined, { get: true });
+  const { data, error } = await backend.rpc('my_age_check', undefined, { get: true });
   if (error) throw new Error(error.message);
   if (data === true) {
     await recordPendingConsent(email);

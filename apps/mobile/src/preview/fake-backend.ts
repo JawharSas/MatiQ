@@ -1,8 +1,10 @@
 /**
- * In-memory stand-in for Supabase used by the browser UI preview.
+ * In-memory stand-in for the Neon backend and Clerk used by the browser UI
+ * preview.
  *
  * It implements exactly the surface the app calls (tables via a small query
- * builder, RPCs, Edge Functions, auth incl. TOTP, storage and Realtime) and
+ * builder, RPCs, server functions, storage, and sign-in incl. two-factor
+ * through the Clerk stub in stubs/clerk.tsx) and
  * mirrors the server rules that matter for the UI: visibility, the ranked
  * lifecycle and quota counting. Analyses are scored by the real rules engine
  * and ranked results are settled by the real `settleRankedMatch`, so the
@@ -17,7 +19,7 @@ import {
   settleRankedMatch,
   type Athlete,
 } from '@matiq/rules-engine';
-import { FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js';
+import { FunctionError } from '@/lib/function-error';
 import { meetsMinimumAge } from '@/features/legal/age-rule';
 import { LEGAL_VERSIONS } from '@/features/legal/documents';
 import { createFixtures, DEMO_EMAIL, PREVIEW_PASSWORD, type Row, syntheticEvents } from './fixtures';
@@ -25,12 +27,7 @@ import { createFixtures, DEMO_EMAIL, PREVIEW_PASSWORD, type Row, syntheticEvents
 const db = createFixtures();
 
 interface PreviewSession {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  token_type: 'bearer';
-  aal: 'aal1' | 'aal2';
-  user: { id: string; email: string; created_at: string; factors: Row[] };
+  user: { id: string; email: string };
 }
 
 let session: PreviewSession | null = null;
@@ -48,8 +45,7 @@ const AGE_CHECK_REQUIRED = { code: '42501', message: 'age_check_required', detai
 /** Like the server's pre-request hook: a banned account gets nothing at all. */
 const isBanned = (uid: string | null) => uid !== null && db.bans.some((ban) => ban.user_id === uid);
 const BANNED = { code: '42501', message: 'banned', details: null, hint: null };
-let tokenSeq = 0;
-const authListeners = new Set<(event: string, session: PreviewSession | null) => void>();
+const authListeners = new Set<() => void>();
 
 const latency = (ms = 80) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const now = () => new Date().toISOString();
@@ -136,50 +132,6 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
       return row.owner_id === viewer;
     default:
       return viewer !== null;
-  }
-}
-
-// Realtime --------------------------------------------------------------------------
-
-interface Listener {
-  table: string;
-  filter?: string;
-  callback: (payload: { eventType: string; new: Row; old: Row }) => void;
-}
-
-class PreviewChannel {
-  readonly listeners: Listener[] = [];
-  readonly name: string;
-  constructor(name: string) {
-    this.name = name;
-  }
-  on(_type: string, config: { table: string; filter?: string }, callback: Listener['callback']) {
-    this.listeners.push({ table: config.table, filter: config.filter, callback });
-    return this;
-  }
-  subscribe() {
-    channels.add(this);
-    return this;
-  }
-  unsubscribe() {
-    channels.delete(this);
-    return Promise.resolve('ok');
-  }
-}
-
-const channels = new Set<PreviewChannel>();
-
-function emit(table: string, eventType: 'INSERT' | 'UPDATE' | 'DELETE', row: Row) {
-  for (const channel of channels) {
-    for (const listener of channel.listeners) {
-      if (listener.table !== table) continue;
-      if (!visible(table, row, me())) continue;
-      if (listener.filter) {
-        const [column, rest] = listener.filter.split('=eq.');
-        if (column && String(row[column]) !== rest) continue;
-      }
-      setTimeout(() => listener.callback({ eventType, new: row, old: row }), 0);
-    }
   }
 }
 
@@ -300,7 +252,6 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
         checkUpdate(this.table, this.values as Row);
         for (const row of rows) {
           Object.assign(row, this.values);
-          emit(this.table, 'UPDATE', row);
         }
         return this.returning ? this.shape(rows) : null;
       }
@@ -444,7 +395,6 @@ function insertRow(table: string, value: Row, upsert: boolean): Row | null {
       return fail('42501', `permission denied for table ${table}`);
   }
   rows.push(row);
-  emit(table, 'INSERT', row);
   return row;
 }
 
@@ -456,7 +406,6 @@ function deleteRow(table: string, row: Row) {
     db.match_analyses = db.match_analyses.filter((analysis) => analysis.match_id !== row.id);
     db.posts = db.posts.filter((post) => post.match_id !== row.id);
   }
-  emit(table, 'DELETE', row);
 }
 
 // Ranked rules (mirrors 20261028000100_ranked.sql) ----------------------------------
@@ -482,7 +431,6 @@ function onMatchCompleted(matchId: string) {
     recorded_at: now(),
     confirm_by: new Date(Date.now() + 72 * 3_600_000).toISOString(),
   });
-  emit('ranked_matches', 'UPDATE', r);
 }
 
 function onMatchDeleted(matchId: string) {
@@ -490,7 +438,6 @@ function onMatchDeleted(matchId: string) {
     if (r.match_id !== matchId || !OPEN.includes(r.status)) continue;
     if (r.status === 'accepted') Object.assign(r, { match_id: null, fighter_a_id: null, fighter_b_id: null });
     else Object.assign(r, { status: 'voided', match_id: null });
-    emit('ranked_matches', 'UPDATE', r);
   }
 }
 
@@ -537,7 +484,6 @@ function settle(r: Row) {
     }
   }
   Object.assign(r, { status: 'confirmed', settled_at: now(), rating_a_after: rowA.rating, rating_b_after: rowB.rating });
-  emit('ranked_matches', 'UPDATE', r);
   return { id: r.id, status: 'confirmed' };
 }
 
@@ -564,7 +510,6 @@ function usageFor(uid: string) {
 
 function setMatch(match: Row, patch: Row) {
   Object.assign(match, patch);
-  emit('matches', 'UPDATE', match);
 }
 
 function startAnalysis(matchId: string, keySource: string) {
@@ -675,6 +620,7 @@ const requireOwner = () => (isOwner(me()) ? me()! : fail('42501', 'not authorize
 
 const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
   am_i_owner: (_args, viewer) => isOwner(viewer),
+  register_user: (_args, viewer) => viewer,
   my_age_check: (_args, viewer) => ageChecked.has(viewer),
   get_my_usage: (_args, viewer) => [usageFor(viewer)],
 
@@ -791,7 +737,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
       settled_at: null,
     };
     db.ranked_matches.push(row);
-    emit('ranked_matches', 'INSERT', row);
     return row.id;
   },
   respond_ranked_challenge: ({ p_id, p_accept }, viewer) => {
@@ -799,7 +744,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     if (r.opponent_id !== viewer) fail('P0002', 'ranked match not found');
     if (r.status !== 'pending') fail('22023', `challenge is ${r.status}`);
     Object.assign(r, { status: p_accept ? 'accepted' : 'declined', responded_at: now() });
-    emit('ranked_matches', 'UPDATE', r);
     return r.status;
   },
   cancel_ranked_challenge: ({ p_id }, viewer) => {
@@ -807,7 +751,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     if (![r.challenger_id, r.opponent_id].includes(viewer)) fail('P0002', 'ranked match not found');
     if (!['pending', 'accepted'].includes(r.status) || r.match_id) fail('22023', 'only unrecorded challenges can be cancelled');
     r.status = 'cancelled';
-    emit('ranked_matches', 'UPDATE', r);
     return null;
   },
   link_ranked_match: ({ p_id, p_match_id }, viewer) => {
@@ -818,7 +761,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     if (match.status !== 'draft') fail('22023', 'only a new recording can be ranked');
     if (match.discipline !== r.discipline || match.variant !== r.variant) fail('22023', 'recording does not match the ranked ruleset');
     Object.assign(r, { match_id: p_match_id, fighter_a_id: viewer, fighter_b_id: viewer === r.challenger_id ? r.opponent_id : r.challenger_id });
-    emit('ranked_matches', 'UPDATE', r);
     return null;
   },
   dispute_ranked_result: ({ p_id, p_reason }, viewer) => {
@@ -827,7 +769,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     if (r.status !== 'awaiting_confirmation') fail('22023', 'result is not awaiting confirmation');
     if (!String(p_reason ?? '').trim()) fail('22023', 'a reason is required');
     Object.assign(r, { status: 'disputed', dispute_reason: String(p_reason).slice(0, 280), disputed_by: viewer });
-    emit('ranked_matches', 'UPDATE', r);
     return null;
   },
   feature_title: ({ p_title_id }, viewer) => {
@@ -940,7 +881,6 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
     if (p_outcome === 'void') Object.assign(r, { status: 'voided', settled_at: now() });
     else Object.assign(r, { status: 'awaiting_confirmation', confirmed_a_at: now(), confirmed_b_at: now() });
     audit('resolve_ranked_dispute', r.disputed_by, { status: 'disputed' }, { outcome: p_outcome, status: r.status }, p_reason ?? null);
-    emit('ranked_matches', 'UPDATE', r);
     return r.status;
   },
   admin_ban_user: ({ p_user_id, p_reason }) => {
@@ -1004,7 +944,7 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
 // Edge Functions -------------------------------------------------------------------------
 
 function functionError(status: number, code: string) {
-  return new FunctionsHttpError(new Response(JSON.stringify({ error: { code, message: code } }), { status }));
+  return new FunctionError(new Response(JSON.stringify({ error: { code, message: code } }), { status }));
 }
 
 /** Sample model lists for the AI provider screen (the real ones come from each provider). */
@@ -1059,7 +999,6 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string, para
       if (r.status !== 'awaiting_confirmation') fail('invalid_state', 'not awaiting confirmation');
       if (viewer === r.fighter_a_id) r.confirmed_a_at ??= now();
       else r.confirmed_b_at ??= now();
-      emit('ranked_matches', 'UPDATE', r);
       return rankedReady(r) ? settle(r) : { id: r.id, status: 'awaiting_confirmation' };
     }
     if (!participant && !isOwner(viewer)) fail('not_found', 'Not found');
@@ -1104,114 +1043,282 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string, para
         return { status: 'ok' };
       }
       db.users = db.users.filter((user) => user.id !== viewer);
-      session = null;
-      for (const listener of authListeners) listener('SIGNED_OUT', null);
+      setSession(null);
       return { status: 'not_eligible' };
     }
     if (method === 'GET') {
       return { exportedAt: now(), profile: profileOf(viewer), matches: db.matches.filter((m) => m.owner_id === viewer), note: 'Preview export (sample data).' };
     }
-    session = null;
-    for (const listener of authListeners) listener('SIGNED_OUT', null);
+    setSession(null);
     return { deleted: true };
   },
 };
 
-// Auth -----------------------------------------------------------------------------------
+// Sign-in (Clerk) ------------------------------------------------------------------------
+//
+// The Clerk stub (stubs/clerk.tsx) drives these, with the behaviour of Clerk
+// that the screens rely on: the password is checked, an account with
+// two-factor needs a code before the session starts, and a banned account
+// can't sign in.
 
-function issueSession(userId: string, aal: 'aal1' | 'aal2'): PreviewSession {
-  const user = db.users.find((u) => u.id === userId)!;
+/** Any 6-digit code works in the preview, except 000000 (to show the error path). */
+const codeOk = (code: string) => /^\d{6}$/.test(code) && code !== '000000';
+const PREVIEW_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+const PREVIEW_BACKUP_CODES = ['prev-iewa-0001', 'prev-iewa-0002', 'prev-iewa-0003', 'prev-iewa-0004', 'prev-iewa-0005'];
+
+type ClerkResult = { error: { code: string; message: string } | null };
+const ok = (): ClerkResult => ({ error: null });
+const refused = (code: string): ClerkResult => ({ error: { code, message: code } });
+/** User methods throw, like Clerk's API errors (a list of codes). */
+const thrown = (code: string) => Object.assign(new Error(code), { errors: [{ code }] });
+
+let authVersion = 0;
+function setSession(next: PreviewSession | null) {
+  session = next;
+  authVersion++;
+  for (const listener of authListeners) listener();
+}
+
+function startSession(uid: string) {
+  const user = db.users.find((u) => u.id === uid)!;
+  user.last_sign_in_at = now();
+  setSession({ user: { id: uid, email: user.email } });
+}
+
+const totpOn = (uid: string) => db.mfa_factors.some((factor) => factor.user_id === uid && factor.status === 'verified');
+
+/** Passwords changed in the preview (everyone starts with PREVIEW_PASSWORD), and who connected Google. */
+const passwords = new Map<string, string>();
+const passwordOf = (uid: string) => passwords.get(uid) ?? PREVIEW_PASSWORD;
+const googleConnected = new Set<string>();
+const googleConnecting = new Set<string>();
+
+export function subscribePreviewAuth(listener: () => void): () => void {
+  authListeners.add(listener);
+  return () => authListeners.delete(listener);
+}
+
+export const previewSessionUserId = () => me();
+
+export async function previewSignOut(): Promise<void> {
+  setSession(null);
+}
+
+function createSignIn() {
+  let status = 'needs_identifier';
+  let pending: string | null = null;
+  const passed = (): ClerkResult => {
+    status = 'complete';
+    return ok();
+  };
   return {
-    access_token: `preview-token-${userId}-${++tokenSeq}`,
-    refresh_token: `preview-refresh-${tokenSeq}`,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    token_type: 'bearer',
-    aal,
-    user: { id: userId, email: user.email, created_at: user.created_at, factors: db.mfa_factors.filter((f) => f.user_id === userId) },
+    get status() {
+      return status;
+    },
+    async password({ emailAddress, password }: { emailAddress: string; password: string }): Promise<ClerkResult> {
+      await latency(250);
+      const user = db.users.find((u) => u.email.toLowerCase() === emailAddress.toLowerCase());
+      if (!user || password !== passwordOf(user.id)) return refused('form_password_or_identifier_incorrect');
+      if (isBanned(user.id)) return refused('user_banned');
+      pending = user.id;
+      status = totpOn(user.id) ? 'needs_second_factor' : 'complete';
+      return ok();
+    },
+    mfa: {
+      async verifyTOTP({ code }: { code: string }) {
+        await latency(200);
+        return codeOk(code) ? passed() : refused('form_code_incorrect');
+      },
+      async verifyBackupCode({ code }: { code: string }) {
+        await latency(200);
+        return PREVIEW_BACKUP_CODES.includes(code) ? passed() : refused('form_code_incorrect');
+      },
+      async sendEmailCode() {
+        return ok();
+      },
+      async verifyEmailCode({ code }: { code: string }) {
+        await latency(200);
+        return codeOk(code) ? passed() : refused('form_code_incorrect');
+      },
+    },
+    /** The first step of a password reset: whose password. */
+    async create({ identifier }: { identifier: string }): Promise<ClerkResult> {
+      await latency(150);
+      const user = db.users.find((u) => u.email.toLowerCase() === identifier.toLowerCase());
+      pending = user?.id ?? null;
+      status = 'needs_first_factor';
+      return user ? ok() : refused('form_identifier_not_found');
+    },
+    resetPasswordEmailCode: {
+      async sendCode(): Promise<ClerkResult> {
+        return pending ? ok() : refused('form_identifier_not_found');
+      },
+      async verifyCode({ code }: { code: string }): Promise<ClerkResult> {
+        await latency(150);
+        if (!pending || !codeOk(code)) return refused('form_code_incorrect');
+        status = 'needs_new_password';
+        return ok();
+      },
+      async submitPassword({ password }: { password: string }): Promise<ClerkResult> {
+        await latency(150);
+        if (status !== 'needs_new_password' || !pending) return refused('sign_in_incomplete');
+        passwords.set(pending, password);
+        status = totpOn(pending) ? 'needs_second_factor' : 'complete';
+        return ok();
+      },
+    },
+    async finalize(): Promise<ClerkResult> {
+      if (status !== 'complete' || !pending) return refused('sign_in_incomplete');
+      startSession(pending);
+      status = 'needs_identifier';
+      pending = null;
+      return ok();
+    },
+    async reset(): Promise<ClerkResult> {
+      status = 'needs_identifier';
+      pending = null;
+      return ok();
+    },
   };
 }
 
-function setSession(next: PreviewSession | null, event: string) {
-  session = next;
-  for (const listener of authListeners) listener(event, next);
+function createSignUp() {
+  let status = 'missing_requirements';
+  let draft: { email: string; username: string; displayName: string } | null = null;
+  let created: string | null = null;
+  return {
+    get status() {
+      return status;
+    },
+    async password(params: { emailAddress: string; password: string; unsafeMetadata?: Row }): Promise<ClerkResult> {
+      await latency(250);
+      if (db.users.some((u) => u.email.toLowerCase() === params.emailAddress.toLowerCase())) return refused('form_identifier_exists');
+      draft = {
+        email: params.emailAddress,
+        username: String(params.unsafeMetadata?.username ?? `user_${uuidSeq}`),
+        displayName: String(params.unsafeMetadata?.displayName ?? 'New athlete'),
+      };
+      status = 'missing_requirements';
+      return ok();
+    },
+    verifications: {
+      async sendEmailCode() {
+        return ok();
+      },
+      async verifyEmailCode({ code }: { code: string }): Promise<ClerkResult> {
+        await latency(200);
+        if (!draft) return refused('sign_up_missing');
+        if (!codeOk(code)) return refused('form_code_incorrect');
+        // What register_user does on the server on the first sign-in.
+        const uid = uuid();
+        db.users.push({ id: uid, email: draft.email, created_at: now(), last_sign_in_at: null });
+        db.profiles.push({ id: uid, username: draft.username, display_name: draft.displayName, bio: '', avatar_path: null, primary_discipline: null, visibility: 'private', created_at: now() });
+        db.user_entitlements.push({ user_id: uid, role: 'user', is_unlimited: false, monthly_analysis_limit: 10, max_video_seconds: 480, is_suspended: false });
+        created = uid;
+        status = 'complete';
+        return ok();
+      },
+    },
+    async finalize(): Promise<ClerkResult> {
+      if (status !== 'complete' || !created) return refused('sign_up_incomplete');
+      startSession(created);
+      draft = null;
+      created = null;
+      status = 'missing_requirements';
+      return ok();
+    },
+  };
 }
 
-const verifiedFactors = (uid: string) => db.mfa_factors.filter((factor) => factor.user_id === uid && factor.status === 'verified');
+export const previewSignIn = createSignIn();
+export const previewSignUp = createSignUp();
 
-const auth = {
-  getSession: async () => ({ data: { session }, error: null }),
-  getUser: async () => ({ data: { user: session?.user ?? null }, error: null }),
-  onAuthStateChange(callback: (event: string, session: PreviewSession | null) => void) {
-    authListeners.add(callback);
-    setTimeout(() => callback('INITIAL_SESSION', session), 0);
-    return { data: { subscription: { unsubscribe: () => authListeners.delete(callback) } } };
-  },
-  async signInWithPassword({ email, password }: { email: string; password: string }) {
-    await latency(250);
-    const user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!user || password !== PREVIEW_PASSWORD) return { data: { session: null, user: null }, error: { status: 400, message: 'Invalid login credentials' } };
-    if (isBanned(user.id)) return { data: { session: null, user: null }, error: { status: 400, code: 'user_banned', message: 'User is banned' } };
-    user.last_sign_in_at = now();
-    setSession(issueSession(user.id, 'aal1'), 'SIGNED_IN');
-    return { data: { session, user: session!.user }, error: null };
-  },
-  async signUp({ email, options }: { email: string; password: string; options?: { data?: Row } }) {
-    await latency(250);
-    if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) return { data: { user: null, session: null }, error: null };
-    const uid = uuid();
-    db.users.push({ id: uid, email, created_at: now(), last_sign_in_at: null });
-    db.profiles.push({ id: uid, username: options?.data?.username ?? `user_${uuidSeq}`, display_name: options?.data?.display_name ?? 'New athlete', bio: '', avatar_path: null, primary_discipline: null, visibility: 'private', created_at: now() });
-    db.user_entitlements.push({ user_id: uid, role: 'user', is_unlimited: false, monthly_analysis_limit: 10, max_video_seconds: 600, is_suspended: false });
-    // Email confirmation is on: no session until the link is opened.
-    return { data: { user: { id: uid, email }, session: null }, error: null };
-  },
-  async signOut() {
-    setSession(null, 'SIGNED_OUT');
-    return { error: null };
-  },
-  async refreshSession() {
-    if (session) setSession(issueSession(session.user.id, session.aal), 'TOKEN_REFRESHED');
-    return { data: { session }, error: null };
-  },
-  async exchangeCodeForSession() {
-    return { data: { session: null }, error: { message: 'Email links are not available in the preview' } };
-  },
-  async signInWithOAuth() {
-    return { data: { provider: 'google', url: null }, error: { message: 'Google sign-in is not available in the preview' } };
-  },
-  mfa: {
-    async listFactors() {
-      await latency();
-      const all = session ? db.mfa_factors.filter((f) => f.user_id === session!.user.id) : [];
-      return { data: { all, totp: all.filter((f) => f.status === 'verified') }, error: null };
-    },
-    async enroll({ friendlyName }: { friendlyName?: string }) {
-      await latency(150);
-      const factor = { id: uuid(), user_id: session!.user.id, friendly_name: friendlyName, factor_type: 'totp', status: 'unverified', created_at: now(), updated_at: now() };
-      db.mfa_factors.push(factor);
-      const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
-      return { data: { id: factor.id, type: 'totp', totp: { secret, uri: `otpauth://totp/MatIQ:${session!.user.email}?secret=${secret}&issuer=MatIQ`, qr_code: '' } }, error: null };
-    },
-    async challengeAndVerify({ factorId, code }: { factorId: string; code: string }) {
+function buildUser() {
+  const uid = me();
+  if (!uid || !session) return null;
+  const email = session.user.email;
+  const notify = () => setSession(session);
+  return {
+    id: uid,
+    fullName: (profileOf(uid)?.display_name as string | undefined) ?? null,
+    unsafeMetadata: {},
+    primaryEmailAddress: { emailAddress: email },
+    totpEnabled: totpOn(uid),
+    backupCodeEnabled: totpOn(uid),
+    twoFactorEnabled: totpOn(uid),
+    passwordEnabled: true,
+    externalAccounts: googleConnected.has(uid)
+      ? [
+          {
+            id: `google-${uid}`,
+            provider: 'google',
+            emailAddress: email.replace(/@.*/, '@gmail.com'),
+            verification: { status: 'verified' },
+            async destroy() {
+              await latency(150);
+              googleConnected.delete(uid);
+              notify();
+            },
+          },
+        ]
+      : [],
+    async updatePassword({ newPassword, currentPassword }: { newPassword: string; currentPassword?: string }) {
       await latency(200);
-      const factor = db.mfa_factors.find((f) => f.id === factorId);
-      // Any 6-digit code works in the preview, except 000000 (to show the error path).
-      if (!factor || !/^\d{6}$/.test(code) || code === '000000') return { data: null, error: { message: 'Invalid TOTP code entered' } };
-      factor.status = 'verified';
-      setSession(issueSession(session!.user.id, 'aal2'), 'MFA_CHALLENGE_VERIFIED');
-      return { data: { access_token: session!.access_token }, error: null };
+      if (currentPassword !== passwordOf(uid)) throw thrown('form_password_validation_failed');
+      passwords.set(uid, newPassword);
+      notify();
+      return previewUser();
     },
-    async unenroll({ factorId }: { factorId: string }) {
-      db.mfa_factors = db.mfa_factors.filter((f) => f.id !== factorId);
-      return { data: { id: factorId }, error: null };
+    /** Google's consent screen is skipped in the preview: the next reload finds the account connected. */
+    async createExternalAccount() {
+      await latency(150);
+      googleConnecting.add(uid);
+      return { verification: { externalVerificationRedirectURL: new URL('https://accounts.google.com/o/oauth2/v2/auth?preview=1') } };
     },
-    async getAuthenticatorAssuranceLevel() {
-      if (!session) return { data: { currentLevel: null, nextLevel: null, currentAuthenticationMethods: [] }, error: null };
-      const next = verifiedFactors(session.user.id).length > 0 ? 'aal2' : 'aal1';
-      return { data: { currentLevel: session.aal, nextLevel: next, currentAuthenticationMethods: [] }, error: null };
+    async createTOTP() {
+      await latency(150);
+      return { id: 'totp', verified: false, secret: PREVIEW_TOTP_SECRET, uri: `otpauth://totp/MatIQ:${email}?secret=${PREVIEW_TOTP_SECRET}&issuer=MatIQ` };
     },
-  },
-};
+    async verifyTOTP({ code }: { code: string }) {
+      await latency(200);
+      if (!codeOk(code)) throw thrown('form_code_incorrect');
+      db.mfa_factors.push({ id: uuid(), user_id: uid, factor_type: 'totp', status: 'verified', created_at: now(), updated_at: now() });
+      notify();
+      return { id: 'totp', verified: true, backupCodes: PREVIEW_BACKUP_CODES };
+    },
+    async disableTOTP() {
+      db.mfa_factors = db.mfa_factors.filter((factor) => factor.user_id !== uid);
+      notify();
+      return { object: 'totp', deleted: true };
+    },
+    async createBackupCode() {
+      await latency(150);
+      return { id: 'backup', codes: PREVIEW_BACKUP_CODES };
+    },
+    async reload() {
+      if (googleConnecting.delete(uid)) {
+        googleConnected.add(uid);
+        notify();
+      }
+      return previewUser();
+    },
+    async getSessions() {
+      return [];
+    },
+  };
+}
+
+let cachedUser: ReturnType<typeof buildUser> = null;
+let cachedVersion = -1;
+
+/** The signed-in Clerk user; the same object until something about it changes (like Clerk's). */
+export function previewUser(): ReturnType<typeof buildUser> {
+  if (cachedVersion !== authVersion) {
+    cachedUser = buildUser();
+    cachedVersion = authVersion;
+  }
+  return cachedUser;
+}
 
 // Storage --------------------------------------------------------------------------------
 
@@ -1267,16 +1374,22 @@ function bucket(name: string) {
 
 // Client ---------------------------------------------------------------------------------
 
-const client = {
-  auth,
+/** The backend client (lib/backend.ts) in the preview; tokens are not needed. */
+export const backend = {
   from: (table: string) => new QueryBuilder(table as TableName),
   async rpc(name: string, args: Row = {}, options: { get?: boolean } = {}) {
     await latency();
+    // Read before signing in. The walkthrough sets window.__PREVIEW_MIN_VERSION to show the update screen.
+    if (name === 'app_requirements') {
+      const minimum = (globalThis as { __PREVIEW_MIN_VERSION?: string }).__PREVIEW_MIN_VERSION ?? '1.0.0';
+      return { data: { min_version: minimum, download_url: 'https://github.com/JawharSas/MatiQ/releases' }, error: null };
+    }
     const handler = RPCS[name];
     if (!handler) return { data: null, error: { code: 'PGRST202', message: `function ${name} not found`, details: null, hint: null } };
     if (!me()) return { data: null, error: { code: '42501', message: 'permission denied', details: null, hint: null } };
     if (isBanned(me())) return { data: null, error: BANNED };
-    if (!options.get && ageCheckPending()) return { data: null, error: AGE_CHECK_REQUIRED };
+    // register_user works before the age check, like on the server.
+    if (!options.get && name !== 'register_user' && ageCheckPending()) return { data: null, error: AGE_CHECK_REQUIRED };
     try {
       return { data: structuredClone(handler(args, me()!)), error: null };
     } catch (error) {
@@ -1300,15 +1413,9 @@ const client = {
     },
   },
   storage: { from: bucket },
-  channel: (name: string) => new PreviewChannel(name),
-  removeChannel: (channel: PreviewChannel) => channel.unsubscribe(),
 };
 
-export const supabase = client as unknown as SupabaseClient;
-
-export function initSupabase(): SupabaseClient {
-  return supabase;
-}
+export function setTokenGetter(): void {}
 
 /** For the walkthrough: the current legal versions, so tests can reason about the consent gate. */
 export const PREVIEW_INFO = { demoEmail: DEMO_EMAIL, password: PREVIEW_PASSWORD, legalVersions: LEGAL_VERSIONS };

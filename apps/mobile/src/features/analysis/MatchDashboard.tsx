@@ -1,13 +1,16 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { formatClock, type Highlight, type Phase, type Scorecard } from '@matiq/rules-engine';
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useA11y } from '@/features/accessibility/A11yProvider';
 import { useRef, useState } from 'react';
-import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Badge, Body, Caption, Card, Heading, Segmented } from '@/ui/components';
-import { athleteColor, colors, font, radius, spacing } from '@/ui/theme';
+import { athleteColor, colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { highlightText, withNames } from './labels';
 import { statRows } from './stat-rows';
 import { type AthleteFilter, type BreakdownSection, type Clip, filterByAthlete, techniqueBreakdown } from './technique-breakdown';
@@ -35,6 +38,7 @@ interface MatchDashboardProps {
 }
 
 export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardProps) {
+  useTheme();
   const { reduceMotion } = useA11y();
   const scorecard = match.analysis?.scorecard;
   const [filter, setFilter] = useState<AthleteFilter>('both');
@@ -129,6 +133,7 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
 type Names = { A: string; B: string };
 
 function ScoreHeader({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
+  useTheme();
   const { result, totals } = scorecard;
   const winner = result.winner ? names[result.winner] : null;
   const method = `${METHOD_LABELS[result.method] ?? result.method}${result.at !== undefined ? ` · ${formatClock(result.at)}` : ''}`;
@@ -177,6 +182,7 @@ function PhaseTimeline({
   onSeek?: (ms: number) => void;
   onPlay?: (highlight: Highlight) => void;
 }) {
+  useTheme();
   const [width, setWidth] = useState(0);
   if (durationMs <= 0) return null;
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
@@ -234,6 +240,7 @@ function PhaseTimeline({
 }
 
 function HighlightList({ highlights, names, onPlay }: { highlights: Highlight[]; names: Names; onPlay?: (highlight: Highlight) => void }) {
+  useTheme();
   if (highlights.length === 0) return null;
   return (
     <Card>
@@ -264,6 +271,7 @@ function HighlightList({ highlights, names, onPlay }: { highlights: Highlight[];
 const formatValue = (unit: BreakdownSection['unit'], value: number) => (unit === 'ms' ? formatClock(value) : String(value));
 
 function TechniqueBreakdown({ sections, names, filter }: { sections: BreakdownSection[]; names: Names; filter: AthleteFilter }) {
+  useTheme();
   if (sections.length === 0) return null;
   return (
     <Card>
@@ -302,6 +310,7 @@ function TechniqueBreakdown({ sections, names, filter }: { sections: BreakdownSe
 }
 
 function StatsPanel({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
+  useTheme();
   return (
     <Card>
       <View style={styles.statHeader}>
@@ -327,6 +336,7 @@ function StatsPanel({ scorecard, names }: { scorecard: Scorecard; names: Names }
 }
 
 function RoundsTable({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
+  useTheme();
   return (
     <Card>
       <Heading>Rounds (projected)</Heading>
@@ -357,6 +367,7 @@ function ScoreLog({
   filter: AthleteFilter;
   onSeek?: (ms: number) => void;
 }) {
+  useTheme();
   const lines = filterByAthlete(
     scorecard.scoreLog.filter((line) => scorecard.discipline !== 'mma' || line.penalties > 0),
     filter,
@@ -382,7 +393,7 @@ function ScoreLog({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   stack: { gap: spacing.lg },
   fill: { flex: 1 },
   video: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.lg, backgroundColor: '#000' },
@@ -420,4 +431,4 @@ const styles = StyleSheet.create({
   dimmed: { opacity: 0.3 },
   // The other fighter's numbers stay readable (4.5:1) while filtered out.
   dimmedText: { color: colors.textMuted },
-});
+}));

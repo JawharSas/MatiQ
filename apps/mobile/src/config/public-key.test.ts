@@ -1,23 +1,20 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isPublicSupabaseKey } from './public-key.ts';
+import { isPublishableClerkKey } from './public-key.ts';
 
-const jwt = (claims: object) =>
-  ['{"alg":"HS256","typ":"JWT"}', JSON.stringify(claims)].map((part) => Buffer.from(part).toString('base64url')).join('.') + '.signature';
-
-describe('isPublicSupabaseKey', () => {
-  it('accepts publishable keys and anon JWTs', () => {
-    assert.equal(isPublicSupabaseKey('sb_publishable_NLqMpAOvPaZK7G48Prt5iA_wQvZLIot'), true);
-    assert.equal(isPublicSupabaseKey(jwt({ iss: 'supabase', role: 'anon' })), true);
+describe('isPublishableClerkKey', () => {
+  it('accepts publishable keys', () => {
+    assert.equal(isPublishableClerkKey(`pk_test_${btoa('funny-locust-4840.clerk.accounts.dev$')}`), true);
+    assert.equal(isPublishableClerkKey(`pk_live_${btoa('clerk.matiq.app$')}`), true);
   });
 
-  it('refuses secret and service-role keys', () => {
-    assert.equal(isPublicSupabaseKey('sb_secret_abcdefghijklmnopqrstuvwxyz'), false);
-    assert.equal(isPublicSupabaseKey(jwt({ iss: 'supabase', role: 'service_role' })), false);
-  });
-
-  it('refuses anything else', () => {
-    assert.equal(isPublicSupabaseKey('not-a-key-at-all-but-long'), false);
-    assert.equal(isPublicSupabaseKey('header.%%%.signature'), false);
+  it('refuses secret keys and anything else', () => {
+    // Built at runtime so the fake keys don't look like leaked ones to secret scanners.
+    const fake = (prefix: string) => `${prefix}${'x0'.repeat(20)}`;
+    assert.equal(isPublishableClerkKey(fake('sk_' + 'test_')), false);
+    assert.equal(isPublishableClerkKey(fake('sk_' + 'live_')), false);
+    assert.equal(isPublishableClerkKey(fake('sb_' + 'publishable_')), false);
+    assert.equal(isPublishableClerkKey(`pk_test_${btoa('not a host')}`), false);
+    assert.equal(isPublishableClerkKey('pk_test_%%%'), false);
   });
 });

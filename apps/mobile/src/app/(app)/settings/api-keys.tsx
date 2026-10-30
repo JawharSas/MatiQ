@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useRouter } from 'expo-router';
@@ -12,6 +14,7 @@ import { apiKeySchema, firstIssue, modelIdSchema } from '@/lib/validation';
 import { Badge, Body, Button, Caption, Card, ChoiceChips, ErrorText, Heading, IconTile, Loading, Screen, SectionHeader, StatusText, TextField } from '@/ui/components';
 import { Text } from '@/ui/text';
 import { font, spacing } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const PROVIDER_CHIPS = PROVIDER_OPTIONS.map((option) => ({
   value: option.id,
@@ -28,6 +31,7 @@ const PROVIDER_CHIPS = PROVIDER_OPTIONS.map((option) => ({
  * authentication to open.
  */
 export default function ApiKeysScreen() {
+  useTheme();
   usePreventScreenCapture('api-keys');
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -245,6 +249,7 @@ export default function ApiKeysScreen() {
 }
 
 function StoredKeyCard({ stored, busy, onUse, onRemove }: { stored: StoredKey; busy: boolean; onUse: () => void; onRemove: () => void }) {
+  useTheme();
   const option = providerOption(stored.provider);
   return (
     <Card>

@@ -129,6 +129,9 @@ select is((select count(*)::int from private.banned_ips where user_id = 'e111111
 select pg_temp.as_user('e2222222-2222-4222-8222-222222222222');
 select set_config('request.headers', '{"x-forwarded-for":"203.0.113.7"}', true);
 select throws_ok($$select public.check_request()$$, '42501', 'banned', 'a network another banned account used stays blocked');
+-- The owner below isn't on that network (on Neon, app.uid() applies network
+-- bans to API requests, as the request hook does).
+select set_config('request.headers', '', true);
 select pg_temp.as_user('e3333333-3333-4333-8333-333333333333');
 select lives_ok($$select public.admin_unban_user('e5555555-5555-4555-8555-555555555555')$$, 'the second ban is lifted');
 reset role;

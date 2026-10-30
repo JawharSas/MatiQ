@@ -2,8 +2,8 @@
 
 A way to see and click through the whole MatIQ app in a browser, with sample
 data and no backend. It is a development and QA tool, **not** a web version of
-MatIQ: the camera, encrypted storage, TLS pinning and Supabase only exist in
-the iOS and Android builds.
+MatIQ: the camera, encrypted storage, TLS pinning, Clerk and the Neon backend
+only exist in the iOS and Android builds.
 
 ```bash
 cd apps/mobile
@@ -14,14 +14,16 @@ npm run preview:walkthrough   # Playwright clicks through every screen
 
 Sign in with **demo@matiq.app** / **matiq-preview** (the account is the app
 owner, so the Owner Panel is reachable). Other sample users use the same
-password, e.g. `sam_okafor@example.com`. Two-factor codes: any 6 digits except
-`000000`, which shows the error path.
+password, e.g. `sam_okafor@example.com`. Two-factor and email codes: any 6
+digits except `000000`, which shows the error path; backup codes are
+`prev-iewa-0001` to `prev-iewa-0005`.
 
 ## How it works
 
 | Native piece | In the preview |
 |---|---|
-| Supabase (Auth, Postgres + RLS, Storage, Realtime, Edge Functions) | `fake-backend.ts`: in-memory tables with the same visibility rules, RPCs, functions, TOTP and Realtime events, seeded by `fixtures.ts` |
+| Neon (Data API + RLS, Object Storage, Functions) | `fake-backend.ts`: in-memory tables with the same visibility rules, RPCs, functions and files, seeded by `fixtures.ts` |
+| Clerk (sign-in, sign-up, two-factor) | `stubs/clerk.tsx`: the same hooks, backed by the sample accounts in `fake-backend.ts` |
 | AI analysis | Synthetic events for the discipline, scored by the real rules engine |
 | Ranked settlement | The real `settleRankedMatch` (Elo, totals, titles) |
 | Camera (VisionCamera) | `stubs/vision-camera.tsx` placeholder; `useLiveCapture.web.ts` simulates a 2:30 round |

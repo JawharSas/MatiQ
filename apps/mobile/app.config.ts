@@ -14,8 +14,8 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
 /** Marketing version and release channel ("Pre-Beta V1.3.0"). */
-const APP_VERSION = '1.6.0';
-const RELEASE_LABEL = 'Pre-Beta';
+const APP_VERSION = '1.7.0';
+const RELEASE_LABEL = 'Alpha';
 /** Monotonic build number for local / CI builds: 1.3.0 -> 10300 (EAS manages its own remotely). */
 const BUILD_NUMBER = APP_VERSION.split('.').reduce((total, part) => total * 100 + Number(part), 0);
 
@@ -27,7 +27,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   // Follows the device: content is never locked to one orientation (WCAG 1.3.4).
   orientation: 'default',
-  userInterfaceStyle: 'dark',
+  // Light, Dark or Midnight in Settings → Appearance; "System" follows the phone.
+  userInterfaceStyle: 'automatic',
   // Brand assets are rendered from the vector mark by scripts/brand-assets.cjs.
   icon: './assets/brand/icon.png',
   // Root view colour behind every screen (expo-system-ui): no white flashes.

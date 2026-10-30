@@ -1,19 +1,25 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
+import { ClerkProvider } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { envError } from '@/config/env';
+import { env, envError } from '@/config/env';
 import { A11yProvider, useA11y } from '@/features/accessibility/A11yProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { UpdateRequired } from '@/features/update/UpdateRequired';
+import { useUpdateRequired } from '@/features/update/useUpdateRequired';
 import { isBannedError } from '@/lib/errors';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
-import { initSupabase } from '@/lib/supabase';
 import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
-import { colors } from '@/ui/theme';
+import { colors, isDarkTheme } from '@/ui/theme';
+import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -41,13 +47,13 @@ type BootState = { kind: 'loading' } | { kind: 'ready' } | { kind: 'failed'; mes
  *   1. validate public config
  *   2. enable TLS pinning (before ANY request)
  *   3. open the encrypted store (key from Keychain/Keystore)
- *   4. create the Supabase client (may refresh the session immediately)
+ *   4. then Clerk starts (it may refresh the session immediately); Clerk
+ *      keeps its session token in the keychain (expo-secure-store).
  */
 async function boot(): Promise<void> {
   if (envError) throw new Error(__DEV__ ? `Invalid configuration:\n${envError}` : 'This build is misconfigured.');
   await enableCertificatePinning();
   await openSecureStorage();
-  initSupabase();
 }
 
 export default function RootLayout() {
@@ -64,15 +70,20 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
       {state.kind === 'ready' ? (
-        <A11yProvider>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <RootNavigator />
-            </AuthProvider>
-          </QueryClientProvider>
-        </A11yProvider>
+        // The theme comes from the encrypted store, which is open by now.
+        <ThemeProvider>
+          <ThemedStatusBar />
+          <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
+            <A11yProvider>
+              <QueryClientProvider client={queryClient}>
+                <AuthProvider>
+                  <RootNavigator />
+                </AuthProvider>
+              </QueryClientProvider>
+            </A11yProvider>
+          </ClerkProvider>
+        </ThemeProvider>
       ) : state.kind === 'failed' ? (
         <Screen>
           <Title>MatIQ can't start</Title>
@@ -82,16 +93,24 @@ export default function RootLayout() {
       ) : (
         <Loading />
       )}
+      {state.kind !== 'ready' ? <StatusBar style="light" /> : null}
     </SafeAreaProvider>
   );
 }
 
+function ThemedStatusBar() {
+  const { theme } = useTheme();
+  return <StatusBar style={isDarkTheme(theme) ? 'light' : 'dark'} />;
+}
+
 function RootNavigator() {
-  const { session, initializing, mfaPending } = useAuth();
+  useTheme();
+  const { signedIn, initializing } = useAuth();
   const { reduceMotion } = useA11y();
-  if (initializing || (session && mfaPending === null)) return <Loading />;
-  const signedIn = Boolean(session);
-  const challenge = signedIn && mfaPending === true;
+  const update = useUpdateRequired();
+  // A version too old to keep working shows only the way to the new one.
+  if (update.required) return <UpdateRequired downloadUrl={update.downloadUrl} />;
+  if (initializing) return <Loading />;
 
   return (
     <Stack
@@ -105,17 +124,15 @@ function RootNavigator() {
     >
       {/* Explicit redirects: the root stack has no anchor, so without them a
           guarded URL (e.g. "/" while signed out) would land on a bare group. */}
-      <Stack.Protected guard={!signedIn} redirectTo={challenge ? '/mfa' : '/'}>
+      <Stack.Protected guard={!signedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={challenge} redirectTo={signedIn ? '/' : '/sign-in'}>
-        <Stack.Screen name="mfa" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && !challenge} redirectTo={challenge ? '/mfa' : '/sign-in'}>
+      <Stack.Protected guard={signedIn} redirectTo="/sign-in">
         <Stack.Screen name="(app)" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />
       <Stack.Screen name="accessibility" options={{ headerShown: true, title: 'Accessibility', presentation: 'modal' }} />
+      <Stack.Screen name="appearance" options={{ headerShown: true, title: 'Appearance', presentation: 'modal' }} />
       <Stack.Screen name="auth/callback" />
     </Stack>
   );

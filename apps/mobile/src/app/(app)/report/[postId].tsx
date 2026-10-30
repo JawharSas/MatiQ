@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking } from 'react-native';
 import { env } from '@/config/env';
@@ -5,9 +7,11 @@ import { contactSupport, copyrightAgentEmail, mailto, supportEmail } from '@/fea
 import { Body, Button, Caption, Card, Heading, Screen } from '@/ui/components';
 import { Text } from '@/ui/text';
 import { font } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 /** Reporting a post: copyright notices go to the designated DMCA agent, anything else to support. */
 export default function ReportPostScreen() {
+  useTheme();
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const router = useRouter();
   const id = typeof postId === 'string' ? postId : '';

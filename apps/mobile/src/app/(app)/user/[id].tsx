@@ -9,10 +9,12 @@ import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Loading, Screen, Title } from '@/ui/components';
 import { spacing } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
 export default function UserScreen() {
+  useTheme();
   const params = paramsSchema.safeParse(useLocalSearchParams());
   if (!params.success) {
     return (
@@ -25,6 +27,7 @@ export default function UserScreen() {
 }
 
 function UserProfile({ id }: { id: string }) {
+  useTheme();
   const me = useUserId();
   const profile = useProfile(id);
   const action = useFriendAction();

@@ -1,30 +1,29 @@
-import * as Linking from 'expo-linking';
+import { useSignUp } from '@clerk/expo';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { useCaptcha } from '@/features/auth/Captcha';
+import { clerkErrorMessage } from '@/features/auth/clerk-errors';
 import { AuthDivider, GoogleButton } from '@/features/auth/GoogleButton';
 import { ageCheckLocked, lockAgeCheck, rememberBirthMonthForSignup } from '@/features/legal/age';
 import { type BirthInput, meetsMinimumAge, parseBirthMonth } from '@/features/legal/age-rule';
 import { BirthMonthField } from '@/features/legal/BirthMonthField';
 import { rememberConsentForSignup } from '@/features/legal/consent';
-import { messageFor } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
 import { firstIssue, signUpSchema } from '@/lib/validation';
 import { LogoMark } from '@/ui/brand';
 import { Body, Button, Caption, Card, Checkbox, ErrorText, inlineLink, Loading, Screen, TextField, Title } from '@/ui/components';
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { signUp } = useSignUp();
   const [form, setForm] = useState({ email: '', password: '', username: '', displayName: '' });
   const [birth, setBirth] = useState<BirthInput>({ month: null, year: '' });
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [code, setCode] = useState('');
   const [blocked, setBlocked] = useState<boolean | null>(null);
-  const captcha = useCaptcha();
 
   useEffect(() => {
     void ageCheckLocked().then(setBlocked);
@@ -45,28 +44,38 @@ export default function SignUpScreen() {
       return;
     }
 
-    if (captcha.enabled && !captcha.token) return setError('Complete the security check first.');
-
     setBusy(true);
     try {
       await rememberConsentForSignup(parsed.data.email);
       await rememberBirthMonthForSignup(parsed.data.email, birthMonth.value);
-      const { error: authError } = await supabase.auth.signUp({
-        email: parsed.data.email,
+      const { error: signUpError } = await signUp.password({
+        emailAddress: parsed.data.email,
         password: parsed.data.password,
-        options: {
-          // Only these two fields are read server side, and both are re-validated.
-          data: { username: parsed.data.username, display_name: parsed.data.displayName },
-          emailRedirectTo: Linking.createURL('/auth/callback'),
-          ...(captcha.token ? { captchaToken: captcha.token } : {}),
-        },
+        legalAccepted: true,
+        // Only these two fields are read server side (register_user), and both are re-validated.
+        unsafeMetadata: { username: parsed.data.username, displayName: parsed.data.displayName },
       });
-      captcha.reset();
-      if (authError) {
-        setError(authError.status === 429 ? messageFor('rate_limited') : authError.message);
-        return;
-      }
-      setSent(true);
+      if (signUpError) return setError(clerkErrorMessage(signUpError));
+      const { error: sendError } = await signUp.verifications.sendEmailCode();
+      if (sendError) return setError(clerkErrorMessage(sendError));
+      setVerifying(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    setError(null);
+    const trimmed = code.replace(/\s/g, '');
+    if (!trimmed) return setError('Enter the code from the email.');
+    setBusy(true);
+    try {
+      const { error: codeError } = await signUp.verifications.verifyEmailCode({ code: trimmed });
+      if (codeError) return setError(clerkErrorMessage(codeError));
+      if (signUp.status !== 'complete') return setError('Sign-up did not complete. Please try again.');
+      // Starts the session; the app then opens the new MatIQ account.
+      const { error: finishError } = await signUp.finalize();
+      if (finishError) setError(clerkErrorMessage(finishError));
     } finally {
       setBusy(false);
     }
@@ -87,15 +96,38 @@ export default function SignUpScreen() {
     );
   }
 
-  if (sent) {
+  if (verifying) {
     return (
       <Screen>
         <View style={styles.header}>
           <LogoMark size={44} />
           <Title>Check your email</Title>
         </View>
-        <Body>We sent a confirmation link to {form.email}. Open it on this device to finish creating your account.</Body>
-        <Button label="Back to sign in" variant="secondary" onPress={() => router.replace('/sign-in')} />
+        <Card>
+          <Body>We sent a code to {form.email}. Enter it to finish creating your account.</Body>
+          <TextField
+            label="Code"
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            maxLength={8}
+          />
+          <ErrorText>{error}</ErrorText>
+          <Button label="Create account" onPress={() => void verify()} loading={busy} />
+          <Button label="Send a new code" variant="ghost" disabled={busy} onPress={() => void signUp.verifications.sendEmailCode()} />
+        </Card>
+        <Button
+          label="Back"
+          variant="secondary"
+          disabled={busy}
+          onPress={() => {
+            setVerifying(false);
+            setCode('');
+            setError(null);
+          }}
+        />
       </Screen>
     );
   }
@@ -145,7 +177,8 @@ export default function SignUpScreen() {
           videos are never sold or shared with data brokers. New accounts are private.
         </Caption>
       </Card>
-      {captcha.element}
+      {/* Where Clerk's bot protection shows its check, when it needs one. */}
+      <View nativeID="clerk-captcha" />
       <ErrorText>{error}</ErrorText>
       <Button label="Create account" onPress={() => void submit()} loading={busy} />
       <Button label="Cancel" variant="secondary" hint="Goes back to sign in" disabled={busy} onPress={() => router.replace('/sign-in')} />

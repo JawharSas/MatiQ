@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 import { useFeed } from '@/features/social/api';
@@ -5,8 +7,10 @@ import { PostCard } from '@/features/social/PostCard';
 import { errorMessage } from '@/lib/errors';
 import { EmptyState, ErrorText, Segmented } from '@/ui/components';
 import { colors, spacing } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 export default function FeedScreen() {
+  useTheme();
   const [scope, setScope] = useState<'community' | 'friends'>('community');
   const feed = useFeed({ friendsOnly: scope === 'friends' });
   const posts = feed.data?.pages.flat() ?? [];

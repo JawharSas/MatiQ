@@ -23,6 +23,8 @@ const COLORS = {
   accent: '#F97316',
   accentDark: '#EA580C',
   white: '#F4F6FA',
+  /** The "M" on light backgrounds (the app's Light theme text colour). */
+  ink: '#0F172A',
 };
 
 /** Regular octagon (the cage / mat) around the centre of a 100 x 100 box. */
@@ -39,9 +41,10 @@ const M_PATH = 'M29 70V30h8.6L50 47.5 62.4 30H71v40h-8.2V44.6L50 62 37.2 44.6V70
 /**
  * The mark in a 100 x 100 box: the "M" with a dot between its peaks reads as
  * a fighter with both arms raised, inside the cage. `mono` draws everything
- * in one colour (Android themed icons).
+ * in one colour (Android themed icons); `ink` colours the "M" (dark on light
+ * backgrounds).
  */
-function mark({ mono = false } = {}) {
+function mark({ mono = false, ink = COLORS.white } = {}) {
   const accent = mono ? COLORS.white : 'url(#ring)';
   return `
     <defs>
@@ -51,7 +54,7 @@ function mark({ mono = false } = {}) {
       </linearGradient>
     </defs>
     <polygon points="${octagon(43)}" fill="none" stroke="${accent}" stroke-width="6.5" stroke-linejoin="round"/>
-    <path d="${M_PATH}" fill="${COLORS.white}"/>
+    <path d="${M_PATH}" fill="${mono ? COLORS.white : ink}"/>
     <circle cx="50" cy="33.5" r="5.2" fill="${accent}"/>`;
 }
 
@@ -103,6 +106,7 @@ const ASSETS = [
   { file: 'splash-icon.png', size: 1024, body: (s) => placedMark(s, 0.92), transparent: true },
   // In-app logo and the download page.
   { file: 'logo-mark.png', size: 512, body: (s) => placedMark(s, 1), transparent: true },
+  { file: 'logo-mark-light.png', size: 512, body: (s) => placedMark(s, 1, { ink: COLORS.ink }), transparent: true },
   { file: 'favicon.png', size: 64, body: (s) => iconBackground(s) + placedMark(s, 0.8) },
   // Sign-in button (shown at 20 pt, so 3x).
   { file: 'google-g.png', size: 60, body: (s) => googleG(s), transparent: true },

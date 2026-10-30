@@ -1,15 +1,18 @@
 /**
  * Provisional score during a live recording.
  *
- * Subscribes to the match's analysed batches (Realtime; RLS limits them to
- * the owner) and runs the shared rules engine on the device over all events
- * received so far. Updates arrive once per batch (~every 20-40 s), so this
+ * Polls the match's analysed batches (RLS limits them to the owner) and runs
+ * the shared rules engine on the device over all events received so far.
+ * Batches finish every 20-40 s and only changed rows cause a render, so this
  * re-renders rarely and never touches the camera subtree.
  */
 
 import { analyzeMatch, type Discipline, type Scorecard } from '@matiq/rules-engine';
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
+
+/** Batches take 20-40 s, so a few seconds of delay is never noticed. */
+const POLL_MS = 5000;
 
 interface BatchRow {
   batch_index: number;
@@ -30,36 +33,28 @@ export function useLiveScore(match: { id: string; discipline: Discipline; varian
   useEffect(() => {
     if (!match) return;
     let cancelled = false;
-    const upsert = (row: BatchRow) =>
+    const merge = (rows: BatchRow[]) =>
       setBatches((current) => {
+        const changed = rows.filter((row) => {
+          const known = current.get(row.batch_index);
+          return !known || known.status !== row.status || known.events.length !== row.events.length;
+        });
+        if (changed.length === 0) return current;
         const next = new Map(current);
-        next.set(row.batch_index, row);
+        for (const row of changed) next.set(row.batch_index, row);
         return next;
       });
 
-    const channel = supabase
-      .channel(`live-batches:${match.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'match_live_batches', filter: `match_id=eq.${match.id}` },
-        (payload) => {
-          if (payload.new && 'batch_index' in payload.new) upsert(payload.new as BatchRow);
-        },
-      )
-      .subscribe();
-
-    // Catch up on batches finished before the subscription was established.
-    supabase
-      .from('match_live_batches')
-      .select('batch_index, status, frame_ts, events')
-      .eq('match_id', match.id)
-      .then(({ data }) => {
-        if (!cancelled) for (const row of (data ?? []) as BatchRow[]) upsert(row);
-      });
+    const poll = async () => {
+      const { data } = await backend.from('match_live_batches').select('batch_index, status, frame_ts, events').eq('match_id', match.id);
+      if (!cancelled && data) merge(data as BatchRow[]);
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), POLL_MS);
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      clearInterval(timer);
     };
   }, [match]);
 

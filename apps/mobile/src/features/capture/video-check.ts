@@ -9,9 +9,9 @@ import { type ByteSource, checkVideoFile, findPersonalMetadata, type VideoCheckP
 import * as Crypto from 'expo-crypto';
 import { File, FileMode, Paths } from 'expo-file-system';
 import { AppError } from '@/lib/errors';
+import { MAX_SOURCE_BYTES, MAX_VIDEO_BYTES } from './video-quality';
 
-/** Same as the `match-videos` bucket limit. */
-export const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+export { MAX_SOURCE_BYTES, MAX_VIDEO_BYTES };
 
 /** Runs `fn` with a read-only byte source over the file at `uri`. */
 async function withSource<T>(uri: string, fn: (source: ByteSource) => Promise<T>): Promise<T> {
@@ -29,11 +29,30 @@ async function withSource<T>(uri: string, fn: (source: ByteSource) => Promise<T>
   }
 }
 
+/** Full check (every frame) of a file that is about to be uploaded. */
 export function scanVideo(
   uri: string,
   options: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
 ): Promise<VideoCheckPassed | VideoCheckRejected> {
   return withSource(uri, (source) => checkVideoFile(source, { maxBytes: MAX_VIDEO_BYTES, deep: true, ...options }));
+}
+
+/**
+ * Quick check of a video before it is compressed: the file structure only
+ * (box headers and the movie header), up to the larger size a phone video
+ * can have before compression. The file that is uploaded gets the full check.
+ */
+export function inspectVideo(uri: string, options: { signal?: AbortSignal } = {}): Promise<VideoCheckPassed | VideoCheckRejected> {
+  return withSource(uri, (source) => checkVideoFile(source, { maxBytes: MAX_SOURCE_BYTES, ...options }));
+}
+
+/** Size of the file at `uri` in bytes (0 when unknown). */
+export function fileSize(uri: string): number {
+  try {
+    return new File(uri).size ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 const FREE = Uint8Array.of(0x66, 0x72, 0x65, 0x65); // 'free'
@@ -83,7 +102,7 @@ export function videoRejectedMessage(result: VideoCheckRejected): string {
     case 'not_a_video':
       return 'This file is not a video. Choose an MP4 or MOV video.';
     case 'too_large':
-      return 'Videos must be smaller than 500 MB.';
+      return 'This video is too large to upload. Trim it and try again.';
     case 'no_video_track':
       return 'This file has no video picture. Choose a video recorded with a camera.';
     case 'encrypted':
@@ -100,6 +119,13 @@ export function videoRejectedMessage(result: VideoCheckRejected): string {
 /** Throws when the file at `uri` is not a genuine video. */
 export async function requireVideo(uri: string, options: Parameters<typeof scanVideo>[1] = {}): Promise<VideoCheckPassed> {
   const result = await scanVideo(uri, options);
+  if (!result.ok) throw new AppError('invalid_video', videoRejectedMessage(result));
+  return result;
+}
+
+/** Quick check that throws when the file at `uri` is not a genuine video. */
+export async function requireVideoStructure(uri: string, options: { signal?: AbortSignal } = {}): Promise<VideoCheckPassed> {
+  const result = await inspectVideo(uri, options);
   if (!result.ok) throw new AppError('invalid_video', videoRejectedMessage(result));
   return result;
 }

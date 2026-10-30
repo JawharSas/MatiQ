@@ -8,7 +8,7 @@ import type { MatchResult, AthleteTotals } from '@matiq/rules-engine';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppError, fromPostgrest } from '@/lib/errors';
 import { readCache, writeCache } from '@/lib/storage';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
 
 export type Visibility = 'public' | 'private';
@@ -45,7 +45,7 @@ export interface FeedFilter {
 const PAGE_SIZE = 20;
 
 async function fetchFeedPage(filter: FeedFilter, before: string | null): Promise<FeedItem[]> {
-  const { data, error } = await supabase.rpc('get_feed', {
+  const { data, error } = await backend.rpc('get_feed', {
     p_before: before,
     p_limit: PAGE_SIZE,
     p_author: filter.author ?? null,
@@ -76,8 +76,8 @@ export function useToggleLike() {
   return useMutation({
     mutationFn: async ({ postId, liked }: { postId: string; liked: boolean }) => {
       const { error } = liked
-        ? await supabase.from('post_likes').delete().eq('post_id', postId)
-        : await supabase.from('post_likes').insert({ post_id: postId });
+        ? await backend.from('post_likes').delete().eq('post_id', postId)
+        : await backend.from('post_likes').insert({ post_id: postId });
       if (error) throw fromPostgrest(error);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
@@ -90,7 +90,7 @@ export async function createPost(input: {
   friendsOnly: boolean;
   highlight?: { start: number; end: number };
 }): Promise<void> {
-  const { data, error } = await supabase
+  const { data, error } = await backend
     .from('posts')
     .insert({
       match_id: input.matchId,
@@ -105,7 +105,7 @@ export async function createPost(input: {
   // The server's word filter held it back (only its author could see it) and
   // counted a strike. It is not kept: the strike is.
   if (data.moderation === 'blocked') {
-    const { error: deleteError } = await supabase.from('posts').delete().eq('id', data.id);
+    const { error: deleteError } = await backend.from('posts').delete().eq('id', data.id);
     // The third strike bans the account straight away: say so.
     const refused = fromPostgrest(deleteError);
     if (refused?.code === 'banned') throw refused;
@@ -117,7 +117,7 @@ export const POST_HELD_MESSAGE =
   "This post wasn't shared: it includes words MatIQ doesn't allow. Three of these in 30 days ban the account.";
 
 export async function deletePost(postId: string): Promise<void> {
-  const { error } = await supabase.from('posts').delete().eq('id', postId);
+  const { error } = await backend.from('posts').delete().eq('id', postId);
   if (error) throw fromPostgrest(error);
 }
 
@@ -141,7 +141,7 @@ export function useProfile(userId: string) {
   return useQuery({
     queryKey: ['profile', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_profile', { p_user_id: userId });
+      const { data, error } = await backend.rpc('get_profile', { p_user_id: userId });
       if (error) throw fromPostgrest(error);
       return ((data ?? []) as ProfileCard[])[0] ?? null;
     },
@@ -152,7 +152,7 @@ export async function updateProfile(
   userId: string,
   patch: { username?: string; display_name?: string; bio?: string; visibility?: Visibility; avatar_path?: string | null },
 ) {
-  const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
+  const { error } = await backend.from('profiles').update(patch).eq('id', userId);
   if (error) throw fromPostgrest(error);
 }
 
@@ -172,7 +172,7 @@ export function useFriends() {
   return useQuery({
     queryKey: ['friends'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_friends');
+      const { data, error } = await backend.rpc('get_friends');
       if (error) throw fromPostgrest(error);
       return (data ?? []) as FriendEntry[];
     },
@@ -180,13 +180,13 @@ export function useFriends() {
 }
 
 export async function searchProfiles(query: string) {
-  const { data, error } = await supabase.rpc('search_profiles', { p_query: cleanText(query), p_limit: 20 });
+  const { data, error } = await backend.rpc('search_profiles', { p_query: cleanText(query), p_limit: 20 });
   if (error) throw fromPostgrest(error);
   return (data ?? []) as Pick<ProfileCard, 'user_id' | 'username' | 'display_name' | 'avatar_path' | 'visibility'>[];
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {
-  const { data, error } = await supabase.rpc(name, args);
+  const { data, error } = await backend.rpc(name, args);
   if (error) throw fromPostgrest(error);
   return data;
 }
@@ -197,7 +197,7 @@ export const friendActions = {
   decline: (userId: string) => rpc('respond_friend_request', { p_requester: userId, p_accept: false }),
   remove: (userId: string) => rpc('remove_friend', { p_other: userId }),
   block: async (userId: string) => {
-    const { error } = await supabase.from('blocks').insert({ blocked_id: userId });
+    const { error } = await backend.from('blocks').insert({ blocked_id: userId });
     if (error) throw fromPostgrest(error);
   },
 };
