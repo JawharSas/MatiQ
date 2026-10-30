@@ -11,35 +11,11 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
-import type { Discipline } from '../rules-engine/index.ts';
-import { type BatchContext, batchIntro, coachingSystemPrompt, IMAGE_SAFETY_PROMPT, systemPrompt } from './prompts.ts';
-import { BATCH_SCHEMAS, type BatchOutput, type Safety, SAFETY_SCHEMA } from './schemas.ts';
+import { batchIntro, coachingSystemPrompt, IMAGE_SAFETY_PROMPT, systemPrompt } from './prompts.ts';
+import { BATCH_SCHEMAS, SAFETY_SCHEMA } from './schemas.ts';
+import { AnalysisError, type AnalysisProvider } from './types.ts';
 
-export interface Frame {
-  t: number;
-  /** Base64-encoded JPEG. */
-  data: string;
-}
-
-export class AnalysisError extends Error {
-  override name = 'AnalysisError';
-  readonly code: string;
-  readonly retryable: boolean;
-
-  constructor(code: string, message: string, retryable = false) {
-    super(message);
-    this.code = code;
-    this.retryable = retryable;
-  }
-}
-
-export interface AnalysisProvider {
-  readonly model: string;
-  analyzeBatch(context: BatchContext, frames: Frame[]): Promise<BatchOutput>;
-  coachingSummary(discipline: Discipline, digest: unknown, observations: string[]): Promise<string>;
-  /** Content check of one JPEG; null when the model declined to look at it. */
-  checkImage(jpegBase64: string): Promise<Safety | null>;
-}
+export { AnalysisError, type AnalysisProvider, type Frame } from './types.ts';
 
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
@@ -167,14 +143,21 @@ export function createAnthropicProvider(options: {
   };
 }
 
-/** Cheap credential check used before storing a BYOK key (no tokens billed). */
-export async function verifyAnthropicKey(apiKey: string): Promise<boolean> {
+/**
+ * Lists the Claude models the key can use (every Claude model reads images).
+ * Returns null when the key is rejected. No tokens are billed.
+ */
+export async function listAnthropicModels(apiKey: string): Promise<string[] | null> {
   const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 15_000 });
   try {
-    await client.models.list({ limit: 1 });
-    return true;
+    const ids: string[] = [];
+    for await (const model of client.models.list({ limit: 100 })) {
+      ids.push(model.id);
+      if (ids.length >= 200) break;
+    }
+    return ids;
   } catch (error) {
-    if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) return false;
+    if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) return null;
     throw new AnalysisError('ai_unavailable', 'Could not verify the key right now', true);
   }
 }

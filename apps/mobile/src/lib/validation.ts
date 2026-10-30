@@ -77,13 +77,24 @@ export const matchSetupSchema = z.object({
   athleteBHint: singleLine(80).optional(),
 });
 
+/** Any provider's key: the server checks its exact format and that it works. */
 export const apiKeySchema = z.object({
   apiKey: z
     .string()
     .trim()
-    .regex(/^sk-ant-[A-Za-z0-9_-]{20,250}$/, 'Anthropic keys start with "sk-ant-"'),
-  label: singleLine(40).optional(),
+    .regex(/^[\x21-\x7e]{8,500}$/, 'Paste the whole key: no spaces'),
+  baseUrl: z
+    .string()
+    .trim()
+    .regex(/^https:\/\/[^\s/?#@]+\.[^\s/?#@]+(\/[^\s?#]*)?$/, 'Use the https address of the AI service, e.g. https://api.example.com/v1')
+    .max(300)
+    .optional(),
 });
+
+export const modelIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._:/@+-]{1,200}$/, 'Choose a model, or type its exact ID');
 
 /** Formats the first zod issue for display next to a form. */
 export function firstIssue(error: z.ZodError): string {

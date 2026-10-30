@@ -326,7 +326,13 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
     const embedAnalyses = this.table === 'matches' && this.columns.includes('match_analyses(');
     const out = rows.map((row) => {
       const copy = structuredClone(row);
-      if (embedAnalyses) copy.match_analyses = db.match_analyses.filter((analysis) => analysis.match_id === row.id).map((analysis) => structuredClone(analysis));
+      if (embedAnalyses) {
+        const analyses = db.match_analyses.filter((analysis) => analysis.match_id === row.id);
+        // Like PostgREST's JSON paths: `match_analyses(result:scorecard->result, totals:scorecard->totals)`.
+        copy.match_analyses = this.columns.includes('result:scorecard->result')
+          ? analyses.map((analysis) => ({ result: structuredClone(analysis.scorecard?.result ?? null), totals: structuredClone(analysis.scorecard?.totals ?? null) }))
+          : analyses.map((analysis) => structuredClone(analysis));
+      }
       return copy;
     });
     if (this.mode === 'many') return out;
@@ -391,7 +397,8 @@ function banUser(userId: string, reason: string, category: string, source: 'owne
   const earlier = db.bans.find((ban) => ban.user_id === userId);
   const prior = earlier ? { prior_suspended: earlier.prior_suspended, prior_suspended_reason: earlier.prior_suspended_reason } : { prior_suspended: Boolean(e?.is_suspended), prior_suspended_reason: e?.suspended_reason ?? null };
   db.bans = db.bans.filter((ban) => ban.user_id !== userId);
-  db.bans.unshift({ user_id: userId, reason, category, source, created_at: now(), ...prior });
+  // The preview has no networks: one private network, one shared one left open.
+  db.bans.unshift({ user_id: userId, reason, category, source, created_at: now(), networks_blocked: 1, networks_shared: 1, ...prior });
   if (e) Object.assign(e, { is_suspended: true, suspended_reason: `Banned: ${reason}` });
   audit('ban', userId, {}, { category, source }, reason);
 }
@@ -1000,7 +1007,14 @@ function functionError(status: number, code: string) {
   return new FunctionsHttpError(new Response(JSON.stringify({ error: { code, message: code } }), { status }));
 }
 
-const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string) => unknown> = {
+/** Sample model lists for the AI provider screen (the real ones come from each provider). */
+const PREVIEW_MODELS: Record<string, { id: string; vision: boolean | null }[]> = {
+  anthropic: [{ id: 'claude-opus-5-5', vision: true }, { id: 'claude-sonnet-5-5', vision: true }, { id: 'claude-haiku-5-5', vision: true }],
+  openai: [{ id: 'gpt-5', vision: true }, { id: 'gpt-5-mini', vision: true }, { id: 'gpt-4o', vision: true }, { id: 'text-embedding-3-small', vision: false }],
+  google: [{ id: 'gemini-3.1-pro', vision: true }, { id: 'gemini-2.5-flash', vision: true }],
+};
+
+const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string, params: URLSearchParams) => unknown> = {
   // The preview has no AI: every picture passes the check.
   moderation: (body, _method, viewer) => {
     if (body.action !== 'avatar') fail('validation_failed', 'Unknown action');
@@ -1051,17 +1065,36 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string) => u
     if (!participant && !isOwner(viewer)) fail('not_found', 'Not found');
     return settle(r);
   },
-  'api-keys': (body, method, viewer) => {
-    if (method === 'GET') return { keys: db.api_keys.filter((key) => key.user_id === viewer).map(({ user_id: _u, ...key }) => key) };
+  'api-keys': (body, method, viewer, params) => {
+    const mine = () => db.api_keys.filter((key) => key.user_id === viewer).sort((a, b) => (a.selected_at < b.selected_at ? 1 : -1));
+    if (method === 'GET') return { keys: mine().map(({ user_id: _u, selected_at: _s, ...key }, index) => ({ ...key, active: index === 0 })) };
     if (method === 'DELETE') {
-      db.api_keys = db.api_keys.filter((key) => key.user_id !== viewer);
+      db.api_keys = db.api_keys.filter((key) => !(key.user_id === viewer && key.provider === params.get('provider')));
       return { deleted: true };
     }
+    if (body.action === 'select') {
+      const key = mine().find((row) => row.provider === body.provider) ?? fail('not_found', 'Not found');
+      key.selected_at = now();
+      return { provider: key.provider, active: true };
+    }
     const apiKey = String(body.apiKey ?? '');
-    if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(apiKey)) fail('invalid_key_format', 'invalid key');
-    db.api_keys = db.api_keys.filter((key) => key.user_id !== viewer);
-    db.api_keys.push({ user_id: viewer, provider: 'anthropic', last4: apiKey.slice(-4), label: body.label ?? null, created_at: now(), last_used_at: null });
-    return { stored: true };
+    if (apiKey.length < 8 || /\s/.test(apiKey)) fail('invalid_key_format', 'invalid key');
+    if (apiKey.includes('invalid')) fail('key_rejected', 'rejected');
+    const models = PREVIEW_MODELS[String(body.provider)];
+    if (body.action === 'check') return models ? { listed: true, models, suggested: models[0]!.id } : { listed: false, models: [], suggested: null };
+    db.api_keys = db.api_keys.filter((key) => !(key.user_id === viewer && key.provider === body.provider));
+    db.api_keys.push({
+      user_id: viewer,
+      provider: body.provider,
+      model: body.model,
+      base_url: body.baseUrl ?? null,
+      last4: apiKey.slice(-4),
+      label: body.label ?? null,
+      created_at: now(),
+      selected_at: now(),
+      last_used_at: null,
+    });
+    return { provider: body.provider, model: body.model, last4: apiKey.slice(-4), label: body.label ?? null };
   },
   account: (body, method, viewer) => {
     if (method === 'POST') {
@@ -1259,9 +1292,8 @@ const client = {
       if (!me()) return { data: null, error: functionError(401, 'unauthorized') };
       if (isBanned(me())) return { data: null, error: functionError(403, 'banned') };
       if (fn !== 'account' && ageCheckPending()) return { data: null, error: functionError(403, 'age_check_required') };
-      void query;
       try {
-        return { data: structuredClone(handler(options.body ?? {}, options.method ?? 'POST', me()!)), error: null };
+        return { data: structuredClone(handler(options.body ?? {}, options.method ?? 'POST', me()!, new URLSearchParams(query ?? ''))), error: null };
       } catch (error) {
         return { data: null, error: functionError(error instanceof PreviewError && error.code === 'not_found' ? 404 : 409, error instanceof PreviewError ? error.code : 'internal_error') };
       }

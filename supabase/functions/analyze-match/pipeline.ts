@@ -12,7 +12,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { AnalysisError, type AnalysisProvider, type Frame } from '../_shared/ai/anthropic.ts';
+import { AnalysisError, type AnalysisProvider, type Frame } from '../_shared/ai/types.ts';
 import type { BatchOutput } from '../_shared/ai/schemas.ts';
 import { toBase64 } from '../_shared/crypto.ts';
 import type { Logger } from '../_shared/log.ts';

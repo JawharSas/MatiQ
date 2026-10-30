@@ -3,6 +3,61 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.6.0] Pre-Beta, 2026-10-30
+
+### Any AI
+- Own keys for any AI: Anthropic (Claude, on the Anthropic SDK), OpenAI,
+  Google Gemini, xAI, OpenRouter, Groq, Mistral, Together and any custom
+  OpenAI-compatible service (`_shared/ai/providers.ts`,
+  `_shared/ai/openai-compatible.ts`). Frames go as base64 data URLs; the
+  reply is asked for as a strict JSON Schema, then JSON mode, then a plain
+  instruction, whichever the endpoint accepts, and validated with the same
+  zod schemas (unusable events are dropped; the content check is required).
+  Batches are split to each provider's image limit.
+- `api-keys`: `check` verifies a key and lists its models (whether each reads
+  images comes from the listing or the name; a model is suggested); `save`
+  tests the chosen model with one 64x64 picture before encrypting and
+  storing the key; `select` picks which stored key analyses use. Old app
+  versions keep working (Claude, no action field).
+- Custom endpoints: public `https` hosts only (no IP literals, local names,
+  other ports, credentials or queries), names that resolve to private
+  addresses are refused, and requests never follow redirects.
+- Migration `20261030000100_any_ai_provider.sql`: provider list, `model`,
+  `base_url` (https, custom only) and `selected_at` on stored keys;
+  `svc_get_active_api_key`, `svc_select_api_key`; `svc_list_api_keys`
+  returns the model and which key is in use.
+- Platform AI: `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`
+  (Claude with `ANTHROPIC_API_KEY` stays the default); Deploy backend
+  forwards them. Analyses without a configured platform AI answer
+  `ai_not_configured`.
+- App: Settings → **AI provider** (was API keys): key recognised as you
+  paste it, model picker, test and save, several keys with one in use. The
+  analysis setup names the AI that will score the round.
+
+### Moderation
+- Network bans only for private networks (migration
+  `20261030000200_private_network_bans.sql`): never addresses outside the
+  public internet (private, carrier-grade NAT, NAT64, loopback, link-local
+  and other reserved ranges), and only networks no other account that
+  isn't banned used in the last 30 days. The ban records how many networks
+  were blocked and how many were left open; the owner panel and the audit
+  log show both. Existing blocks on shared networks are lifted.
+
+### Design
+- Feed: a scoreboard with one tinted panel per fighter, the result pill on
+  top and "View scorecard".
+- Matches: record (wins, losses, draws for Fighter 1), matches and analysed
+  counts, month headers, and the score with Won / Lost / Draw on each
+  analysed match.
+- Profile: a header with a cover band, the picture overlapping it, and
+  matches, record and friends.
+
+### Legal
+- Privacy Policy: your own AI provider receives the frames of analyses run
+  with your key, plus one test picture when you save it; network blocks only
+  for networks nobody else uses. Terms: bans block your own networks only.
+  Both are version `2026-10-30`.
+
 ## [1.5.0] Pre-Beta, 2026-10-29
 
 ### Moderation

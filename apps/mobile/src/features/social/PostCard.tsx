@@ -61,20 +61,18 @@ export function PostCard({ post }: { post: FeedItem }) {
               ) : (
                 <View style={styles.fill} />
               )}
-              <Text style={styles.method}>{winner ? methodLabel(post.result.method) : 'Draw'}</Text>
+              <View style={[styles.resultPill, !winner && styles.drawPill]}>
+                {winner ? <Ionicons name="trophy" size={12} color={colors.warning} aria-hidden /> : null}
+                <Text style={[styles.resultText, !winner && { color: colors.textMuted }]}>{winner ? methodLabel(post.result.method) : 'Draw'}</Text>
+              </View>
             </View>
             <View style={styles.fighters}>
-              <Fighter name={names.A} corner="A" won={winner === 'A'} lost={winner === 'B'} />
-              <View style={styles.scores}>
-                <Text style={[styles.score, { color: winner === 'B' ? colors.textMuted : athleteColor('A') }]}>
-                  {post.totals.A.points}
-                </Text>
-                <Text style={styles.scoreDivider}>:</Text>
-                <Text style={[styles.score, { color: winner === 'A' ? colors.textMuted : athleteColor('B') }]}>
-                  {post.totals.B.points}
-                </Text>
-              </View>
-              <Fighter name={names.B} corner="B" won={winner === 'B'} lost={winner === 'A'} />
+              <Fighter name={names.A} corner="A" points={post.totals.A.points} won={winner === 'A'} lost={winner === 'B'} />
+              <Fighter name={names.B} corner="B" points={post.totals.B.points} won={winner === 'B'} lost={winner === 'A'} />
+            </View>
+            <View style={styles.viewScorecard}>
+              <Text style={styles.viewScorecardText}>View scorecard</Text>
+              <Ionicons name="chevron-forward" size={14} color={colors.accent} aria-hidden />
             </View>
           </Pressable>
         </Link>
@@ -127,21 +125,32 @@ export function PostCard({ post }: { post: FeedItem }) {
   );
 }
 
-function Fighter({ name, corner, won, lost }: { name: string; corner: 'A' | 'B'; won: boolean; lost: boolean }) {
+/** One fighter's side of the scoreboard: their colour, name, points and the win. */
+function Fighter({ name, corner, points, won, lost }: { name: string; corner: 'A' | 'B'; points: number; won: boolean; lost: boolean }) {
   const alignRight = corner === 'B';
+  const color = athleteColor(corner);
   return (
-    <View style={[styles.fighter, alignRight && { alignItems: 'flex-end' }]}>
-      <View style={[styles.cornerBar, { backgroundColor: athleteColor(corner) }, lost && { opacity: 0.35 }]} />
-      <Text style={[styles.fighterName, lost && { color: colors.textMuted }]} numberOfLines={1}>
-        {name}
-      </Text>
+    <View
+      style={[
+        styles.fighter,
+        { backgroundColor: corner === 'A' ? colors.athleteASoft : colors.athleteBSoft, borderColor: won ? color : 'transparent' },
+        alignRight && { alignItems: 'flex-end' },
+      ]}
+    >
+      <View style={[styles.fighterTop, alignRight && { flexDirection: 'row-reverse' }]}>
+        <View style={[styles.cornerDot, { backgroundColor: color }, lost && { opacity: 0.4 }]} />
+        <Text style={[styles.fighterName, lost && { color: colors.textMuted }]} numberOfLines={1}>
+          {name}
+        </Text>
+      </View>
+      <Text style={[styles.score, { color: lost ? colors.textMuted : color }]}>{points}</Text>
       {won ? (
         <View style={styles.won}>
-          <Ionicons name="trophy" size={12} color={colors.warning} />
+          <Ionicons name="trophy" size={12} color={colors.warning} aria-hidden />
           <Text style={styles.wonText}>WIN</Text>
         </View>
       ) : (
-        <Text style={styles.wonPlaceholder}> </Text>
+        <Text style={styles.wonPlaceholder}>{lost ? ' ' : 'DRAW'}</Text>
       )}
     </View>
   );
@@ -152,19 +161,30 @@ const styles = StyleSheet.create({
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { fontSize: 15, fontWeight: '700', color: colors.text },
   body: { ...font.body, fontSize: 15.5, lineHeight: 23 },
-  fightCard: { backgroundColor: colors.surfaceRaised, borderRadius: 16, padding: 14, gap: 12 },
+  fightCard: { backgroundColor: colors.surfaceRaised, borderRadius: 16, padding: 12, gap: 10, borderWidth: 1, borderColor: colors.border },
   fightMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  method: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
-  fighters: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  fighter: { flex: 1, gap: 4 },
-  cornerBar: { width: 28, height: 4, borderRadius: 2 },
-  fighterName: { fontSize: 16, fontWeight: '700', color: colors.text },
+  resultPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    backgroundColor: colors.warningSoft,
+  },
+  drawPill: { backgroundColor: colors.surfaceHigh },
+  resultText: { fontSize: 12, fontWeight: '800', color: colors.warning },
+  fighters: { flexDirection: 'row', gap: spacing.sm },
+  fighter: { flex: 1, gap: 2, borderRadius: 12, padding: 12, borderWidth: 1.5 },
+  fighterTop: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'stretch' },
+  cornerDot: { width: 8, height: 8, borderRadius: 4 },
+  fighterName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.text },
   won: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   wonText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.warning },
-  wonPlaceholder: { fontSize: 11 },
-  scores: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  score: { fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
-  scoreDivider: { fontSize: 22, fontWeight: '700', color: colors.textFaint },
+  wonPlaceholder: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textMuted },
+  score: { fontSize: 34, lineHeight: 40, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
+  viewScorecard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  viewScorecardText: { fontSize: 13, fontWeight: '700', color: colors.accent },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   like: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, minWidth: 44 },
   report: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: spacing.xs },

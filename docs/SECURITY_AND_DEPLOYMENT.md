@@ -10,7 +10,8 @@ the repository safely.
 |---|---|---|
 | API keys extracted from the app bundle | Only the Supabase URL + publishable anon key ship in the app; the app and the release build refuse a secret or `service_role` key. AI keys, the service-role key and KEKs exist only as Edge Function secrets. CI scans the full git history with gitleaks and the built bundle with `scripts/scan-bundle.mjs`. | `config/env.ts`, `config/public-key.ts`, `release.yml`, `ci.yml` |
 | User BYOK keys leaked | Sent once over TLS, verified, encrypted with AES-256-GCM (KEK in function secrets, AAD bound to user + provider), never returned, logged (redacting logger) or stored on the device. Screen capture blocked; device auth required to open the screen. | `supabase/functions/api-keys`, `_shared/crypto.ts`, `settings/api-keys.tsx` |
-| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 237 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
+| Own keys for any AI pointed at internal services (SSRF) | Known providers have fixed endpoints. A custom endpoint must be a public `https` host on port 443: no IP literals, local names, credentials or query strings, its name must not resolve to a private address, and requests never follow redirects. Keys are only sent to the provider they were saved for; the app recognises a key's provider by its format and never tries one key on several providers. | `_shared/ai/endpoint.ts`, `_shared/ai/openai-compatible.ts` |
+| Reading other users' data | RLS on every table (a test fails if a table is added without it); `anon` has no table access or privileged functions; no views; helpers are `SECURITY DEFINER` with empty `search_path`; feed is `SECURITY INVOKER`. 261 automated database tests. | `supabase/migrations/*`, `supabase/tests/database` |
 | Privilege escalation (unlimited / owner) | Entitlements live in a separate table with no client write grants or policies; signup metadata cannot set roles; admin RPCs re-check the role (and MFA) every call and are audited. | `20261023000300_access_control.sql`, `20261023000600_owner_panel.sql` |
 | Forged scores / analyses | Only the service role writes `match_analyses`, `status`, `frame_count`, `has_video`; column-level grants block client writes; duration frozen after analysis starts. | migrations 300 / 400 |
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
@@ -42,7 +43,8 @@ the repository safely.
 | `EXPO_PUBLIC_TURNSTILE_SITE_KEY` | No (public by design) | GitHub Actions variable (release builds) |
 | `TURNSTILE_SECRET_KEY` | **Yes** | GitHub Actions secret; Deploy backend copies it into Supabase Auth's CAPTCHA settings |
 | `SUPABASE_ACCESS_TOKEN` (and optionally `SUPABASE_DB_PASSWORD`) | **Yes** | GitHub Actions secret, used only by the Deploy backend workflow |
-| `ANTHROPIC_API_KEY` | **Yes** | GitHub Actions secret (the Deploy backend workflow copies it into the function secrets) or `supabase secrets set` |
+| `ANTHROPIC_API_KEY`, or `AI_API_KEY` for another provider | **Yes** | GitHub Actions secret (the Deploy backend workflow copies it into the function secrets) or `supabase secrets set` |
+| `AI_PROVIDER`, `AI_MODEL`, `AI_BASE_URL` | No | GitHub Actions variables (or secrets): which AI the platform key is for, the model (it must read images) and, for a custom service, its https address |
 | `MATIQ_KEK_V{n}`, `MATIQ_KEK_CURRENT` | **Yes** | Function secrets: the Deploy backend workflow creates `MATIQ_KEK_V1` once if it is missing and never prints it; set it yourself first with `supabase secrets set` if you want a recovery copy in a password manager |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | injected automatically into Edge Functions; never anywhere else |
 | Signing keystores, App Store Connect keys | **Yes** | EAS credentials service |
@@ -81,8 +83,13 @@ From the browser, with the
 
 1. Repository variable `EXPO_PUBLIC_SUPABASE_URL` (also used by the app
    build) and the Actions secrets `SUPABASE_ACCESS_TOKEN` (an access token
-   from supabase.com/dashboard/account/tokens) and, optionally,
-   `ANTHROPIC_API_KEY`.
+   from supabase.com/dashboard/account/tokens) and, optionally, the platform
+   AI: the secret `ANTHROPIC_API_KEY` for Claude, or for any other AI the
+   secret `AI_API_KEY` with the variables `AI_PROVIDER` (`openai`, `google`,
+   `xai`, `openrouter`, `groq`, `mistral`, `together` or `custom`),
+   `AI_MODEL` (a model that reads images, for example the newest GPT or
+   Gemini) and, for `custom`, `AI_BASE_URL`. Use a provider whose terms
+   forbid training on your customers' content: the Privacy Policy says so.
 2. **Actions → Deploy backend → Run workflow**. It applies the migrations,
    sets the Auth, Data API and storage settings below, creates the function
    secrets and deploys every Edge Function. It runs again by itself whenever
@@ -268,24 +275,29 @@ What runs on its own:
   match's frames and video to the `moderation-quarantine` bucket, bans the
   account and fails the analysis with `content_removed`.
 - **Profile pictures** are checked before anyone else sees them. This needs
-  the platform AI key: set the `ANTHROPIC_API_KEY` function secret. Without
-  it, new pictures are refused (`moderation_unavailable`) and nothing is
-  published unchecked.
+  the platform AI (`ANTHROPIC_API_KEY`, or `AI_PROVIDER` + `AI_API_KEY` +
+  `AI_MODEL` for any other AI). Without it, new pictures are refused
+  (`moderation_unavailable`) and nothing is published unchecked.
 - **Bans** (automatic, or **Ban account** on a user in the Owner panel):
   sign-in and token refresh refused by Supabase Auth, sessions ended,
-  profile, posts and shared matches hidden, and every network the account
-  used in the last 30 days blocked for 30 days. **Lift ban** under
+  profile, posts and shared matches hidden, and the account's private
+  networks blocked for 30 days. **Lift ban** under
   Moderation undoes it and restores a suspension the account had before
   the ban; a network another banned account also used stays blocked. The
   owner account can't be banned.
 
 Know the limits:
 
-- Network blocks hit everyone on that network who signs in to MatIQ: a gym's
-  Wi-Fi, or a mobile carrier that shares one address between many phones.
-  If someone reports that, lift the ban, or ban again later from a
-  different network. Blocks apply to the Data API and the Edge Functions;
-  creating an account still works but the new account gets the banned screen.
+- Only private networks are blocked (migration
+  `20261030000200_private_network_bans.sql`): a network is blocked only if
+  no other account that isn't banned used it in the last 30 days, and never
+  for addresses outside the public internet (private ranges, carrier-grade
+  NAT, NAT64, loopback, link-local). The ban card in the Owner panel shows
+  how many networks were blocked and how many were left open as shared.
+  A carrier address nobody else on MatIQ happened to use can still be
+  blocked; lift the ban if someone reports it. Blocks apply to the Data API
+  and the Edge Functions; creating an account still works but the new
+  account gets the banned screen.
 - The AI check sees the sampled frames, not every frame of the video, and a
   word list never catches everything. Reports (the **Report** button) are
   still how people tell you about the rest.
@@ -413,7 +425,7 @@ Panel screens, device authentication before opening them.
 | Event | Action |
 |---|---|
 | Suspected account takeover | Owner Panel: suspend the account; user signs out of all devices (`signOut({ scope: 'global' })`), resets password and turns on two-factor authentication. |
-| AI provider key leaked | Revoke it at the provider, `supabase secrets set ANTHROPIC_API_KEY=<new>`. |
+| AI provider key leaked | Revoke it at the provider, `supabase secrets set ANTHROPIC_API_KEY=<new>` (or `AI_API_KEY`), or update the GitHub secret and run Deploy backend. |
 | KEK exposed | Rotate (section 4) immediately, then ask users to replace their stored keys. |
 | Service-role key exposed | Rotate the project's API keys / JWT secret in the dashboard, redeploy functions. |
 | Abuse of analysis quota | Lower `monthly_analysis_limit`, review `admin_usage_overview`, suspend offenders. |
@@ -451,7 +463,7 @@ Then in the GitHub repository settings:
 - [ ] TLS pins configured with a backup pin.
 - [ ] Privacy Policy and Terms reviewed by counsel; `LEGAL_VERSIONS` bumped when they change.
 - [ ] Rule values in `packages/rules-engine` checked against current rulebooks.
-- [ ] `ANTHROPIC_API_KEY` set (needed for profile-picture checks); `moderation` function deployed; a test post with a blocked word is held back, and a ban plus **Lift ban** work on a test account.
+- [ ] Platform AI set (`ANTHROPIC_API_KEY`, or `AI_PROVIDER` + `AI_API_KEY` + `AI_MODEL`; needed for profile-picture checks); `moderation` function deployed; a test post with a blocked word is held back, and a ban plus **Lift ban** work on a test account.
 - [ ] App Store privacy labels / Play data-safety form match the Privacy Policy (no data sold, no tracking).
 
 ## 10. Security checklist

@@ -202,6 +202,10 @@ export interface BanRow {
   source: 'owner' | 'automatic';
   created_at: string;
   strikes: number;
+  /** Networks only this account used, blocked for 30 days. */
+  networks_blocked: number;
+  /** Networks left open because someone else uses them, or they aren't public addresses. */
+  networks_shared: number;
 }
 
 export interface StrikeRow {

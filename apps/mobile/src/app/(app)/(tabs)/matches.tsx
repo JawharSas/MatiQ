@@ -1,29 +1,16 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { formatClock } from '@matiq/rules-engine';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
+import { byMonth, type Outcome, outcomeOf, recordText, summarize } from '@/features/analysis/match-record';
 import type { MatchStatus } from '@/features/analysis/useMatch';
-import { useUserId } from '@/features/auth/AuthProvider';
+import { type MatchListItem, useMyMatches } from '@/features/analysis/useMyMatches';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
-import { errorMessage, fromPostgrest } from '@/lib/errors';
-import { readCache, writeCache } from '@/lib/storage';
-import { supabase } from '@/lib/supabase';
-import { Body, Caption, Card, ErrorText } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
-
-interface MatchListItem {
-  id: string;
-  discipline: 'bjj' | 'wrestling' | 'mma';
-  title: string;
-  status: MatchStatus;
-  duration_ms: number;
-  recorded_at: string;
-  athlete_a_label: string;
-  athlete_b_label: string;
-}
+import { errorMessage } from '@/lib/errors';
+import { Button, Caption, Card, EmptyState, ErrorText, StatTile } from '@/ui/components';
+import { colors, font, radius, spacing } from '@/ui/theme';
 
 const STATUS: Record<MatchStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: colors.textMuted },
@@ -34,82 +21,132 @@ const STATUS: Record<MatchStatus, { label: string; color: string }> = {
   failed: { label: 'Failed', color: colors.danger },
 };
 
+const OUTCOME: Record<Outcome, { label: string; color: string; background: string }> = {
+  won: { label: 'Won', color: colors.success, background: colors.successSoft },
+  lost: { label: 'Lost', color: colors.danger, background: colors.dangerSoft },
+  draw: { label: 'Draw', color: colors.textMuted, background: colors.surfaceHigh },
+};
+
 const DISCIPLINE_ICONS: Record<MatchListItem['discipline'], ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   bjj: 'karate',
   wrestling: 'kabaddi',
   mma: 'boxing-glove',
 };
 
+type Row = { kind: 'month'; month: string } | { kind: 'match'; match: MatchListItem };
+
 export default function MatchesScreen() {
-  const userId = useUserId();
-  const cacheKey = `matches:${userId}`;
-  const matches = useQuery({
-    queryKey: ['my-matches'],
-    placeholderData: readCache<MatchListItem[]>(cacheKey),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('matches')
-        .select('id, discipline, title, status, duration_ms, recorded_at, athlete_a_label, athlete_b_label')
-        .eq('owner_id', userId)
-        .order('recorded_at', { ascending: false })
-        .limit(100);
-      if (error) throw fromPostgrest(error);
-      writeCache(cacheKey, data);
-      return data as MatchListItem[];
-    },
-  });
+  const router = useRouter();
+  const matches = useMyMatches();
+  const list = matches.data ?? [];
+  const summary = summarize(list);
+  const rows: Row[] = byMonth(list, (match) => match.recorded_at).flatMap((group) => [
+    { kind: 'month' as const, month: group.month },
+    ...group.items.map((match) => ({ kind: 'match' as const, match })),
+  ]);
 
   return (
     <FlatList
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.md }}
-      data={matches.data ?? []}
-      keyExtractor={(match) => match.id}
-      ListHeaderComponent={matches.error ? <ErrorText>{errorMessage(matches.error)}</ErrorText> : undefined}
-      ListEmptyComponent={matches.isPending ? undefined : <Body muted>No matches yet. Record or upload a round from the Analyze tab.</Body>}
+      data={rows}
+      keyExtractor={(row) => (row.kind === 'month' ? `month:${row.month}` : row.match.id)}
+      ListHeaderComponent={
+        <View style={styles.header}>
+          {matches.error ? <ErrorText>{errorMessage(matches.error)}</ErrorText> : null}
+          {list.length > 0 ? (
+            <>
+              <View style={styles.tiles}>
+                <StatTile label="Matches" value={summary.total} />
+                <StatTile label="Record" value={recordText(summary)} tone="accent" />
+                <StatTile label="Analysed" value={summary.analysed} />
+              </View>
+              <Caption>Record is wins, losses and draws for Fighter 1: you.</Caption>
+            </>
+          ) : null}
+        </View>
+      }
+      ListEmptyComponent={
+        matches.isPending ? undefined : (
+          <EmptyState
+            icon="videocam"
+            title="No matches yet"
+            body="Record a round or upload a video, and MatIQ scores it for you."
+            action={<Button label="Analyze a round" icon="videocam" onPress={() => router.push('/record')} />}
+          />
+        )
+      }
       refreshControl={<RefreshControl refreshing={matches.isRefetching} onRefresh={() => void matches.refetch()} tintColor={colors.accent} />}
-      renderItem={({ item }) => {
-        const title = item.title || `${item.athlete_a_label} vs ${item.athlete_b_label}`;
-        const status = STATUS[item.status];
-        const details = `${DISCIPLINE_LABELS[item.discipline]} · ${formatClock(item.duration_ms)} · ${new Date(item.recorded_at).toLocaleDateString()}`;
-        return (
-          <Link href={{ pathname: '/match/[id]', params: { id: item.id } }} asChild>
-            <Pressable accessibilityRole="link">
-              <Card>
-                <View style={styles.row}>
-                  <View style={styles.icon} aria-hidden>
-                    <MaterialCommunityIcons name={DISCIPLINE_ICONS[item.discipline]} size={22} color={colors.accent} />
-                  </View>
-                  <View style={styles.text}>
-                    <Text style={font.heading} numberOfLines={1}>
-                      {title}
-                    </Text>
-                    <Caption>{details}</Caption>
-                  </View>
-                  <View style={[styles.status, { borderColor: status.color }]}>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-                  </View>
-                </View>
-              </Card>
-            </Pressable>
-          </Link>
-        );
-      }}
+      renderItem={({ item: row }) =>
+        row.kind === 'month' ? (
+          <Text style={[font.overline, styles.month]} accessibilityRole="header">
+            {row.month.toUpperCase()}
+          </Text>
+        ) : (
+          <MatchRow match={row.match} />
+        )}
     />
   );
 }
 
+function MatchRow({ match }: { match: MatchListItem }) {
+  const title = match.title || `${match.athlete_a_label} vs ${match.athlete_b_label}`;
+  const details = `${DISCIPLINE_LABELS[match.discipline]} · ${formatClock(match.duration_ms)} · ${new Date(match.recorded_at).toLocaleDateString()}`;
+  const outcome = match.status === 'completed' ? outcomeOf(match.result) : null;
+  const status = STATUS[match.status];
+
+  return (
+    <Link href={{ pathname: '/match/[id]', params: { id: match.id } }} asChild>
+      <Pressable accessibilityRole="link" style={({ pressed }) => pressed && { opacity: 0.85 }}>
+        <Card style={outcome ? { borderLeftWidth: 3, borderLeftColor: OUTCOME[outcome].color } : undefined}>
+          <View style={styles.row}>
+            <View style={styles.icon} aria-hidden>
+              <MaterialCommunityIcons name={DISCIPLINE_ICONS[match.discipline]} size={22} color={colors.accent} />
+            </View>
+            <View style={styles.text}>
+              <Text style={font.heading} numberOfLines={1}>
+                {title}
+              </Text>
+              <Caption>{details}</Caption>
+            </View>
+            {outcome && match.totals ? (
+              <View style={styles.result}>
+                <Text style={styles.score}>
+                  {match.totals.A.points}–{match.totals.B.points}
+                </Text>
+                <View style={[styles.pill, { backgroundColor: OUTCOME[outcome].background }]}>
+                  <Text style={[styles.pillText, { color: OUTCOME[outcome].color }]}>{OUTCOME[outcome].label}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.pill, styles.outlined, { borderColor: status.color }]}>
+                <Text style={[styles.pillText, { color: status.color }]}>{status.label}</Text>
+              </View>
+            )}
+          </View>
+        </Card>
+      </Pressable>
+    </Link>
+  );
+}
+
 const styles = StyleSheet.create({
+  header: { gap: spacing.sm },
+  tiles: { flexDirection: 'row', gap: spacing.sm },
+  month: { marginTop: spacing.sm, color: colors.textMuted },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   icon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,
   },
   text: { flex: 1, gap: 2 },
-  status: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  statusText: { fontSize: 12, fontWeight: '700' },
+  result: { alignItems: 'flex-end', gap: 4 },
+  score: { fontSize: 18, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  pill: { borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  outlined: { borderWidth: 1 },
+  pillText: { fontSize: 12, fontWeight: '700' },
 });

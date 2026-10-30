@@ -12,8 +12,12 @@ import { PrivacyToggle } from '@/features/social/PrivacyToggle';
 import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, profileSchema } from '@/lib/validation';
-import { Badge, Body, Button, Caption, Card, ErrorText, ListGroup, ListRow, Loading, Screen, SectionHeader, TextField } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { useA11y } from '@/features/accessibility/A11yProvider';
+import { recordText, summarize } from '@/features/analysis/match-record';
+import { useMyMatches } from '@/features/analysis/useMyMatches';
+import { LogoMark } from '@/ui/brand';
+import { Badge, Body, Button, Caption, Card, ErrorText, ListGroup, ListRow, Loading, Screen, SectionHeader, StatTile, TextField } from '@/ui/components';
+import { colors, font, radius, spacing } from '@/ui/theme';
 
 export default function ProfileScreen() {
   const userId = useUserId();
@@ -25,6 +29,8 @@ export default function ProfileScreen() {
   const [draft, setDraft] = useState({ username: '', displayName: '', bio: '' });
   const [error, setError] = useState<string | null>(null);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const { highContrast } = useA11y();
+  const record = summarize(useMyMatches().data ?? []);
 
   if (profile.isPending) return <Loading />;
   const card = profile.data;
@@ -60,31 +66,43 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Change profile picture"
-          disabled={avatarBusy}
-          onPress={() => void updateAvatar(false)}
-          style={({ pressed }) => ({ opacity: avatarBusy || pressed ? 0.6 : 1 })}
-        >
-          <Avatar path={card.avatar_path} name={card.display_name} size={84} />
-          <View style={styles.cameraBadge}>
-            <Ionicons name="camera" size={14} color={colors.accentText} />
+      <View style={[styles.hero, highContrast && styles.heroContrast]}>
+        <View style={styles.cover} aria-hidden accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <View style={styles.coverMark}>
+            <LogoMark size={132} />
           </View>
-        </Pressable>
-        <View style={styles.identity}>
-          <Text style={font.title} numberOfLines={1}>
-            {card.display_name}
-          </Text>
-          <Text style={font.caption}>@{card.username}</Text>
-          <View style={styles.badges}>
-            <Badge
-              label={card.visibility === 'public' ? 'Public' : 'Private'}
-              icon={card.visibility === 'public' ? 'globe-outline' : 'lock-closed'}
-              tone={card.visibility === 'public' ? 'blue' : 'neutral'}
-            />
-            <Badge label={`${card.friend_count} ${card.friend_count === 1 ? 'friend' : 'friends'}`} icon="people" />
+        </View>
+        <View style={styles.heroBody}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Change profile picture"
+            disabled={avatarBusy}
+            onPress={() => void updateAvatar(false)}
+            style={({ pressed }) => [styles.avatarRing, { opacity: avatarBusy || pressed ? 0.6 : 1 }]}
+          >
+            <Avatar path={card.avatar_path} name={card.display_name} size={88} />
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={14} color={colors.accentText} />
+            </View>
+          </Pressable>
+          <View style={styles.identity}>
+            <Text style={font.title} numberOfLines={1}>
+              {card.display_name}
+            </Text>
+            <Text style={font.caption}>@{card.username}</Text>
+            <View style={styles.badges}>
+              <Badge
+                label={card.visibility === 'public' ? 'Public' : 'Private'}
+                icon={card.visibility === 'public' ? 'globe-outline' : 'lock-closed'}
+                tone={card.visibility === 'public' ? 'blue' : 'neutral'}
+              />
+              {isOwner ? <Badge label="Owner" icon="shield-half" tone="warning" /> : null}
+            </View>
+          </View>
+          <View style={styles.tiles}>
+            <StatTile label="Matches" value={record.total} />
+            <StatTile label="Record" value={recordText(record)} tone="accent" />
+            <StatTile label={card.friend_count === 1 ? 'Friend' : 'Friends'} value={card.friend_count} />
           </View>
         </View>
       </View>
@@ -133,9 +151,22 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, paddingTop: spacing.sm },
-  identity: { flex: 1, gap: 2 },
+  hero: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.hairline,
+    overflow: 'hidden',
+  },
+  heroContrast: { borderWidth: 1.5, borderColor: colors.textMuted },
+  // Decorative band behind the avatar.
+  cover: { height: 84, backgroundColor: colors.accentSoft, overflow: 'hidden' },
+  coverMark: { position: 'absolute', right: -24, top: -30, opacity: 0.18, transform: [{ rotate: '-12deg' }] },
+  heroBody: { paddingHorizontal: 18, paddingBottom: 18, gap: spacing.md },
+  avatarRing: { marginTop: -48, alignSelf: 'flex-start', borderRadius: 999, borderWidth: 4, borderColor: colors.surface },
+  identity: { gap: 2 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  tiles: { flexDirection: 'row', gap: spacing.sm },
   cameraBadge: {
     position: 'absolute',
     right: -2,

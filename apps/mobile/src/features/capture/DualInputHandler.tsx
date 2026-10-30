@@ -322,7 +322,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
           {onExitRanked ? <Button label="Record a casual match instead" variant="secondary" onPress={onExitRanked} /> : null}
         </Card>
       ) : null}
-      <MatchSetupForm value={setup} onChange={setSetup} hasOwnKey={(keys.data?.length ?? 0) > 0} rulesetLocked={ranked !== null} />
+      <MatchSetupForm value={setup} onChange={setSetup} ownKey={keys.data?.find((key) => key.active) ?? null} rulesetLocked={ranked !== null} />
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <IconTile icon="flash" tone={outOfQuota ? 'danger' : 'accent'} />

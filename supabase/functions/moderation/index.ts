@@ -2,8 +2,8 @@
  * moderation: checks content before other people can see it.
  *
  *   POST { action: 'avatar' }
- *     The app uploaded `avatars/{user}/pending.jpg`. The AI (platform key)
- *     checks it and it is published under a new name as the profile's
+ *     The app uploaded `avatars/{user}/pending.jpg`. The platform AI (any
+ *     provider, see _shared/ai/providers.ts) checks it and it is published under a new name as the profile's
  *     avatar_path -> 200 { status: 'ok', path }.
  *     Sexual content: the picture goes to quarantine and the account is
  *     banned -> 403 banned. Declined or not a JPEG -> 422 image_rejected.
@@ -11,8 +11,8 @@
  */
 
 import { z } from 'zod';
-import { createAnthropicProvider } from '../_shared/ai/anthropic.ts';
-import { ConfigError, env } from '../_shared/env.ts';
+import { createPlatformProvider } from '../_shared/ai/providers.ts';
+import { ConfigError } from '../_shared/env.ts';
 import { json, readJson } from '../_shared/http.ts';
 import { createHandler } from '../_shared/middleware.ts';
 import { checkAvatar } from './avatar.ts';
@@ -21,7 +21,7 @@ const requestSchema = z.object({ action: z.literal('avatar') }).strict();
 
 function platformProvider() {
   try {
-    return createAnthropicProvider({ apiKey: env.anthropicApiKey(), model: env.analysisModel(), effort: 'low' });
+    return createPlatformProvider();
   } catch (error) {
     if (error instanceof ConfigError) return null;
     throw error;

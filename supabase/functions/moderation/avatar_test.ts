@@ -1,6 +1,6 @@
 // deno test --allow-env supabase/functions/
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AnalysisProvider } from '../_shared/ai/anthropic.ts';
+import type { AnalysisProvider } from '../_shared/ai/types.ts';
 import type { Safety } from '../_shared/ai/schemas.ts';
 import type { Logger } from '../_shared/log.ts';
 import { checkAvatar } from './avatar.ts';
