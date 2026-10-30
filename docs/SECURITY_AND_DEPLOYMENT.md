@@ -132,6 +132,10 @@ CLI, set the same in the dashboard:
 - **Storage**: raise the global upload limit to at least 500 MB if you allow
   long videos (bucket limits are set by the migration). The Free plan caps
   uploads at 50 MB; the workflow warns when it cannot raise the limit.
+  Videos are at most 8 minutes and phones compress them with HEVC before
+  upload (same frame rate, up to 1080p): about 45 MB per minute at 1080p30
+  and 55 MB per minute at 1080p60, so 8 minutes stays under 500 MB. On the
+  50 MB Free-plan limit, only about a minute of video uploads.
 - **Realtime**: the migrations add `public.matches`,
   `public.match_live_batches` and `public.ranked_matches` to
   `supabase_realtime`; Realtime applies RLS, so users only receive their own
@@ -492,4 +496,4 @@ How each item of the common web and mobile security checklist is covered.
 | 18 | Add security headers | `_shared/http.ts`: CSP `default-src 'none'`, `frame-ancestors 'none'`, `X-Frame-Options`, HSTS, `nosniff`, `no-referrer`, Permissions-Policy, COOP, `no-store`. |
 | 19 | Force HTTPS | The app requires an `https://` Supabase URL (plain HTTP only for a local dev stack), Android blocks cleartext traffic, iOS ATS is on, TLS pinning; HSTS on function responses; Supabase serves only HTTPS. |
 | 20 | Scan dependencies | Dependabot; CI Dependency audit of the app and the Edge Functions; Dependency review on pull requests. |
-| 21 | Only videos, fully scanned before upload | The phone reads the whole file before uploading: it must be an MP4 or QuickTime file whose boxes tile the file exactly, with a real video track, nothing hidden in or after the media data, and H.264 / HEVC frames whose NAL units add up. Anything else (documents, archives, apps, images, audio, renamed files, files with data appended) is refused with a message. The server checks the uploaded copy again before anyone can watch it and deletes anything that fails. |
+| 21 | Only videos, fully scanned before upload | The phone checks a video's structure when it is picked, compresses it (HEVC, on the phone), then reads the whole file that is uploaded: it must be an MP4 or QuickTime file whose boxes tile the file exactly, with a real video track, nothing hidden in or after the media data, and H.264 / HEVC frames whose NAL units add up. Anything else (documents, archives, apps, images, audio, renamed files, files with data appended) is refused with a message. The server checks the uploaded copy again before anyone can watch it and deletes anything that fails. |

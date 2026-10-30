@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["VideoCompressorModule"]
+  },
+  "android": {
+    "modules": ["app.matiq.videocompressor.VideoCompressorModule"]
+  }
+}

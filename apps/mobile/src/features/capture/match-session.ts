@@ -17,7 +17,8 @@ import { File, UploadType } from 'expo-file-system';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 import type { SampledFrame } from './frame-processor';
-import { removePersonalMetadata, requireVideo } from './video-check';
+import { fileSize, removePersonalMetadata, requireVideo, requireVideoStructure } from './video-check';
+import { compressForUpload, compressionPlans } from './video-compression';
 
 export interface MatchSetup {
   discipline: Discipline;
@@ -91,29 +92,68 @@ export async function uploadFrame(userId: string, matchId: string, frame: Sample
  * a short-lived signed upload URL using the platform's native uploader (no JS
  * memory pressure, continues in the background on iOS).
  */
+export type VideoStage = 'checking' | 'compressing' | 'uploading';
+
+/**
+ * Uploads a match video: checks what the file is, compresses it once with
+ * HEVC when that makes it meaningfully smaller (same frame rate, up to
+ * 1080p, see video-quality.ts), fully checks the exact file that goes up,
+ * removes personal metadata and uploads it.
+ */
 export async function uploadVideo(
   userId: string,
   matchId: string,
   videoUri: string,
-  options: { verified?: VideoCheckPassed; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+  options: {
+    /** Check result for `videoUri` when it was already checked (quick or full). */
+    verified?: VideoCheckPassed;
+    durationMs?: number;
+    onProgress?: (fraction: number) => void;
+    onStage?: (stage: VideoStage) => void;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<void> {
-  const checkShare = options.verified ? 0 : 0.2;
-  const verified =
-    options.verified ??
-    (await requireVideo(videoUri, {
-      onProgress: (fraction) => options.onProgress?.(fraction * checkShare),
-      ...(options.signal ? { signal: options.signal } : {}),
-    }));
-  const isMov = verified.container === 'mov';
-  // Location (GPS) and phone details never leave the phone.
-  const clean = await removePersonalMetadata(videoUri, verified.container);
+  const signal = options.signal ? { signal: options.signal } : {};
+  options.onStage?.('checking');
+  const original = options.verified ?? (await requireVideoStructure(videoUri, signal));
+  const originalBytes = fileSize(videoUri);
+  const plans = compressionPlans(original, originalBytes, original.durationMs ?? options.durationMs ?? 0);
+  // Shares of the progress bar: compressing, then the full check, then the upload.
+  const compressShare = plans.length > 0 ? 0.5 : 0;
+  const checkShare = 0.1;
+
+  let compressed: { uri: string } | null = null;
+  if (plans.length > 0) {
+    options.onStage?.('compressing');
+    compressed = await compressForUpload(videoUri, plans, originalBytes, {
+      onProgress: (fraction) => options.onProgress?.(fraction * compressShare),
+      ...signal,
+    });
+  }
   try {
-    const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
-    const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
-    if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
-    await sendVideo(clean.uri, data.signedUrl, isMov, checkShare, options);
+    const uploadUri = compressed?.uri ?? videoUri;
+    options.onStage?.('checking');
+    const verified =
+      !compressed && original.framesChecked > 0
+        ? original
+        : await requireVideo(uploadUri, {
+            onProgress: (fraction) => options.onProgress?.(compressShare + fraction * checkShare),
+            ...signal,
+          });
+    const isMov = verified.container === 'mov';
+    // Location (GPS) and phone details never leave the phone.
+    const clean = await removePersonalMetadata(uploadUri, verified.container);
+    try {
+      const path = `${userId}/${matchId}/upload.${isMov ? 'mov' : 'mp4'}`;
+      const { data, error } = await supabase.storage.from('match-videos').createSignedUploadUrl(path, { upsert: true });
+      if (error || !data) throw new AppError('upload_failed', 'Could not start the video upload');
+      options.onStage?.('uploading');
+      await sendVideo(clean.uri, data.signedUrl, isMov, compressShare + checkShare, options);
+    } finally {
+      if (clean.temporary) deleteLocalFile(clean.uri);
+    }
   } finally {
-    if (clean.temporary) deleteLocalFile(clean.uri);
+    if (compressed) deleteLocalFile(compressed.uri);
   }
 }
 
@@ -121,7 +161,8 @@ async function sendVideo(
   uri: string,
   signedUrl: string,
   isMov: boolean,
-  checkShare: number,
+  /** Share of the progress bar already used before the upload. */
+  done: number,
   options: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
 ): Promise<void> {
   const result = await new File(uri).upload(signedUrl, {
@@ -130,7 +171,7 @@ async function sendVideo(
     headers: { 'Content-Type': isMov ? 'video/quicktime' : 'video/mp4', 'x-upsert': 'true' },
     sessionType: 'background',
     onProgress: ({ bytesSent, totalBytes }) =>
-      options.onProgress?.(checkShare + (1 - checkShare) * (totalBytes > 0 ? bytesSent / totalBytes : 0)),
+      options.onProgress?.(done + (1 - done) * (totalBytes > 0 ? bytesSent / totalBytes : 0)),
     ...(options.signal ? { signal: options.signal } : {}),
   });
   if (result.status < 200 || result.status >= 300) throw new AppError('upload_failed', 'The video upload failed');

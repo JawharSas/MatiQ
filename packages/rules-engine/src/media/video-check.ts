@@ -43,9 +43,22 @@ export interface VideoCheckPassed {
   /** `moov` duration, when the file states one. */
   durationMs: number | null;
   videoCodec: string;
+  /** The video track's coded picture, frame count and average rate. */
+  video: VideoTrackInfo;
   tracks: number;
   /** Video frames whose NAL structure was verified (deep checks only). */
   framesChecked: number;
+}
+
+export interface VideoTrackInfo {
+  /** Coded size, before any rotation the player applies (0 when unknown). */
+  width: number;
+  height: number;
+  frames: number;
+  /** Average frames per second, when the track states its length. */
+  fps: number | null;
+  /** Average video bits per second, when the track states its length. */
+  bitRate: number | null;
 }
 
 export interface VideoCheckRejected {
@@ -147,6 +160,14 @@ function childBoxes(bytes: Uint8Array, from: number, to: number, base: number): 
 interface Track {
   handler: string;
   codec: string;
+  /** Visual sample entry size (video tracks). */
+  width: number;
+  height: number;
+  sampleCount: number;
+  /** Media length from `mdhd`, when stated. */
+  seconds: number | null;
+  /** Bytes of all samples (null when the table can't tell). */
+  bytes: number | null;
   /** Length of a NAL unit's size prefix, for H.264 / HEVC tracks. */
   nalLengthSize: number | null;
   /** Byte ranges of the track's chunks, in file order. */
@@ -200,6 +221,17 @@ function parseMoov(moov: Uint8Array, moovBody: number, keepSamples: boolean): { 
     const minf = need(mdiaChildren, 'minf', 'mdia');
     const minfChildren = children(minf);
 
+    let seconds: number | null = null;
+    const mdhd = find(mdiaChildren, 'mdhd');
+    if (mdhd && rel(mdhd).to - rel(mdhd).from >= 20) {
+      const at = rel(mdhd).from;
+      const version = moov[at]!;
+      if (version === 1 && rel(mdhd).to - at < 32) throw new Reject('damaged', 'short mdhd');
+      const timescale = version === 1 ? u32(view, at + 20) : u32(view, at + 12);
+      const duration = version === 1 ? u64(view, at + 24) : u32(view, at + 16);
+      if (timescale > 0 && duration > 0 && duration !== 0xffffffff) seconds = duration / timescale;
+    }
+
     // Media must be inside this file (self-contained data references).
     const dinf = find(minfChildren, 'dinf');
     const dref = dinf ? find(children(dinf), 'dref') : undefined;
@@ -220,6 +252,10 @@ function parseMoov(moov: Uint8Array, moovBody: number, keepSamples: boolean): { 
       if (ENCRYPTED_ENTRIES.has(candidate.type)) throw new Reject('encrypted', 'encrypted track');
     }
     const codec = entry.type;
+    // VisualSampleEntry: width and height at bytes 24-27 of its fields.
+    const visual = handler === 'vide' && entry.end - entry.body >= 28;
+    const pictureWidth = visual ? u16(view, entry.body - moovBody + 24) : 0;
+    const pictureHeight = visual ? u16(view, entry.body - moovBody + 26) : 0;
 
     let nalLengthSize: number | null = null;
     const configType = handler === 'vide' ? NAL_CODECS[codec] : undefined;
@@ -299,6 +335,7 @@ function parseMoov(moov: Uint8Array, moovBody: number, keepSamples: boolean): { 
     const openEnded = handler === 'soun' && constantSize === 1;
     const chunks: { start: number; end: number }[] = new Array(chunkCount);
     let sample = 0;
+    let trackBytes = 0;
     for (let chunk = 0; chunk < chunkCount; chunk++) {
       const offset = width === 4 ? u32(view, offsetsAt + 8 + chunk * 4) : u64(view, offsetsAt + 8 + chunk * 8);
       const count = perChunk[chunk]!;
@@ -310,6 +347,7 @@ function parseMoov(moov: Uint8Array, moovBody: number, keepSamples: boolean): { 
         bytes = count * constantSize;
       }
       sample += count;
+      trackBytes += bytes;
       chunks[chunk] = { start: offset, end: openEnded ? -1 : offset + bytes };
     }
     if (sample !== sampleCount) throw new Reject('damaged', 'chunk table and sample count disagree');
@@ -318,6 +356,11 @@ function parseMoov(moov: Uint8Array, moovBody: number, keepSamples: boolean): { 
     tracks.push({
       handler,
       codec,
+      width: pictureWidth,
+      height: pictureHeight,
+      sampleCount,
+      seconds,
+      bytes: openEnded ? null : trackBytes,
       nalLengthSize,
       chunks,
       sampleSizes: deepNal ? (sizes ?? new Uint32Array(sampleCount).fill(constantSize)) : null,
@@ -501,7 +544,22 @@ async function check(source: ByteSource, { maxBytes, deep = false, onProgress, s
   }
   onProgress?.(1);
 
-  return { ok: true, container, durationMs, videoCodec: video.codec, tracks: tracks.length, framesChecked };
+  const seconds = video.seconds ?? (durationMs ? durationMs / 1000 : null);
+  return {
+    ok: true,
+    container,
+    durationMs,
+    videoCodec: video.codec,
+    video: {
+      width: video.width,
+      height: video.height,
+      frames: video.sampleCount,
+      fps: seconds ? video.sampleCount / seconds : null,
+      bitRate: seconds && video.bytes !== null ? Math.round((video.bytes * 8) / seconds) : null,
+    },
+    tracks: tracks.length,
+    framesChecked,
+  };
 }
 
 // Personal metadata ------------------------------------------------------------

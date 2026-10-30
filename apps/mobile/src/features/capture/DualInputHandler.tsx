@@ -38,6 +38,7 @@ import {
   requestAnalysis,
   uploadFrame,
   uploadVideo,
+  type VideoStage,
 } from './match-session';
 import { FrameUploadQueue } from './upload-queue';
 import type { CapturePlan } from './capture-plan';
@@ -45,11 +46,18 @@ import { cancelLiveAnalysis, finalizeLiveAnalysis, LiveBatcher, startLiveAnalysi
 import type { LiveMatchInfo } from './LiveScoreboard';
 import type { LiveCaptureResult } from './useLiveCapture';
 import { extractFrames } from './video-frame-extractor';
+import { MAX_VIDEO_SECONDS } from './video-quality';
 import { type PickedVideo, VideoUploader } from './VideoUploader';
 
 /** Frame budget per analysis (matches the server's ANALYSIS_MAX_FRAMES default). */
 const MAX_FRAMES = 240;
 const MIN_FRAMES = 3;
+
+const VIDEO_STAGES: Record<VideoStage, string> = {
+  checking: 'checking the video',
+  compressing: 'compressing the video',
+  uploading: 'uploading the video',
+};
 
 type Mode = 'live' | 'upload';
 type Phase =
@@ -74,7 +82,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
   const batcherRef = useRef<LiveBatcher | null>(null);
   const [liveMatch, setLiveMatch] = useState<LiveMatchInfo | null>(null);
 
-  const maxDurationMs = (usage.data?.max_video_seconds ?? 600) * 1000;
+  const maxDurationMs = Math.min(usage.data?.max_video_seconds ?? MAX_VIDEO_SECONDS, MAX_VIDEO_SECONDS) * 1000;
   const remaining = remainingAnalyses(usage.data);
   const outOfQuota = setup.keySource === 'platform' && remaining === 0;
 
@@ -147,17 +155,18 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
 
     let extraction = sampleFrames ? 0 : 1;
     let videoProgress = cleanSetup.uploadVideo ? 0 : 1;
-    const videoStep = video.verified ? 'uploading video' : 'checking and uploading video';
-    const step = [sampleFrames ? 'Sampling frames' : null, cleanSetup.uploadVideo ? videoStep : null]
-      .filter(Boolean)
-      .join(' and ');
-    const report = () =>
+    let videoStage: VideoStage | null = cleanSetup.uploadVideo ? 'checking' : null;
+    const report = () => {
+      const step = [sampleFrames && extraction < 1 ? 'Sampling frames' : null, videoStage ? VIDEO_STAGES[videoStage] : null]
+        .filter(Boolean)
+        .join(' and ');
       setPhase({
         kind: 'processing',
         step: step.charAt(0).toUpperCase() + step.slice(1),
         progress: (extraction + videoProgress) / 2,
       });
-    if (step) report();
+    };
+    if (sampleFrames || videoStage) report();
 
     await Promise.all([
       sampleFrames
@@ -176,7 +185,12 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
       cleanSetup.uploadVideo
         ? uploadVideo(userId, matchId, video.uri, {
             ...(video.verified ? { verified: video.verified } : {}),
+            durationMs: video.durationMs,
             signal: controller.signal,
+            onStage: (stage) => {
+              videoStage = stage;
+              report();
+            },
             onProgress: (fraction) => {
               videoProgress = fraction;
               report();

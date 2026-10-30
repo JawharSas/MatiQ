@@ -55,7 +55,19 @@ const concat = (...parts: Uint8Array[]) => {
 describe('checkVideoFile: genuine videos', () => {
   it('accepts H.264 + AAC MP4 and verifies every frame', async () => {
     const result = await check(fixture('h264-aac.mp4'));
-    assert.deepEqual(result, { ok: true, container: 'mp4', durationMs: 1000, videoCodec: 'avc1', tracks: 2, framesChecked: 10 });
+    assert.ok(result.ok);
+    const { video, ...rest } = result;
+    assert.deepEqual(rest, { ok: true, container: 'mp4', durationMs: 1000, videoCodec: 'avc1', tracks: 2, framesChecked: 10 });
+    assert.deepEqual({ ...video, bitRate: null }, { width: 64, height: 48, frames: 10, fps: 10, bitRate: null });
+  });
+
+  it('reports the video bit rate from the frames alone (no audio)', async () => {
+    const result = await check(fixture('faststart.mp4'), false);
+    assert.ok(result.ok);
+    const bytes = fixture('faststart.mp4').byteLength;
+    // One second of video: the frames are most of the file, never more.
+    assert.ok(result.video.bitRate !== null && result.video.bitRate > 0 && result.video.bitRate <= bytes * 8, `${result.video.bitRate}`);
+    assert.equal(result.video.fps, 10);
   });
 
   it('accepts HEVC QuickTime (iPhone-style .mov)', async () => {
@@ -64,6 +76,7 @@ describe('checkVideoFile: genuine videos', () => {
     assert.equal(result.ok && result.container, 'mov');
     assert.equal(result.ok && result.videoCodec, 'hvc1');
     assert.equal(result.ok && result.framesChecked, 10);
+    assert.equal(result.ok && `${result.video.width}x${result.video.height}@${result.video.fps}`, '64x48@10');
   });
 
   it('accepts a fast-start MP4 (moov before mdat)', async () => {

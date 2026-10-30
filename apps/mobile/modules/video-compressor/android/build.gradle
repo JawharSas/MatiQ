@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.matiq'
+version = '1.0.0'
+
+android {
+  namespace "app.matiq.videocompressor"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // AndroidX Media3 Transformer: hardware decode -> HEVC / H.264 encode, audio copied.
+  // Same version as expo-video: every Media3 module in the app must match.
+  def media3 = '1.9.1'
+  implementation "androidx.media3:media3-transformer:${media3}"
+  implementation "androidx.media3:media3-effect:${media3}"
+  implementation "androidx.media3:media3-common:${media3}"
+}

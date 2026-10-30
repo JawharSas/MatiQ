@@ -1161,7 +1161,7 @@ const auth = {
     const uid = uuid();
     db.users.push({ id: uid, email, created_at: now(), last_sign_in_at: null });
     db.profiles.push({ id: uid, username: options?.data?.username ?? `user_${uuidSeq}`, display_name: options?.data?.display_name ?? 'New athlete', bio: '', avatar_path: null, primary_discipline: null, visibility: 'private', created_at: now() });
-    db.user_entitlements.push({ user_id: uid, role: 'user', is_unlimited: false, monthly_analysis_limit: 10, max_video_seconds: 600, is_suspended: false });
+    db.user_entitlements.push({ user_id: uid, role: 'user', is_unlimited: false, monthly_analysis_limit: 10, max_video_seconds: 480, is_suspended: false });
     // Email confirmation is on: no session until the link is opened.
     return { data: { user: { id: uid, email }, session: null }, error: null };
   },

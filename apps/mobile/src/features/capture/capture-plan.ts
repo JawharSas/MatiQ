@@ -14,6 +14,7 @@
  */
 
 import type { CameraOutput, Constraint, TargetDynamicRange } from 'react-native-vision-camera';
+import { recordingBitRate } from './video-quality.ts';
 
 export type FpsPreference = 'auto' | '60' | '30';
 
@@ -93,7 +94,11 @@ export function captureConstraints(fps: number, videoOutput: CameraOutput): Cons
   ];
 }
 
-/** HEVC/H.264 target bit rates for 1080p sparring footage. */
-export function bitRateFor(preference: FpsPreference): number {
-  return preference === '30' ? 9_000_000 : 14_000_000;
+/**
+ * Recording bit rate for 1080p sparring footage (video-quality.ts): iOS
+ * records HEVC at the upload rate; Android records H.264 well above it and
+ * the file is compressed once, to HEVC, before upload.
+ */
+export function bitRateFor(preference: FpsPreference, { maxDurationMs, recordsHevc }: { maxDurationMs: number; recordsHevc: boolean }): number {
+  return recordingBitRate({ fps: preference === '30' ? 30 : 60, maxDurationMs, recordsHevc });
 }
