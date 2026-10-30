@@ -110,8 +110,27 @@ export function recordingBitRate({ fps, maxDurationMs, recordsHevc }: { fps: num
   return Math.round(qualityBitRate({ width: 1920, height: 1080, fps, codec: 'h264' }) * 1.5);
 }
 
+/** Short side of the last-resort encode for a video that must shrink to fit the limit. */
+export const FALLBACK_SHORT_SIDE = 720;
+
+/**
+ * A smaller encode for when the first one still doesn't fit the upload
+ * limit (iOS export presets choose their own bit rate): 720p within the
+ * size budget. Null when the plan is already that small.
+ */
+export function fallbackPlan(
+  plan: Extract<CompressionPlan, { compress: true }>,
+  { codec, durationMs, maxBytes = MAX_VIDEO_BYTES }: { codec: VideoCodec; durationMs: number; maxBytes?: number },
+): Extract<CompressionPlan, { compress: true }> | null {
+  if (plan.shortSide <= FALLBACK_SHORT_SIDE) return null;
+  const quality = qualityBitRate({ width: 1280, height: 720, fps: 60, codec });
+  return { compress: true, codec, bitRate: Math.min(quality, budgetBitRate(durationMs, maxBytes)), shortSide: FALLBACK_SHORT_SIDE };
+}
+
 /** Whether a compressed copy is worth uploading instead of the original. */
 export function keepCompressed({ originalBytes, compressedBytes, maxBytes = MAX_VIDEO_BYTES }: { originalBytes: number; compressedBytes: number; maxBytes?: number }): boolean {
+  // A copy over the limit can't be uploaded either.
+  if (compressedBytes > maxBytes) return false;
   if (originalBytes > maxBytes) return true;
   return compressedBytes < originalBytes * 0.9;
 }

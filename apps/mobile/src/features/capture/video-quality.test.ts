@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   budgetBitRate,
+  fallbackPlan,
   keepCompressed,
   MAX_VIDEO_BYTES,
   MAX_VIDEO_SECONDS,
@@ -143,5 +144,29 @@ describe('keepCompressed', () => {
 
   it('always keeps it when the original is over the limit', () => {
     assert.equal(keepCompressed({ originalBytes: MAX_VIDEO_BYTES + 1, compressedBytes: MAX_VIDEO_BYTES }), true);
+  });
+
+  it('never keeps a copy that is still over the limit', () => {
+    assert.equal(keepCompressed({ originalBytes: 3 * MAX_VIDEO_BYTES, compressedBytes: MAX_VIDEO_BYTES + 1 }), false);
+  });
+});
+
+describe('fallbackPlan', () => {
+  const eight = minutes(8);
+
+  it('drops to 720p within the size budget', () => {
+    const first = planCompression({ width: 3840, height: 2160, fps: 60, durationMs: eight, sizeBytes: 3 * 1024 ** 3 }, { codec: 'hevc' });
+    assert.ok(first.compress);
+    const fallback = fallbackPlan(first, { codec: 'h264', durationMs: eight });
+    assert.ok(fallback);
+    assert.equal(fallback.shortSide, 720);
+    assert.equal(fallback.codec, 'h264');
+    assert.ok(sized(fallback.bitRate + 192_000, eight) < MAX_VIDEO_BYTES);
+  });
+
+  it('has nothing smaller to offer for a 720p plan', () => {
+    const first = planCompression({ width: 1280, height: 720, fps: 30, durationMs: eight, sizeBytes: MAX_VIDEO_BYTES + 1 }, { codec: 'hevc' });
+    assert.ok(first.compress);
+    assert.equal(fallbackPlan(first, { codec: 'hevc', durationMs: eight }), null);
   });
 });

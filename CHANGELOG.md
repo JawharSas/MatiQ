@@ -22,6 +22,9 @@ pre-release channels are named in the release title.
   Media3 Transformer 1.9.1 (the version expo-video uses) on Android,
   AVFoundation's HEVC export preset on iOS. H.264 where HEVC is missing; the
   original video when the phone can't encode it or the copy isn't smaller.
+  A copy still over the 500 MB limit is never kept; a video that must shrink
+  to fit gets one more try at 720p within the size budget (on iOS, whose
+  export presets choose their own bit rate, H.264 1280x720).
   Videos that are already compact (an iPhone's own HEVC) are uploaded as
   they are, so nothing is encoded twice.
 - Recording: iOS records HEVC at the upload rate; Android records a

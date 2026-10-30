@@ -11,7 +11,8 @@ internal struct CompressOptions: Record {
   /// Requested video bits per second. AVAssetExportSession picks its own
   /// rate for the preset, close to the camera's, so this is informational.
   @Field var bitRate: Int = 0
-  /// Short side of the output picture, at most 1080 (the preset size).
+  /// Short side of the output picture: 1080 (the preset size, never scaled
+  /// up), or 720 or less for H.264's 1280x720 preset.
   @Field var shortSide: Int = 0
 }
 
@@ -49,7 +50,7 @@ public final class VideoCompressorModule: Module {
       if presets.contains(AVAssetExportPresetHEVC1920x1080) {
         codecs.append("hevc")
       }
-      if presets.contains(AVAssetExportPreset1920x1080) {
+      if presets.contains(AVAssetExportPreset1920x1080) && presets.contains(AVAssetExportPreset1280x720) {
         codecs.append("h264")
       }
       return codecs
@@ -82,7 +83,11 @@ public final class VideoCompressorModule: Module {
       promise.reject(CompressionFailedException("each compression needs its own id"))
       return
     }
-    let preset = options.codec == "h264" ? AVAssetExportPreset1920x1080 : AVAssetExportPresetHEVC1920x1080
+    // HEVC has no preset below 1080p; a 720p request (the fallback for a
+    // video that must fit the upload limit) uses H.264 at 1280x720.
+    let preset = options.codec == "h264"
+      ? (options.shortSide <= 720 ? AVAssetExportPreset1280x720 : AVAssetExportPreset1920x1080)
+      : AVAssetExportPresetHEVC1920x1080
     guard let session = AVAssetExportSession(asset: AVURLAsset(url: sourceUrl), presetName: preset) else {
       promise.reject(CompressionFailedException("this video can't be exported with \(preset)"))
       return
