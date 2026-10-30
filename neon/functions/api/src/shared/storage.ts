@@ -74,7 +74,7 @@ export async function putObject(bucket: string, key: string, body: Uint8Array, c
 }
 
 export async function deleteObjects(bucket: string, keys: readonly string[]): Promise<void> {
-  // One request per key: S3-compatible stores differ on batch deletes' checksums.
+  // One request per file, since S3-compatible stores differ on batch deletes' checksums.
   for (let i = 0; i < keys.length; i += 8) {
     await Promise.all(keys.slice(i, i + 8).map((key) => s3().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))));
   }
