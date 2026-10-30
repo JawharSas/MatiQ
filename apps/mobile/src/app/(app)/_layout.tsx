@@ -23,9 +23,8 @@ export const unstable_settings = { anchor: '(tabs)' };
 const ALL_DOCUMENTS = Object.keys(LEGAL_VERSIONS) as LegalDocumentId[];
 
 export default function AppLayout() {
-  const { session } = useAuth();
+  const { email } = useAuth();
   const { reduceMotion } = useA11y();
-  const email = session?.user.email ?? '';
   const age = useQuery({ queryKey: ['age-check'], queryFn: () => ageCheckStatus(email), staleTime: Infinity });
   // After the age check (even a failed lookup), which may save the consent
   // given on the sign-up form.

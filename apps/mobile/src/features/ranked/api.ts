@@ -8,9 +8,8 @@
 
 import type { CareerTotals, Discipline } from '@matiq/rules-engine';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
 import type { RankedMatchRow } from './ranked-state';
 
@@ -72,37 +71,23 @@ const RANKED_COLUMNS =
 // Reads ---------------------------------------------------------------------------
 
 export function useRankedMatches() {
-  const queryClient = useQueryClient();
-  const query = useQuery({
+  // Challenges and results from the other fighter show up within a minute.
+  return useQuery({
     queryKey: ['ranked', 'matches'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ranked_matches').select(RANKED_COLUMNS).order('created_at', { ascending: false }).limit(60);
+      const { data, error } = await backend.from('ranked_matches').select(RANKED_COLUMNS).order('created_at', { ascending: false }).limit(60);
       if (error) throw fromPostgrest(error);
       return (data ?? []) as RankedMatchRow[];
     },
+    refetchInterval: 60_000,
   });
-
-  // Challenges and results arrive live (RLS limits Realtime to participants).
-  useEffect(() => {
-    const channel = supabase
-      .channel('ranked-matches')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ranked_matches' }, () => {
-        void queryClient.invalidateQueries({ queryKey: ['ranked'] });
-      })
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
-
-  return query;
 }
 
 export function useRankedMatch(id: string) {
   return useQuery({
     queryKey: ['ranked', 'match', id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ranked_matches').select(RANKED_COLUMNS).eq('id', id).maybeSingle();
+      const { data, error } = await backend.from('ranked_matches').select(RANKED_COLUMNS).eq('id', id).maybeSingle();
       if (error) throw fromPostgrest(error);
       return data as RankedMatchRow | null;
     },
@@ -114,7 +99,7 @@ export function useRankedForMatch(matchId: string) {
   return useQuery({
     queryKey: ['ranked', 'for-match', matchId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ranked_matches').select(RANKED_COLUMNS).eq('match_id', matchId).maybeSingle();
+      const { data, error } = await backend.from('ranked_matches').select(RANKED_COLUMNS).eq('match_id', matchId).maybeSingle();
       if (error) throw fromPostgrest(error);
       return data as RankedMatchRow | null;
     },
@@ -125,7 +110,7 @@ export function useRatings(userId: string) {
   return useQuery({
     queryKey: ['ranked', 'ratings', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await backend
         .from('ranked_ratings')
         .select('user_id, discipline, rating, games, wins, losses, draws, current_streak, peak_rating, totals')
         .eq('user_id', userId);
@@ -139,7 +124,7 @@ export function useTitles(userId: string) {
   return useQuery({
     queryKey: ['ranked', 'titles', userId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await backend
         .from('user_titles')
         .select('title_id, discipline, is_featured, unlocked_at')
         .eq('user_id', userId)
@@ -154,7 +139,7 @@ export function useLeaderboard(discipline: Discipline, scope: 'global' | 'friend
   return useQuery({
     queryKey: ['ranked', 'leaderboard', discipline, scope],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_leaderboard', { p_discipline: discipline, p_scope: scope, p_limit: 100 });
+      const { data, error } = await backend.rpc('get_leaderboard', { p_discipline: discipline, p_scope: scope, p_limit: 100 });
       if (error) throw fromPostgrest(error);
       return (data ?? []) as LeaderboardRow[];
     },
@@ -165,7 +150,7 @@ export function useOpponents(discipline: Discipline) {
   return useQuery({
     queryKey: ['ranked', 'opponents', discipline],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_ranked_opponents', { p_discipline: discipline, p_limit: 30 });
+      const { data, error } = await backend.rpc('get_ranked_opponents', { p_discipline: discipline, p_limit: 30 });
       if (error) throw fromPostgrest(error);
       return (data ?? []) as OpponentRow[];
     },
@@ -180,7 +165,7 @@ export function usePeople(ids: readonly string[]) {
     enabled: unique.length > 0,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id, username, display_name, avatar_path').in('id', unique);
+      const { data, error } = await backend.from('profiles').select('id, username, display_name, avatar_path').in('id', unique);
       if (error) throw fromPostgrest(error);
       return new Map(((data ?? []) as PersonRow[]).map((person) => [person.id, person]));
     },
@@ -190,7 +175,7 @@ export function usePeople(ids: readonly string[]) {
 // Actions -------------------------------------------------------------------------
 
 async function rpc(name: string, args: Record<string, unknown>): Promise<unknown> {
-  const { data, error } = await supabase.rpc(name, args);
+  const { data, error } = await backend.rpc(name, args);
   if (error) {
     // Duplicate open match is the one 23505 here; give it a clear message.
     if (error.code === '23505') throw new AppError('ranked_already_open', 'You already have an open ranked match with this fighter in this discipline.');
@@ -203,7 +188,7 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<unknown
 }
 
 async function invokeRanked(action: 'confirm' | 'settle', id: string): Promise<{ status: string }> {
-  const { data, error } = await supabase.functions.invoke<{ status: string }>('ranked', { body: { action, id } });
+  const { data, error } = await backend.functions.invoke<{ status: string }>('ranked', { body: { action, id } });
   if (error || !data) throw await fromFunctionError(error);
   return data;
 }

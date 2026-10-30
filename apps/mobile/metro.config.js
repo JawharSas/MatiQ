@@ -17,6 +17,8 @@ const WEB_STUBS = {
   'react-native-nitro-image': 'src/preview/stubs/nitro-image.ts',
   'expo-file-system': 'src/preview/stubs/file-system.ts',
   'expo-screen-capture': 'src/preview/stubs/screen-capture.ts',
+  '@clerk/expo': 'src/preview/stubs/clerk.tsx',
+  '@clerk/expo/token-cache': 'src/preview/stubs/clerk.tsx',
 };
 
 const upstream = config.resolver.resolveRequest;

@@ -30,12 +30,6 @@ export function openSecureStorage(): Promise<MemoryStore> {
   return Promise.resolve(instance);
 }
 
-export const authStorage = {
-  getItem: (key: string) => Promise.resolve(instance.getString(key) ?? null),
-  setItem: (key: string, value: string) => Promise.resolve(instance.set(key, value)),
-  removeItem: (key: string) => Promise.resolve(void instance.remove(key)),
-};
-
 export function readCache<T>(key: string, maxAgeMs = 24 * 60 * 60 * 1000): T | undefined {
   const raw = instance.getString(CACHE_PREFIX + key);
   if (!raw) return undefined;

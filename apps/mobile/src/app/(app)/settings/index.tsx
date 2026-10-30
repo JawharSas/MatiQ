@@ -7,7 +7,7 @@ import { Text } from '@/ui/text';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { contactSupport, supportEmail } from '@/features/legal/contact';
 import { fromFunctionError, errorMessage } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { Button, Caption, Card, ErrorText, Heading, ListGroup, ListRow, Screen, SectionHeader, TextField } from '@/ui/components';
 import { font } from '@/ui/theme';
 
@@ -23,7 +23,7 @@ export default function SettingsScreen() {
     setExporting(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('account', { method: 'GET' });
+      const { data, error: fnError } = await backend.functions.invoke('account', { method: 'GET' });
       if (fnError) throw await fromFunctionError(fnError);
       const file = new File(Paths.cache, `matiq-export-${Date.now()}.json`);
       file.write(JSON.stringify(data, null, 2));
@@ -45,7 +45,7 @@ export default function SettingsScreen() {
           setDeleting(true);
           setError(null);
           try {
-            const { error: fnError } = await supabase.functions.invoke('account', {
+            const { error: fnError } = await backend.functions.invoke('account', {
               method: 'DELETE',
               body: { confirm: 'DELETE MY ACCOUNT' },
             });

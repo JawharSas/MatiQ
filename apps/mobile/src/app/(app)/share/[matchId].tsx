@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { useMatch } from '@/features/analysis/useMatch';
-import { useAuth, useUserId } from '@/features/auth/AuthProvider';
+import { useUserId } from '@/features/auth/AuthProvider';
 import { createPost, useProfile } from '@/features/social/api';
 import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, postSchema } from '@/lib/validation';
@@ -16,7 +16,6 @@ import { colors, font } from '@/ui/theme';
 export default function ShareScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const userId = useUserId();
-  const { session } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const match = useMatch(matchId);
@@ -27,7 +26,7 @@ export default function ShareScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!session || match.isPending || profile.isPending) return <Loading />;
+  if (match.isPending || profile.isPending) return <Loading />;
   const highlights = match.data?.analysis?.scorecard.highlights ?? [];
   const isPublic = profile.data?.visibility === 'public';
 

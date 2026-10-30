@@ -1,9 +1,9 @@
 /**
- * Turns Supabase / Edge Function errors into short user-facing messages.
+ * Turns Data API / function errors into short user-facing messages.
  * Raw server messages are never shown verbatim for unknown errors.
  */
 
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionError } from './function-error';
 
 export class AppError extends Error {
   override name = 'AppError';
@@ -82,9 +82,9 @@ export function fromPostgrest(error: { code?: string; message: string } | null):
   return new AppError(code, messageFor(code));
 }
 
-/** Reads the `{ error: { code } }` body returned by MatIQ Edge Functions. */
+/** Reads the `{ error: { code } }` body returned by the MatIQ functions. */
 export async function fromFunctionError(error: unknown): Promise<AppError> {
-  if (error instanceof FunctionsHttpError) {
+  if (error instanceof FunctionError) {
     try {
       const body = (await error.context.json()) as { error?: { code?: string } };
       const code = body.error?.code ?? 'unknown';

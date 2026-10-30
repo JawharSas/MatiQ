@@ -7,7 +7,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fromFunctionError, fromPostgrest } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
 
 export interface AdminUserRow {
@@ -54,7 +54,7 @@ export function useAdminUsers(query: string, page: number, pageSize = 25) {
     queryKey: ['admin', 'users', query, page],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_search_users', {
+      const { data, error } = await backend.rpc('admin_search_users', {
         p_query: cleanText(query),
         p_limit: pageSize,
         p_offset: page * pageSize,
@@ -69,7 +69,7 @@ export function useUsageOverview() {
   return useQuery({
     queryKey: ['admin', 'overview'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_usage_overview');
+      const { data, error } = await backend.rpc('admin_usage_overview');
       if (error) throw fromPostgrest(error);
       return data as UsageOverview;
     },
@@ -80,7 +80,7 @@ export function useAuditLog() {
   return useQuery({
     queryKey: ['admin', 'audit'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_audit_log', { p_limit: 50 });
+      const { data, error } = await backend.rpc('admin_audit_log', { p_limit: 50 });
       if (error) throw fromPostgrest(error);
       return (data ?? []) as AuditEntry[];
     },
@@ -108,7 +108,7 @@ export function useRankedDisputes() {
   return useQuery({
     queryKey: ['admin', 'ranked-disputes'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('admin_list_ranked_disputes', { p_limit: 50 });
+      const { data, error } = await backend.rpc('admin_list_ranked_disputes', { p_limit: 50 });
       if (error) throw fromPostgrest(error);
       return (data ?? []) as RankedDispute[];
     },
@@ -123,14 +123,14 @@ export function useResolveDispute() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, outcome, reason }: { id: string; outcome: 'apply' | 'void'; reason?: string }) => {
-      const { error } = await supabase.rpc('admin_resolve_ranked_dispute', {
+      const { error } = await backend.rpc('admin_resolve_ranked_dispute', {
         p_id: id,
         p_outcome: outcome,
         p_reason: reason ? cleanText(reason) : null,
       });
       if (error) throw fromPostgrest(error);
       if (outcome === 'apply') {
-        const { error: settleError } = await supabase.functions.invoke('ranked', { body: { action: 'settle', id } });
+        const { error: settleError } = await backend.functions.invoke('ranked', { body: { action: 'settle', id } });
         if (settleError) throw await fromFunctionError(settleError);
       }
     },
@@ -152,7 +152,7 @@ function useAdminMutation<T>(fn: (input: T) => Promise<void>) {
  */
 export function useRemovePost() {
   return useAdminMutation(async ({ postId, reason }: { postId: string; reason: string }) => {
-    const { error } = await supabase.rpc('admin_remove_post', { p_post_id: postId.trim(), p_reason: cleanText(reason) });
+    const { error } = await backend.rpc('admin_remove_post', { p_post_id: postId.trim(), p_reason: cleanText(reason) });
     if (error) throw fromPostgrest(error);
   });
 }
@@ -160,7 +160,7 @@ export function useRemovePost() {
 /** The owner's "Unlimited Access" switch (`is_unlimited`). */
 export function useSetUnlimited() {
   return useAdminMutation(async ({ userId, value, reason }: { userId: string; value: boolean; reason: string }) => {
-    const { error } = await supabase.rpc('admin_set_unlimited', {
+    const { error } = await backend.rpc('admin_set_unlimited', {
       p_user_id: userId,
       p_value: value,
       p_reason: cleanText(reason).slice(0, 280) || null,
@@ -179,7 +179,7 @@ export function useUpdateEntitlements() {
       suspendedReason?: string;
       reason: string;
     }) => {
-      const { error } = await supabase.rpc('admin_update_entitlements', {
+      const { error } = await backend.rpc('admin_update_entitlements', {
         p_user_id: input.userId,
         p_monthly_analysis_limit: input.monthlyLimit ?? null,
         p_max_video_seconds: input.maxVideoSeconds ?? null,
@@ -226,7 +226,7 @@ function useAdminList<T>(key: string, rpc: 'admin_list_bans' | 'admin_list_strik
   return useQuery({
     queryKey: ['admin', key],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc(rpc);
+      const { data, error } = await backend.rpc(rpc);
       if (error) throw fromPostgrest(error);
       return (data ?? []) as T[];
     },
@@ -240,28 +240,28 @@ export const useBlockedTerms = () => useAdminList<BlockedTerm>('blocked-terms', 
 /** Bans the account and blocks the networks it used (stored as one-way fingerprints). */
 export function useBanUser() {
   return useAdminMutation(async ({ userId, reason }: { userId: string; reason: string }) => {
-    const { error } = await supabase.rpc('admin_ban_user', { p_user_id: userId, p_reason: cleanText(reason).slice(0, 280) });
+    const { error } = await backend.rpc('admin_ban_user', { p_user_id: userId, p_reason: cleanText(reason).slice(0, 280) });
     if (error) throw fromPostgrest(error);
   });
 }
 
 export function useUnbanUser() {
   return useAdminMutation(async ({ userId }: { userId: string }) => {
-    const { error } = await supabase.rpc('admin_unban_user', { p_user_id: userId });
+    const { error } = await backend.rpc('admin_unban_user', { p_user_id: userId });
     if (error) throw fromPostgrest(error);
   });
 }
 
 export function useAddBlockedTerm() {
   return useAdminMutation(async ({ term, category }: { term: string; category: BlockedTerm['category'] }) => {
-    const { error } = await supabase.rpc('admin_add_blocked_term', { p_term: term.trim().toLowerCase(), p_category: category });
+    const { error } = await backend.rpc('admin_add_blocked_term', { p_term: term.trim().toLowerCase(), p_category: category });
     if (error) throw fromPostgrest(error);
   });
 }
 
 export function useRemoveBlockedTerm() {
   return useAdminMutation(async ({ term }: { term: string }) => {
-    const { error } = await supabase.rpc('admin_remove_blocked_term', { p_term: term });
+    const { error } = await backend.rpc('admin_remove_blocked_term', { p_term: term });
     if (error) throw fromPostgrest(error);
   });
 }

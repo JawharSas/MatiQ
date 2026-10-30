@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Scans a built app bundle (expo export output) for credentials that must
-// never ship in the app: Supabase secret or service-role keys, AI provider
-// keys, OAuth client secrets and private keys. The publishable (anon) key is
-// expected and allowed.
+// never ship in the app: Clerk secret keys, database connection strings,
+// Supabase secret or service-role keys, AI provider keys, OAuth client
+// secrets and private keys. Publishable keys are expected and allowed.
 //
 //   node scripts/scan-bundle.mjs <bundle-dir>
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -14,6 +14,8 @@ import { join, relative } from 'node:path';
 const random = (value) => /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value);
 const PATTERNS = [
   ['Supabase secret key', /sb_secret_([A-Za-z0-9_-]{20,})/g, random],
+  ['Clerk secret key', /(?<![A-Za-z0-9])sk_(?:test|live)_([A-Za-z0-9]{30,})/g, random],
+  ['Database connection string', /postgres(?:ql)?:\/\/[^\s:@/'"]+:([^\s@/'"]{8,})@/g, () => true],
   ['Anthropic API key', /(?<![A-Za-z0-9])sk-ant-([A-Za-z0-9_-]{20,})/g, random],
   ['OpenAI API key', /(?<![A-Za-z0-9-])sk-(?:proj-)?([A-Za-z0-9_-]{40,})/g, random],
   ['Google OAuth client secret', /GOCSPX-([A-Za-z0-9_-]{20,})/g, random],

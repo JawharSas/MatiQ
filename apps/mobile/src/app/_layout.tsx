@@ -1,16 +1,17 @@
+import { ClerkProvider } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { envError } from '@/config/env';
+import { env, envError } from '@/config/env';
 import { A11yProvider, useA11y } from '@/features/accessibility/A11yProvider';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { isBannedError } from '@/lib/errors';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
-import { initSupabase } from '@/lib/supabase';
 import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
 import { colors } from '@/ui/theme';
@@ -41,13 +42,13 @@ type BootState = { kind: 'loading' } | { kind: 'ready' } | { kind: 'failed'; mes
  *   1. validate public config
  *   2. enable TLS pinning (before ANY request)
  *   3. open the encrypted store (key from Keychain/Keystore)
- *   4. create the Supabase client (may refresh the session immediately)
+ *   4. then Clerk starts (it may refresh the session immediately); Clerk
+ *      keeps its session token in the keychain (expo-secure-store).
  */
 async function boot(): Promise<void> {
   if (envError) throw new Error(__DEV__ ? `Invalid configuration:\n${envError}` : 'This build is misconfigured.');
   await enableCertificatePinning();
   await openSecureStorage();
-  initSupabase();
 }
 
 export default function RootLayout() {
@@ -66,13 +67,15 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       {state.kind === 'ready' ? (
-        <A11yProvider>
-          <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <RootNavigator />
-            </AuthProvider>
-          </QueryClientProvider>
-        </A11yProvider>
+        <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
+          <A11yProvider>
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <RootNavigator />
+              </AuthProvider>
+            </QueryClientProvider>
+          </A11yProvider>
+        </ClerkProvider>
       ) : state.kind === 'failed' ? (
         <Screen>
           <Title>MatIQ can't start</Title>
@@ -87,11 +90,9 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, initializing, mfaPending } = useAuth();
+  const { signedIn, initializing } = useAuth();
   const { reduceMotion } = useA11y();
-  if (initializing || (session && mfaPending === null)) return <Loading />;
-  const signedIn = Boolean(session);
-  const challenge = signedIn && mfaPending === true;
+  if (initializing) return <Loading />;
 
   return (
     <Stack
@@ -105,13 +106,10 @@ function RootNavigator() {
     >
       {/* Explicit redirects: the root stack has no anchor, so without them a
           guarded URL (e.g. "/" while signed out) would land on a bare group. */}
-      <Stack.Protected guard={!signedIn} redirectTo={challenge ? '/mfa' : '/'}>
+      <Stack.Protected guard={!signedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={challenge} redirectTo={signedIn ? '/' : '/sign-in'}>
-        <Stack.Screen name="mfa" />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && !challenge} redirectTo={challenge ? '/mfa' : '/sign-in'}>
+      <Stack.Protected guard={signedIn} redirectTo="/sign-in">
         <Stack.Screen name="(app)" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />

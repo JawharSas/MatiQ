@@ -5,8 +5,9 @@
  * device and kept in the Keychain/Keystore (see secure-store.ts), so the
  * on-disk file is unreadable without the hardware-protected key.
  *
- * Holds the Supabase session (access + refresh token) and a small offline
- * cache of non-sensitive screens (feed, match list) for instant startup.
+ * Holds a small offline cache of non-sensitive screens (feed, match list)
+ * for instant startup, preferences and sign-in bookkeeping. Clerk keeps its
+ * session token in the Keychain/Keystore itself (@clerk/expo/token-cache).
  */
 
 import { createMMKV, type MMKV } from 'react-native-mmkv';
@@ -34,19 +35,6 @@ export function openSecureStorage(): Promise<MMKV> {
   });
   return opening;
 }
-
-/** Async storage adapter for supabase-js auth sessions. */
-export const authStorage = {
-  async getItem(key: string): Promise<string | null> {
-    return (await openSecureStorage()).getString(key) ?? null;
-  },
-  async setItem(key: string, value: string): Promise<void> {
-    (await openSecureStorage()).set(key, value);
-  },
-  async removeItem(key: string): Promise<void> {
-    (await openSecureStorage()).remove(key);
-  },
-};
 
 interface CacheEntry<T> {
   savedAt: number;

@@ -72,9 +72,18 @@ their verified email.
 
 ## Data access in the app
 
-- Database reads and RPCs go to the Data API with `@supabase/postgrest-js`
-  (the client `supabase-js` already used), so `.from()` / `.rpc()` calls
-  stay as they are; the bearer token is Clerk's session token.
+- `apps/mobile/src/lib/backend.ts` is the one client. Database reads and
+  RPCs go to the Data API with `@supabase/postgrest-js` (the client
+  `supabase-js` already used), so `.from()` / `.rpc()` calls stay as they
+  are; the bearer token is Clerk's session token.
+- Sign-in, sign-up (with an email code), Google and two-factor are Clerk's
+  (`@clerk/expo`). With two-factor on, Clerk asks for the code before it
+  starts a session, so there is no half-signed-in state to guard. After
+  sign-in the app calls `register_user`, which returns the MatIQ ID (the
+  imported one, or a new account with the username and display name from
+  sign-up).
+- Realtime is gone: the match being analysed, live-recording batches and
+  ranked challenges are polled (5 s, 5 s and 60 s).
 - Grants: `authenticated` keeps what it had; `anonymous` (Data API's name
   for `anon`) gets nothing. Tokens never carry a `role` claim.
 - Storage calls become `files` function calls returning presigned upload /
@@ -119,16 +128,26 @@ account can't sign in at all.
 
 GitHub secrets: `NEON_API_KEY`, `CLERK_SECRET_KEY` (and, for the data move,
 the existing `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROJECT_REF`).
-GitHub variables: `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEON_PROJECT_ID`.
-Clerk Dashboard: email + password, Google, authenticator app enabled.
+GitHub variables: `EXPO_PUBLIC_DATA_API_URL`, `EXPO_PUBLIC_FUNCTIONS_URL`,
+`EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (the release build checks all three and
+refuses a Clerk secret key), `NEON_PROJECT_ID`.
+Clerk Dashboard (already set on the development instance): email +
+password (12+ characters with upper, lower, number and symbol, breached
+passwords refused), email code verification, Google, authenticator app
+and backup codes, new-device email check. On the production instance,
+also add `matiq://auth/callback` under Native applications → allowlist
+for mobile SSO redirect (Google sign-in returns there).
 
 ## Stages
 
 1. **Done.** Database for Neon: `app.users`, `app.uid()`, the Supabase
-   migrations rewritten for Neon plus `neon/migrations`; all 291 database
+   migrations rewritten for Neon plus `neon/migrations`; all 292 database
    tests pass locally (with a `pg_session_jwt` stand-in) and on the
    Frankfurt database.
-2. Clerk sign-in in the app (sign-up with the age check, Google, two-factor).
+2. **Done.** Clerk sign-in in the app (sign-up with the age check and an
+   email code, Google, two-factor with backup codes, new-device check),
+   the app's data client pointed at the Data API, polling instead of
+   Realtime, and the browser preview on a Clerk stand-in.
 3. Functions on Node + `files`; app storage and function calls switched.
 4. `neon.ts`, deploy workflow, data-move workflow.
 5. Rehearsal, cutover, release.

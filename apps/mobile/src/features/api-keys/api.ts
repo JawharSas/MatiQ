@@ -6,7 +6,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fromFunctionError } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type { ProviderId } from './providers';
 
 export interface StoredKey {
@@ -41,13 +41,13 @@ export interface KeyInput {
 }
 
 async function call<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>('api-keys', { method: 'POST', body });
+  const { data, error } = await backend.functions.invoke<T>('api-keys', { method: 'POST', body });
   if (error || !data) throw await fromFunctionError(error);
   return data;
 }
 
 export async function listKeys(): Promise<StoredKey[]> {
-  const { data, error } = await supabase.functions.invoke<{ keys: StoredKey[] }>('api-keys', { method: 'GET' });
+  const { data, error } = await backend.functions.invoke<{ keys: StoredKey[] }>('api-keys', { method: 'GET' });
   if (error || !data) throw await fromFunctionError(error);
   return data.keys;
 }
@@ -67,7 +67,7 @@ export async function selectKey(provider: ProviderId): Promise<void> {
 }
 
 export async function deleteKey(provider: ProviderId): Promise<void> {
-  const { error } = await supabase.functions.invoke(`api-keys?provider=${provider}`, { method: 'DELETE' });
+  const { error } = await backend.functions.invoke(`api-keys?provider=${provider}`, { method: 'DELETE' });
   if (error) throw await fromFunctionError(error);
 }
 

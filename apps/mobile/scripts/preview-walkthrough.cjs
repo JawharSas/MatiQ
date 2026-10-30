@@ -290,8 +290,8 @@ async function main() {
       await see('That code is incorrect');
       await page.getByLabel('6-digit code').fill('123456');
       await button('Turn on').click();
-      await see('On · added');
-      await shot('two-factor-on');
+      await see('Backup codes');
+      await shot('two-factor-on', { tall: true });
       await page.goBack();
       await button('AI provider').click();
       await see('Use any AI');
@@ -393,10 +393,10 @@ async function main() {
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password').fill(PASSWORD);
       await button('Sign in').click();
-      await see('Two-factor verification');
+      await see('Enter the 6-digit code from your authenticator app');
       await shot('mfa-challenge');
-      await page.getByLabel('Code').fill('123456');
-      await button('Verify').click();
+      await page.getByLabel('Code', { exact: true }).fill('123456');
+      await button('Continue').click();
       // Sam's "Three takedowns" post was removed in the owner panel.
       await see('rear naked choke');
     });

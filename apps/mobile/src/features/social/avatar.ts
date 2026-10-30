@@ -19,7 +19,7 @@ import { type Image, Images } from 'react-native-nitro-image';
 import { deleteLocalFile } from '@/features/capture/match-session';
 import { toFilePath, toFileUri } from '@/features/capture/frame-processor';
 import { AppError, fromFunctionError } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { updateProfile } from './api';
 
 const BUCKET = 'avatars';
@@ -77,14 +77,14 @@ export async function changeAvatar(userId: string): Promise<string | null> {
   if (!uri) return null;
   try {
     const bytes = await new File(uri).arrayBuffer();
-    const { error } = await supabase.storage
+    const { error } = await backend.storage
       .from(BUCKET)
       .upload(`${userId}/pending.jpg`, bytes, { contentType: 'image/jpeg', upsert: true });
     if (error) throw new AppError('upload_failed', 'Uploading the picture failed');
   } finally {
     deleteLocalFile(uri);
   }
-  const { data, error } = await supabase.functions.invoke<{ path: string }>('moderation', { body: { action: 'avatar' } });
+  const { data, error } = await backend.functions.invoke<{ path: string }>('moderation', { body: { action: 'avatar' } });
   if (error) throw await fromFunctionError(error);
   if (!data?.path) throw new AppError('unknown', 'Something went wrong. Please try again.');
   return data.path;
@@ -92,7 +92,7 @@ export async function changeAvatar(userId: string): Promise<string | null> {
 
 export async function removeAvatar(userId: string, path: string): Promise<void> {
   await updateProfile(userId, { avatar_path: null });
-  await supabase.storage.from(BUCKET).remove([path]);
+  await backend.storage.from(BUCKET).remove([path]);
 }
 
 export function useAvatarUrl(path: string | null | undefined) {
@@ -103,7 +103,7 @@ export function useAvatarUrl(path: string | null | undefined) {
     staleTime: (SIGNED_URL_SECONDS - 600) * 1000,
     gcTime: (SIGNED_URL_SECONDS - 600) * 1000,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path!, SIGNED_URL_SECONDS);
+      const { data, error } = await backend.storage.from(BUCKET).createSignedUrl(path!, SIGNED_URL_SECONDS);
       if (error) return null;
       return data.signedUrl;
     },

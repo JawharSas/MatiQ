@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { defaultSetup } from '@/features/capture/MatchSetupForm';
 import type { MatchSetup } from '@/features/capture/match-session';
 import { fromPostgrest } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import { describeRanked, type RankedMatchRow } from './ranked-state';
 
 export interface RankedRecording {
@@ -30,7 +30,7 @@ export function useRankedRecording(rankedId: string | undefined, userId: string)
     queryKey: ['ranked', 'recording', id],
     enabled: id !== null,
     queryFn: async (): Promise<RankedRecording | null> => {
-      const { data, error } = await supabase
+      const { data, error } = await backend
         .from('ranked_matches')
         .select('id, discipline, variant, challenger_id, opponent_id, status, match_id, expires_at, fighter_a_id, fighter_b_id, winner_id, confirmed_a_at, confirmed_b_at, confirm_by, recorded_at, rating_a_before, rating_a_after, rating_b_before, rating_b_after, message, result_method, dispute_reason, created_at, settled_at')
         .eq('id', id!)
@@ -39,7 +39,7 @@ export function useRankedRecording(rankedId: string | undefined, userId: string)
       const row = data as RankedMatchRow | null;
       if (!row || describeRanked(row, userId).stage !== 'to_record') return null;
       const opponentId = row.challenger_id === userId ? row.opponent_id : row.challenger_id;
-      const { data: people, error: peopleError } = await supabase.from('profiles').select('id, display_name').in('id', [userId, opponentId]);
+      const { data: people, error: peopleError } = await backend.from('profiles').select('id, display_name').in('id', [userId, opponentId]);
       if (peopleError) throw fromPostgrest(peopleError);
       const nameOf = (uid: string) => people?.find((person) => person.id === uid)?.display_name ?? 'Fighter';
       return { id: row.id, discipline: row.discipline, variant: row.variant, myName: nameOf(userId), opponentName: nameOf(opponentId) };

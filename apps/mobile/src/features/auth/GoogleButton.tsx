@@ -2,22 +2,26 @@ import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { colors } from '@/ui/theme';
-import { SignInError, signInWithGoogle } from './oauth';
+import { SignInError, useGoogleSignIn } from './oauth';
 
 // Google's "G", rendered by scripts/brand-assets.cjs. Colours follow the dark
 // theme of Google's sign-in branding guidelines.
 const G = require('../../../assets/brand/google-g.png');
 const GOOGLE_DARK = { background: '#131314', border: '#8E918F', text: '#E3E3E3' };
 
-/** "Continue with Google": signs in, or creates the account on first use. */
-export function GoogleButton({ onError }: { onError: (message: string | null) => void }) {
+/**
+ * "Continue with Google": signs in, or creates the account on first use.
+ * `onSecondFactor` runs when the account has two-factor on.
+ */
+export function GoogleButton({ onError, onSecondFactor }: { onError: (message: string | null) => void; onSecondFactor?: () => void }) {
   const [busy, setBusy] = useState(false);
+  const signInWithGoogle = useGoogleSignIn();
 
   const press = async () => {
     onError(null);
     setBusy(true);
     try {
-      await signInWithGoogle();
+      if ((await signInWithGoogle()) === 'second-factor') onSecondFactor?.();
     } catch (caught) {
       onError(caught instanceof SignInError ? caught.message : 'Google sign-in did not complete. Please try again.');
     } finally {

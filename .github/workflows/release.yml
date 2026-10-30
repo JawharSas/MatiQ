@@ -33,13 +33,12 @@ jobs:
       # Public client config only (see apps/mobile/.env.example), read from
       # repository variables or, if saved there instead, Actions secrets.
       # Without them the APK opens to a setup screen, so the build fails.
-      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_DATA_API_URL: ${{ vars.EXPO_PUBLIC_DATA_API_URL || secrets.EXPO_PUBLIC_DATA_API_URL }}
+      EXPO_PUBLIC_FUNCTIONS_URL: ${{ vars.EXPO_PUBLIC_FUNCTIONS_URL || secrets.EXPO_PUBLIC_FUNCTIONS_URL }}
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       EXPO_PUBLIC_TLS_PINS: ${{ vars.EXPO_PUBLIC_TLS_PINS }}
       EXPO_PUBLIC_LEGAL_ENTITY: ${{ vars.EXPO_PUBLIC_LEGAL_ENTITY }}
       EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
-      # Bot protection on email sign-in (public site key; see the security guide).
-      EXPO_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.EXPO_PUBLIC_TURNSTILE_SITE_KEY }}
       # Copyright (DMCA) agent as registered with the U.S. Copyright Office.
       EXPO_PUBLIC_DMCA_AGENT_NAME: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_NAME }}
       EXPO_PUBLIC_DMCA_AGENT_ADDRESS: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_ADDRESS }}
@@ -59,30 +58,25 @@ jobs:
       - run: npm ci
       - name: Check public configuration
         run: |
-          for name in EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY; do
+          for name in EXPO_PUBLIC_DATA_API_URL EXPO_PUBLIC_FUNCTIONS_URL EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is not set. Add it under Settings -> Secrets and variables -> Actions -> Variables (repository variable)."
               exit 1
             fi
           done
-          case "$EXPO_PUBLIC_SUPABASE_URL" in
-            https://*) echo "Supabase project: ${EXPO_PUBLIC_SUPABASE_URL#https://}" ;;
-            *) echo "::error::EXPO_PUBLIC_SUPABASE_URL must start with https://"; exit 1 ;;
-          esac
-          # Only the public key may be built into the app: a secret or
-          # service_role key would let anyone bypass row-level security.
-          key=$EXPO_PUBLIC_SUPABASE_ANON_KEY
-          case "$key" in
-            sb_publishable_*) ;;
-            sb_secret_*) echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY is a SECRET key. Use the publishable key (Project Settings -> API Keys), and rotate the secret key now since it was stored where the app build reads it."; exit 1 ;;
-            *.*.*)
-              claims=$(cut -d. -f2 <<< "$key" | tr '_-' '/+')
-              while (( ${#claims} % 4 )); do claims+='='; done
-              role=$(base64 -d <<< "$claims" 2>/dev/null | jq -r '.role // empty' 2>/dev/null || true)
-              if [ "$role" != anon ]; then
-                echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY is not the anon key (role: ${role:-unknown}). Never build the service_role key into the app."; exit 1
-              fi ;;
-            *) echo "::error::EXPO_PUBLIC_SUPABASE_ANON_KEY is not a Supabase publishable or anon key."; exit 1 ;;
+          for name in EXPO_PUBLIC_DATA_API_URL EXPO_PUBLIC_FUNCTIONS_URL; do
+            case "${!name}" in
+              https://*) echo "$name: ${!name#https://}" ;;
+              *) echo "::error::$name must start with https://"; exit 1 ;;
+            esac
+          done
+          # Only the publishable key may be built into the app: the secret
+          # key manages every user and session.
+          case "$EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY" in
+            pk_live_*) ;;
+            pk_test_*) echo "::warning::EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is a Clerk development key (pk_test_). Use the production instance's pk_live_ key for public releases." ;;
+            sk_*) echo "::error::EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is a Clerk SECRET key. Use the publishable key (Clerk Dashboard -> API keys), and roll the secret key now since it was stored where the app build reads it."; exit 1 ;;
+            *) echo "::error::EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not a Clerk publishable key."; exit 1 ;;
           esac
       - name: Check contact details
         # Legal pages and support links use these. Without them the app falls

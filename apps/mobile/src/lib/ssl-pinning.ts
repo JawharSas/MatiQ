@@ -1,8 +1,7 @@
 /**
- * TLS public-key pinning for the Supabase host.
+ * TLS public-key pinning for the Neon Data API host.
  *
- * Applies to every request made through `fetch` (Auth, Data API, Realtime
- * handshake, Edge Functions). Pins are SHA-256 hashes of the
+ * Applies to every request made to it through `fetch`. Pins are SHA-256 hashes of the
  * SubjectPublicKeyInfo of certificates in the chain; at least two are
  * required (primary + backup) so a certificate rotation cannot lock users
  * out. An optional expiry date makes pinning fail open for app versions that
@@ -14,7 +13,7 @@ import {
   initializeSslPinning,
   isSslPinningAvailable,
 } from 'react-native-ssl-public-key-pinning';
-import { env, supabaseHost } from '@/config/env';
+import { dataApiHost, env } from '@/config/env';
 
 export type PinningStatus = 'enabled' | 'not_configured' | 'unavailable';
 
@@ -29,7 +28,7 @@ export function enableCertificatePinning(): Promise<PinningStatus> {
     if (!isSslPinningAvailable()) return 'unavailable';
 
     await initializeSslPinning({
-      [supabaseHost]: {
+      [dataApiHost]: {
         includeSubdomains: false,
         publicKeyHashes: env.tlsPins,
         ...(env.tlsPinsExpire ? { expirationDate: env.tlsPinsExpire } : {}),

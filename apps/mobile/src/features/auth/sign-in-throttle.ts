@@ -1,8 +1,8 @@
 /**
  * Slows down password guessing on this device: after 5 wrong sign-ins in a
  * row, each further attempt waits 30 seconds, doubling up to 15 minutes. A
- * successful sign-in clears it. The server's own limits (Supabase Auth, per
- * IP address) apply on top; this only stops a phone from being used to
+ * successful sign-in clears it. The server's own limits (Clerk's per-account
+ * lockout and rate limits) apply on top; this only stops a phone from being used to
  * hammer them.
  */
 

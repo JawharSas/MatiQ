@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { fromPostgrest } from '@/lib/errors';
 import { readCache, writeCache } from '@/lib/storage';
-import { supabase } from '@/lib/supabase';
+import { backend } from '@/lib/backend';
 import type { MatchResultSummary } from './match-record';
 import type { MatchStatus } from './useMatch';
 
@@ -36,7 +36,7 @@ export function useMyMatches() {
     queryKey: ['my-matches'],
     placeholderData: readCache<MatchListItem[]>(cacheKey),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await backend
         .from('matches')
         .select(COLUMNS)
         .eq('owner_id', userId)
