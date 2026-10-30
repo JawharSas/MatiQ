@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { formatClock } from '@matiq/rules-engine';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,8 +14,10 @@ import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, postSchema } from '@/lib/validation';
 import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow } from '@/ui/components';
 import { colors, font } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 export default function ShareScreen() {
+  useTheme();
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const userId = useUserId();
   const router = useRouter();

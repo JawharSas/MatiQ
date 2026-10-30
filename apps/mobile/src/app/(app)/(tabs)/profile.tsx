@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -17,9 +19,11 @@ import { recordText, summarize } from '@/features/analysis/match-record';
 import { useMyMatches } from '@/features/analysis/useMyMatches';
 import { LogoMark } from '@/ui/brand';
 import { Badge, Body, Button, Caption, Card, ErrorText, ListGroup, ListRow, Loading, Screen, SectionHeader, StatTile, TextField } from '@/ui/components';
-import { colors, font, radius, spacing } from '@/ui/theme';
+import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 export default function ProfileScreen() {
+  useTheme();
   const userId = useUserId();
   const { isOwner } = useAuth();
   const router = useRouter();
@@ -139,18 +143,17 @@ export default function ProfileScreen() {
       <RankedSummary userId={userId} emptyText="Challenge a training partner from the Ranked tab to earn a rating and titles." />
       <PrivacyToggle userId={userId} visibility={card.visibility} />
 
-      <SectionHeader title="Account" />
+      <SectionHeader title="Social" />
       <ListGroup>
         <ListRow icon="people" title="Friends & requests" onPress={() => router.push('/friends')} />
         <ListRow icon="images" title="My posts" onPress={() => router.push({ pathname: '/user/[id]', params: { id: userId } })} />
-        <ListRow icon="settings" tone="neutral" title="Settings" onPress={() => router.push('/settings')} />
         {isOwner ? <ListRow icon="shield-half" tone="warning" title="Owner panel" subtitle="Users, usage, disputes and audit log" onPress={() => router.push('/admin')} /> : null}
       </ListGroup>
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   hero: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
@@ -180,4 +183,4 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.background,
   },
-});
+}));

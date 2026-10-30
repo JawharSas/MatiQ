@@ -1,7 +1,7 @@
 import type { Discipline } from '@matiq/rules-engine';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
-import { colors, radius, spacing } from '@/ui/theme';
+import { onVideo, radius, spacing } from '@/ui/theme';
 import { useLiveScore } from './useLiveScore';
 
 export interface LiveMatchInfo {
@@ -26,11 +26,11 @@ export function LiveScoreboard({ match }: { match: LiveMatchInfo }) {
       {card ? (
         <>
           <View style={styles.row}>
-            <Text style={[styles.score, { color: colors.athleteA }]} numberOfLines={1}>
+            <Text style={[styles.score, { color: onVideo.athleteA }]} numberOfLines={1}>
               {match.athleteALabel} {card.totals.A.points}
             </Text>
             <Text style={styles.caption}>–</Text>
-            <Text style={[styles.score, { color: colors.athleteB }]} numberOfLines={1}>
+            <Text style={[styles.score, { color: onVideo.athleteB }]} numberOfLines={1}>
               {card.totals.B.points} {match.athleteBLabel}
             </Text>
           </View>
@@ -60,5 +60,5 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   score: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'], flexShrink: 1 },
-  caption: { color: colors.text, fontSize: 12 },
+  caption: { color: onVideo.text, fontSize: 12 },
 });

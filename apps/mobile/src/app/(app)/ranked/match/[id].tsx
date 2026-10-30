@@ -1,6 +1,8 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
@@ -11,7 +13,8 @@ import { describeRanked } from '@/features/ranked/ranked-state';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
@@ -30,6 +33,7 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 export default function RankedMatchScreen() {
+  useTheme();
   const params = paramsSchema.safeParse(useLocalSearchParams());
   if (!params.success) {
     return (
@@ -42,6 +46,7 @@ export default function RankedMatchScreen() {
 }
 
 function RankedMatchView({ id }: { id: string }) {
+  useTheme();
   const userId = useUserId();
   const router = useRouter();
   const ranked = useRankedMatch(id);
@@ -162,6 +167,7 @@ function RankedMatchView({ id }: { id: string }) {
 }
 
 function RatingChange({ before, after }: { before: number | null; after: number | null }) {
+  useTheme();
   if (before === null || after === null) return null;
   const delta = after - before;
   return (
@@ -175,10 +181,10 @@ function RatingChange({ before, after }: { before: number | null; after: number 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   fighter: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   fill: { flex: 1 },
   row: { flexDirection: 'row', gap: spacing.sm },
   change: { alignItems: 'flex-end' },
   after: { color: colors.text, fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
-});
+}));

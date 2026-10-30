@@ -2,7 +2,7 @@ import { formatClock } from '@matiq/rules-engine';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
-import { colors, radius, spacing } from '@/ui/theme';
+import { onVideo, radius, spacing } from '@/ui/theme';
 import { type TelemetryStore, useTelemetry } from './capture-telemetry';
 
 /**
@@ -29,7 +29,7 @@ export function CaptureHud({ telemetry, maxDurationMs }: { telemetry: TelemetryS
     <View style={styles.hud} pointerEvents="none">
       <View style={styles.row}>
         <View style={styles.badge}>
-          <View style={[styles.dot, { backgroundColor: healthy ? colors.success : colors.warning }]} />
+          <View style={[styles.dot, { backgroundColor: healthy ? onVideo.success : onVideo.warning }]} />
           <Text style={styles.text} accessibilityLabel={`${shownFps ?? 'unknown'} frames per second`}>
             {shownFps === null ? '… FPS' : `${shownFps} FPS`}
             {measuredFps !== null ? ' live' : ''}
@@ -37,7 +37,7 @@ export function CaptureHud({ telemetry, maxDurationMs }: { telemetry: TelemetryS
         </View>
         {recording ? (
           <View style={styles.badge}>
-            <View style={[styles.dot, { backgroundColor: colors.danger }]} />
+            <View style={[styles.dot, { backgroundColor: onVideo.danger }]} />
             <Text style={styles.text}>{formatClock(elapsedMs)}</Text>
           </View>
         ) : null}
@@ -85,11 +85,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  text: { color: colors.text, fontVariant: ['tabular-nums'], fontWeight: '700' },
-  caption: { color: colors.text, fontSize: 12 },
+  text: { color: onVideo.text, fontVariant: ['tabular-nums'], fontWeight: '700' },
+  caption: { color: onVideo.text, fontSize: 12 },
   warning: {
     alignSelf: 'flex-start',
-    color: colors.warning,
+    color: onVideo.warning,
     fontWeight: '700',
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: spacing.sm,

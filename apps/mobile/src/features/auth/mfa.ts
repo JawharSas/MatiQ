@@ -20,10 +20,11 @@ export interface TotpEnrollment {
   uri: string;
 }
 
-function mfaError(error: unknown, code: string, message: string): AppError {
+function mfaError(error: unknown, code: string, message: string): unknown {
   switch (clerkErrorCode(error)) {
     case 'session_reverification_required':
-      return new AppError('mfa_reverify', 'For your security, sign out and sign back in, then try again.');
+      // Left as Clerk's error: the screen asks the person to confirm it's them and retries.
+      return error;
     case 'form_code_incorrect':
     case 'verification_expired':
       return new AppError('mfa_code_invalid', 'That code is incorrect or expired. Try the current code.');

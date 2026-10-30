@@ -1087,6 +1087,12 @@ function startSession(uid: string) {
 
 const totpOn = (uid: string) => db.mfa_factors.some((factor) => factor.user_id === uid && factor.status === 'verified');
 
+/** Passwords changed in the preview (everyone starts with PREVIEW_PASSWORD), and who connected Google. */
+const passwords = new Map<string, string>();
+const passwordOf = (uid: string) => passwords.get(uid) ?? PREVIEW_PASSWORD;
+const googleConnected = new Set<string>();
+const googleConnecting = new Set<string>();
+
 export function subscribePreviewAuth(listener: () => void): () => void {
   authListeners.add(listener);
   return () => authListeners.delete(listener);
@@ -1112,7 +1118,7 @@ function createSignIn() {
     async password({ emailAddress, password }: { emailAddress: string; password: string }): Promise<ClerkResult> {
       await latency(250);
       const user = db.users.find((u) => u.email.toLowerCase() === emailAddress.toLowerCase());
-      if (!user || password !== PREVIEW_PASSWORD) return refused('form_password_or_identifier_incorrect');
+      if (!user || password !== passwordOf(user.id)) return refused('form_password_or_identifier_incorrect');
       if (isBanned(user.id)) return refused('user_banned');
       pending = user.id;
       status = totpOn(user.id) ? 'needs_second_factor' : 'complete';
@@ -1133,6 +1139,32 @@ function createSignIn() {
       async verifyEmailCode({ code }: { code: string }) {
         await latency(200);
         return codeOk(code) ? passed() : refused('form_code_incorrect');
+      },
+    },
+    /** The first step of a password reset: whose password. */
+    async create({ identifier }: { identifier: string }): Promise<ClerkResult> {
+      await latency(150);
+      const user = db.users.find((u) => u.email.toLowerCase() === identifier.toLowerCase());
+      pending = user?.id ?? null;
+      status = 'needs_first_factor';
+      return user ? ok() : refused('form_identifier_not_found');
+    },
+    resetPasswordEmailCode: {
+      async sendCode(): Promise<ClerkResult> {
+        return pending ? ok() : refused('form_identifier_not_found');
+      },
+      async verifyCode({ code }: { code: string }): Promise<ClerkResult> {
+        await latency(150);
+        if (!pending || !codeOk(code)) return refused('form_code_incorrect');
+        status = 'needs_new_password';
+        return ok();
+      },
+      async submitPassword({ password }: { password: string }): Promise<ClerkResult> {
+        await latency(150);
+        if (status !== 'needs_new_password' || !pending) return refused('sign_in_incomplete');
+        passwords.set(pending, password);
+        status = totpOn(pending) ? 'needs_second_factor' : 'complete';
+        return ok();
       },
     },
     async finalize(): Promise<ClerkResult> {
@@ -1214,6 +1246,35 @@ function buildUser() {
     totpEnabled: totpOn(uid),
     backupCodeEnabled: totpOn(uid),
     twoFactorEnabled: totpOn(uid),
+    passwordEnabled: true,
+    externalAccounts: googleConnected.has(uid)
+      ? [
+          {
+            id: `google-${uid}`,
+            provider: 'google',
+            emailAddress: email.replace(/@.*/, '@gmail.com'),
+            verification: { status: 'verified' },
+            async destroy() {
+              await latency(150);
+              googleConnected.delete(uid);
+              notify();
+            },
+          },
+        ]
+      : [],
+    async updatePassword({ newPassword, currentPassword }: { newPassword: string; currentPassword?: string }) {
+      await latency(200);
+      if (currentPassword !== passwordOf(uid)) throw thrown('form_password_validation_failed');
+      passwords.set(uid, newPassword);
+      notify();
+      return previewUser();
+    },
+    /** Google's consent screen is skipped in the preview: the next reload finds the account connected. */
+    async createExternalAccount() {
+      await latency(150);
+      googleConnecting.add(uid);
+      return { verification: { externalVerificationRedirectURL: new URL('https://accounts.google.com/o/oauth2/v2/auth?preview=1') } };
+    },
     async createTOTP() {
       await latency(150);
       return { id: 'totp', verified: false, secret: PREVIEW_TOTP_SECRET, uri: `otpauth://totp/MatIQ:${email}?secret=${PREVIEW_TOTP_SECRET}&issuer=MatIQ` };
@@ -1235,6 +1296,10 @@ function buildUser() {
       return { id: 'backup', codes: PREVIEW_BACKUP_CODES };
     },
     async reload() {
+      if (googleConnecting.delete(uid)) {
+        googleConnected.add(uid);
+        notify();
+      }
       return previewUser();
     },
     async getSessions() {

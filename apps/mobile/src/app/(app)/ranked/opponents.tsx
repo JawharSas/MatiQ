@@ -1,7 +1,9 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { type Discipline, previewMatch, variantsFor } from '@matiq/rules-engine';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
@@ -11,7 +13,8 @@ import { VARIANT_LABELS } from '@/features/capture/MatchSetupForm';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Loading, Screen, Segmented, TextField } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ discipline: z.enum(['bjj', 'wrestling', 'mma']).catch('bjj') });
 
@@ -20,6 +23,7 @@ const paramsSchema = z.object({ discipline: z.enum(['bjj', 'wrestling', 'mma']).
  * privacy, plus public ranked fighters), with the projected rating change.
  */
 export default function OpponentsScreen() {
+  useTheme();
   const { discipline } = paramsSchema.parse(useLocalSearchParams());
   const userId = useUserId();
   const opponents = useOpponents(discipline);
@@ -61,6 +65,7 @@ function OpponentCard(props: {
   variant: string;
   message: string;
 }) {
+  useTheme();
   const router = useRouter();
   const challenge = useRankedAction(rankedActions.challenge);
   const { opponent } = props;
@@ -101,8 +106,8 @@ function OpponentCard(props: {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   fill: { flex: 1 },
   rating: { fontSize: 22, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-});
+}));

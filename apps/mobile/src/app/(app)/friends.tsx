@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useDeferredValue, useState } from 'react';
@@ -8,8 +10,10 @@ import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
 import { Button, Caption, Card, ErrorText, Heading, Screen, TextField } from '@/ui/components';
 import { font, spacing } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 export default function FriendsScreen() {
+  useTheme();
   const friends = useFriends();
   const action = useFriendAction();
   const [query, setQuery] = useState('');
@@ -69,6 +73,7 @@ export default function FriendsScreen() {
 }
 
 function ProfileLink({ id, name, username, avatarPath }: { id: string; name: string; username: string; avatarPath: string | null }) {
+  useTheme();
   return (
     <Link href={{ pathname: '/user/[id]', params: { id } }} asChild>
       <Pressable accessibilityRole="link" style={{ paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

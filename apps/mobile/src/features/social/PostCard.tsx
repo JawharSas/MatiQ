@@ -1,11 +1,14 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatClock } from '@matiq/rules-engine';
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { Badge, Card } from '@/ui/components';
-import { athleteColor, colors, font, spacing } from '@/ui/theme';
+import { athleteColor, colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { type FeedItem, useToggleLike } from './api';
 import { Avatar } from './Avatar';
 
@@ -26,6 +29,7 @@ function methodLabel(method: string): string {
 }
 
 export function PostCard({ post }: { post: FeedItem }) {
+  useTheme();
   const like = useToggleLike();
   const viewerId = useUserId();
   const names = { A: post.athlete_a_label ?? 'Fighter 1', B: post.athlete_b_label ?? 'Fighter 2' };
@@ -127,6 +131,7 @@ export function PostCard({ post }: { post: FeedItem }) {
 
 /** One fighter's side of the scoreboard: their colour, name, points and the win. */
 function Fighter({ name, corner, points, won, lost }: { name: string; corner: 'A' | 'B'; points: number; won: boolean; lost: boolean }) {
+  useTheme();
   const alignRight = corner === 'B';
   const color = athleteColor(corner);
   return (
@@ -156,7 +161,7 @@ function Fighter({ name, corner, points, won, lost }: { name: string; corner: 'A
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   fill: { flex: 1 },
   author: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   name: { fontSize: 15, fontWeight: '700', color: colors.text },
@@ -200,4 +205,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   playHighlightText: { color: colors.accent, fontWeight: '700', fontSize: 13 },
-});
+}));

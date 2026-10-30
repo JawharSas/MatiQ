@@ -1,6 +1,8 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { parseTotals, TITLES, isUnlocked } from '@matiq/rules-engine';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
@@ -8,12 +10,14 @@ import { rankedActions, useRankedAction, useRatings, useTitles } from '@/feature
 import { DISCIPLINE_LABELS, ProgressBar } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Button, Caption, Card, ErrorText, Loading, Screen } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ discipline: z.enum(['bjj', 'wrestling', 'mma']).catch('bjj') });
 
 /** Every title, with progress from this discipline's ranked career. */
 export default function TitlesScreen() {
+  useTheme();
   const { discipline } = paramsSchema.parse(useLocalSearchParams());
   const userId = useUserId();
   const ratings = useRatings(userId);
@@ -66,8 +70,8 @@ export default function TitlesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   unlocked: { borderWidth: 1, borderColor: colors.accent },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   badge: { color: colors.accent, fontWeight: '800', fontSize: 12 },
-});
+}));

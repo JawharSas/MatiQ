@@ -1,8 +1,10 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { type Discipline, newFighterState, tierFor } from '@matiq/rules-engine';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { type PersonRow, rankedActions, type RatingRow, useRankedAction, useRankedMatches, usePeople, useRatings } from '@/features/ranked/api';
@@ -27,11 +29,13 @@ import {
   Segmented,
   StatTile,
 } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 const DISCIPLINE_VALUES = DISCIPLINE_OPTIONS.map((option) => option.value);
 
 export default function RankedScreen() {
+  useTheme();
   const userId = useUserId();
   const router = useRouter();
   const [discipline, setDiscipline] = useState<Discipline>(() => readPreference('ranked-discipline', DISCIPLINE_VALUES, 'bjj'));
@@ -123,6 +127,7 @@ export default function RankedScreen() {
 }
 
 function Standing({ discipline, rating }: { discipline: Discipline; rating: RatingRow | undefined }) {
+  useTheme();
   const fallback = newFighterState();
   const current = rating?.rating ?? fallback.rating;
   const games = rating?.games ?? 0;
@@ -155,6 +160,7 @@ function Standing({ discipline, rating }: { discipline: Discipline; rating: Rati
 }
 
 function RankedItem({ row, view, person }: { row: RankedMatchRow; view: RankedView; person: PersonRow | undefined }) {
+  useTheme();
   const router = useRouter();
   const respond = useRankedAction(rankedActions.respond);
   const cancel = useRankedAction(rankedActions.cancel);
@@ -231,7 +237,7 @@ function RankedItem({ row, view, person }: { row: RankedMatchRow; view: RankedVi
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   row: { flexDirection: 'row', gap: spacing.sm },
   fill: { flex: 1 },
   standing: { gap: 14 },
@@ -243,4 +249,4 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 15, fontWeight: '700', color: colors.text },
   itemDiscipline: { fontWeight: '500', color: colors.textMuted },
   quote: { backgroundColor: colors.surfaceRaised, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-});
+}));

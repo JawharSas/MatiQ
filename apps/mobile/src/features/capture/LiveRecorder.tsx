@@ -6,7 +6,7 @@ import { Camera, useCameraPermission, useMicrophonePermission } from 'react-nati
 import { errorMessage } from '@/lib/errors';
 import { readPreference, writePreference } from '@/lib/storage';
 import { Body, Button, Card, Segmented } from '@/ui/components';
-import { colors, radius, spacing } from '@/ui/theme';
+import { onVideo, radius, spacing } from '@/ui/theme';
 import type { CapturePlan, FpsPreference } from './capture-plan';
 import { CaptureHud } from './CaptureHud';
 import type { SampledFrame } from './frame-processor';
@@ -170,13 +170,13 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 4,
-    borderColor: colors.text,
+    borderColor: onVideo.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recordIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.danger },
-  stopIcon: { width: 28, height: 28, borderRadius: 4, backgroundColor: colors.danger },
+  recordIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: onVideo.danger },
+  stopIcon: { width: 28, height: 28, borderRadius: 4, backgroundColor: onVideo.danger },
   cancel: { padding: spacing.sm },
-  cancelText: { color: colors.text, fontWeight: '600' },
-  error: { color: colors.danger, backgroundColor: 'rgba(0,0,0,0.6)', padding: spacing.sm, borderRadius: radius.sm },
+  cancelText: { color: onVideo.text, fontWeight: '600' },
+  error: { color: onVideo.danger, backgroundColor: 'rgba(0,0,0,0.6)', padding: spacing.sm, borderRadius: radius.sm },
 });

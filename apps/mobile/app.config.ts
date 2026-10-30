@@ -27,7 +27,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: APP_VERSION,
   // Follows the device: content is never locked to one orientation (WCAG 1.3.4).
   orientation: 'default',
-  userInterfaceStyle: 'dark',
+  // Light, Dark or Midnight in Settings → Appearance; "System" follows the phone.
+  userInterfaceStyle: 'automatic',
   // Brand assets are rendered from the vector mark by scripts/brand-assets.cjs.
   icon: './assets/brand/icon.png',
   // Root view colour behind every screen (expo-system-ui): no white flashes.

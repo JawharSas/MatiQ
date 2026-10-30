@@ -1,29 +1,36 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useUser } from '@clerk/expo';
 import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { Alert, Linking, Platform } from 'react-native';
 import { Text } from '@/ui/text';
 import { newBackupCodes, removeTotp, startTotpEnrollment, type TotpEnrollment, verifyTotp } from '@/features/auth/mfa';
+import { isVerificationCancelled, useVerifiedAction } from '@/features/auth/reverify';
 import { groupSecret } from '@/features/auth/totp';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField } from '@/ui/components';
 import { font } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 
 export default function TwoFactorScreen() {
+  useTheme();
   const { user } = useUser();
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Changes to two-factor may need the person to confirm it's them first.
+  const verified = useVerifiedAction((work: () => Promise<void>) => work());
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      await work();
+      await verified.run(work);
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (!isVerificationCancelled(caught)) setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -78,6 +85,7 @@ export default function TwoFactorScreen() {
       {enrollment ? <EnrollmentCard enrollment={enrollment} code={code} onCode={setCode} busy={busy} onConfirm={() => void confirm()} onCancel={() => setEnrollment(null)} /> : null}
       {backupCodes.length > 0 ? <BackupCodesCard codes={backupCodes} /> : null}
       <ErrorText>{error}</ErrorText>
+      {verified.prompt}
     </Screen>
   );
 }
@@ -90,6 +98,7 @@ function EnrollmentCard(props: {
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useTheme();
   // The secret is as sensitive as a password while it is on screen.
   usePreventScreenCapture();
   return (
@@ -117,6 +126,7 @@ function EnrollmentCard(props: {
 }
 
 function BackupCodesCard({ codes }: { codes: string[] }) {
+  useTheme();
   return (
     <Card>
       <Heading>Backup codes</Heading>

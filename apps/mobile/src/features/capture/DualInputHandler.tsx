@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 /**
  * Dual input: record a round live or upload a video from the gallery.
  *
@@ -27,6 +29,7 @@ import { errorMessage } from '@/lib/errors';
 import { matchSetupSchema } from '@/lib/validation';
 import { Body, Button, Caption, Card, ErrorText, Heading, IconTile, ProgressBar, Segmented, StatusText } from '@/ui/components';
 import { font } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { LiveRecorder } from './LiveRecorder';
 import { defaultSetup, MatchSetupForm } from './MatchSetupForm';
 import {
@@ -67,6 +70,7 @@ type Phase =
   | { kind: 'failed'; message: string };
 
 export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: RankedRecording | null; onExitRanked?: () => void }) {
+  useTheme();
   const userId = useUserId();
   const router = useRouter();
   const queryClient = useQueryClient();

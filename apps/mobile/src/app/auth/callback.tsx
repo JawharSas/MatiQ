@@ -3,14 +3,16 @@ import { useEffect } from 'react';
 import { Loading } from '@/ui/components';
 
 /**
- * Where Google sign-in returns (matiq:///auth/callback). Clerk completes the
- * sign-in in the browser session that opened it; when Android also opens
- * the link in the app, this route just goes on to the app.
+ * Where Google returns (matiq:///auth/callback), after signing in or after
+ * connecting Google in Settings. Clerk completes it in the browser session
+ * that opened it; when Android also opens the link in the app, this route
+ * goes back to the screen that started it (or on to the app).
  */
 export default function AuthCallback() {
   const router = useRouter();
   useEffect(() => {
-    router.replace('/');
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
   }, [router]);
   return <Loading />;
 }

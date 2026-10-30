@@ -36,6 +36,13 @@ export function clerkErrorMessage(error: unknown): string {
       return 'That code has expired. Ask for a new one.';
     case 'session_exists':
       return 'You are already signed in.';
+    case 'external_account_exists':
+    case 'identifier_already_signed_in':
+      return 'This Google account already belongs to another MatIQ account.';
+    case 'form_password_validation_failed':
+      return 'Your current password is incorrect.';
+    case 'session_reverification_required':
+      return 'For your security, sign out and sign back in, then try again.';
   }
   if (code.startsWith('form_password')) return 'Choose a password with 12+ characters, upper and lower case, a number and a symbol.';
   return 'Something went wrong. Please try again.';

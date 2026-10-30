@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Children, type ComponentProps, Fragment, type ReactNode, useState } from 'react';
 import {
@@ -15,7 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useA11y } from '@/features/accessibility/A11yProvider';
 import { Text } from './text';
-import { colors, font, radius, spacing } from './theme';
+import { colors, font, radius, spacing, themedStyles } from './theme';
+import { useTheme } from './ThemeProvider';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -38,6 +41,7 @@ export function usePressStyle() {
  * legal pages (WCAG 2.1.1).
  */
 export function Screen({ children, scroll = true, focusable = false }: { children: ReactNode; scroll?: boolean; focusable?: boolean }) {
+  useTheme();
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       {scroll ? (
@@ -52,6 +56,7 @@ export function Screen({ children, scroll = true, focusable = false }: { childre
 }
 
 export function Title({ children }: { children: ReactNode }) {
+  useTheme();
   return (
     <Text style={font.title} accessibilityRole="header">
       {children}
@@ -60,6 +65,7 @@ export function Title({ children }: { children: ReactNode }) {
 }
 
 export function Heading({ children }: { children: ReactNode }) {
+  useTheme();
   return (
     <Text style={font.heading} accessibilityRole="header">
       {children}
@@ -68,23 +74,33 @@ export function Heading({ children }: { children: ReactNode }) {
 }
 
 export function Body({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+  useTheme();
   return <Text style={[font.body, muted && { color: colors.textMuted }]}>{children}</Text>;
 }
 
 /** Style for a link inside a sentence: colour and underline, so it does not rely on colour alone (WCAG 1.4.1). */
-export const inlineLink = { color: colors.accent, fontWeight: '600', textDecorationLine: 'underline' } as const;
+export const inlineLink = {
+  get color() {
+    return colors.accent;
+  },
+  fontWeight: '600',
+  textDecorationLine: 'underline',
+} as const;
 
 /** Inline text that reads as a link (use inside expo-router <Link>). */
 export function LinkText({ children }: { children: ReactNode }) {
+  useTheme();
   return <Text style={[font.body, { color: colors.accent, fontWeight: '600', textDecorationLine: 'underline' }]}>{children}</Text>;
 }
 
 export function Caption({ children }: { children: ReactNode }) {
+  useTheme();
   return <Text style={font.caption}>{children}</Text>;
 }
 
 /** Small uppercase label above a group of content. */
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
+  useTheme();
   return (
     <View style={styles.sectionHeader}>
       <Text style={[font.overline, styles.upper]} accessibilityRole="header">
@@ -96,18 +112,19 @@ export function SectionHeader({ title, action }: { title: string; action?: React
 }
 
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  useTheme();
   const { highContrast } = useA11y();
   return <View style={[styles.card, highContrast && styles.highContrastBorder, style]}>{children}</View>;
 }
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
-const BUTTON_LABEL_COLOR: Record<ButtonVariant, string> = {
+const buttonLabelColor = (): Record<ButtonVariant, string> => ({
   primary: colors.accentText,
   secondary: colors.text,
   danger: colors.danger,
   ghost: colors.accent,
-};
+});
 
 export function Button({
   label,
@@ -130,10 +147,11 @@ export function Button({
   /** What happens on press, when the label alone does not say. */
   hint?: string;
 }) {
+  useTheme();
   const { highContrast } = useA11y();
   const pressStyle = usePressStyle();
   const inactive = disabled || loading;
-  const labelColor = BUTTON_LABEL_COLOR[variant];
+  const labelColor = buttonLabelColor()[variant];
   return (
     <Pressable
       accessibilityRole="button"
@@ -165,6 +183,7 @@ export function Button({
 }
 
 export function TextField({ label, error, ...props }: TextInputProps & { label: string; error?: string | null }) {
+  useTheme();
   const { textScale } = useA11y();
   const [focused, setFocused] = useState(false);
   return (
@@ -218,6 +237,7 @@ export function ToggleRow({
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
 }) {
+  useTheme();
   return (
     <View style={styles.toggleRow}>
       <View style={[styles.fill, { gap: 2 }]} aria-hidden>
@@ -246,6 +266,7 @@ export function ToggleRow({
  * (at least 44 pt high) and the label is part of the control's name.
  */
 export function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  useTheme();
   const pressStyle = usePressStyle();
   return (
     <Pressable
@@ -278,6 +299,7 @@ export function ChoiceChips<T extends string | number>({
   onChange: (value: T) => void;
   columns?: number;
 }) {
+  useTheme();
   const pressStyle = usePressStyle();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.chips}>
@@ -313,6 +335,7 @@ export function Segmented<T extends string>({
   /** Options per row, for longer lists that would otherwise squeeze their labels. */
   columns?: number;
 }) {
+  useTheme();
   const pressStyle = usePressStyle();
   const { textScale } = useA11y();
   // With bigger text the options stack, so labels are never cut mid-word (WCAG 1.4.4, 1.4.10).
@@ -343,18 +366,19 @@ export function Segmented<T extends string>({
 
 type Tone = 'accent' | 'success' | 'warning' | 'danger' | 'blue' | 'neutral';
 
-const TONES: Record<Tone, { background: string; foreground: string }> = {
+const tones = (): Record<Tone, { background: string; foreground: string }> => ({
   accent: { background: colors.accentSoft, foreground: colors.accent },
   success: { background: colors.successSoft, foreground: colors.success },
   warning: { background: colors.warningSoft, foreground: colors.warning },
   danger: { background: colors.dangerSoft, foreground: colors.danger },
   blue: { background: colors.athleteASoft, foreground: colors.athleteA },
   neutral: { background: colors.surfaceHigh, foreground: colors.textMuted },
-};
+});
 
 /** Small tinted pill for a status or a tag. */
 export function Badge({ label, tone = 'neutral', icon }: { label: string; tone?: Tone; icon?: IconName }) {
-  const { background, foreground } = TONES[tone];
+  useTheme();
+  const { background, foreground } = tones()[tone];
   return (
     <View style={[styles.badge, { backgroundColor: background }]}>
       {icon ? <Ionicons name={icon} size={12} color={foreground} aria-hidden /> : null}
@@ -365,7 +389,8 @@ export function Badge({ label, tone = 'neutral', icon }: { label: string; tone?:
 
 /** Icon in a tinted rounded square (decorative: hidden from screen readers). */
 export function IconTile({ icon, tone = 'accent', size = 36 }: { icon: IconName; tone?: Tone; size?: number }) {
-  const { background, foreground } = TONES[tone];
+  useTheme();
+  const { background, foreground } = tones()[tone];
   return (
     <View
       style={[styles.iconTile, { width: size, height: size, borderRadius: size * 0.3, backgroundColor: background }]}
@@ -380,6 +405,7 @@ export function IconTile({ icon, tone = 'accent', size = 36 }: { icon: IconName;
 
 /** Rows separated by hairlines inside one card, like a settings list. */
 export function ListGroup({ children }: { children: ReactNode }) {
+  useTheme();
   const { highContrast } = useA11y();
   const rows = Children.toArray(children).filter(Boolean);
   return (
@@ -411,6 +437,7 @@ export function ListRow({
   onPress?: () => void;
   destructive?: boolean;
 }) {
+  useTheme();
   const pressStyle = usePressStyle();
   return (
     <Pressable
@@ -432,9 +459,10 @@ export function ListRow({
 }
 
 export function StatTile({ label, value, tone }: { label: string; value: string | number; tone?: Tone }) {
+  useTheme();
   return (
     <View style={styles.statTile}>
-      <Text style={[styles.statValue, tone && { color: TONES[tone].foreground }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+      <Text style={[styles.statValue, tone && { color: tones()[tone].foreground }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
         {value}
       </Text>
       <Text style={[font.overline, styles.upper]}>{label}</Text>
@@ -444,6 +472,7 @@ export function StatTile({ label, value, tone }: { label: string; value: string 
 
 /** Progress towards a goal; screen readers hear the label and the percentage. */
 export function ProgressBar({ label, value, color = colors.accent }: { label: string; value: number; color?: string }) {
+  useTheme();
   const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100);
   return (
     <View
@@ -458,6 +487,7 @@ export function ProgressBar({ label, value, color = colors.accent }: { label: st
 }
 
 export function EmptyState({ icon, title, body, action }: { icon: IconName; title: string; body?: string; action?: ReactNode }) {
+  useTheme();
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>
@@ -474,6 +504,7 @@ export function EmptyState({ icon, title, body, action }: { icon: IconName; titl
 
 /** Error message, announced as soon as it appears (WCAG 4.1.3). */
 export function ErrorText({ children }: { children: ReactNode }) {
+  useTheme();
   if (!children) return null;
   return (
     <View style={styles.errorBox} accessibilityLiveRegion="assertive">
@@ -487,6 +518,7 @@ export function ErrorText({ children }: { children: ReactNode }) {
 
 /** Status text that screen readers announce when it changes (progress, results). */
 export function StatusText({ children }: { children: ReactNode }) {
+  useTheme();
   return (
     <Text style={font.body} accessibilityLiveRegion="polite" role="status">
       {children}
@@ -495,6 +527,7 @@ export function StatusText({ children }: { children: ReactNode }) {
 }
 
 export function Loading({ label = 'Loading' }: { label?: string }) {
+  useTheme();
   return (
     <View style={[styles.fill, styles.center, { backgroundColor: colors.background }]}>
       <ActivityIndicator color={colors.accent} accessibilityLabel={label} />
@@ -502,7 +535,7 @@ export function Loading({ label = 'Loading' }: { label?: string }) {
   );
 }
 
-export const styles = StyleSheet.create({
+export const styles = themedStyles(() => ({
   fill: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -644,4 +677,4 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
     marginBottom: spacing.xs,
   },
-});
+}));

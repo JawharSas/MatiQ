@@ -1,19 +1,30 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
+import { useUser } from '@clerk/expo';
 import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Share, StyleSheet } from 'react-native';
+import { Alert, Share } from 'react-native';
 import { Text } from '@/ui/text';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { contactSupport, supportEmail } from '@/features/legal/contact';
 import { fromFunctionError, errorMessage } from '@/lib/errors';
 import { backend } from '@/lib/backend';
 import { Button, Caption, Card, ErrorText, Heading, ListGroup, ListRow, Screen, SectionHeader, TextField } from '@/ui/components';
-import { font } from '@/ui/theme';
+import { font, themedStyles } from '@/ui/theme';
+import { type ThemePreference, useTheme } from '@/ui/ThemeProvider';
 
+const THEME_LABELS: Record<ThemePreference, string> = { system: 'System', light: 'Light', dark: 'Dark', midnight: 'Midnight' };
+
+/** Everything essential in one place: account and sign-in, appearance, AI, data, help and legal. */
 export default function SettingsScreen() {
+  const { preference } = useTheme();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, email } = useAuth();
+  const { user } = useUser();
+  const google = user?.externalAccounts.find((account) => account.provider === 'google');
+  const googleConnected = google?.verification?.status === 'verified';
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -63,35 +74,65 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <SectionHeader title="General" />
+      <SectionHeader title="Account and sign-in" />
       <ListGroup>
+        <ListRow icon="mail" title="Email" subtitle={email || 'Not set'} />
+        <ListRow
+          icon="lock-closed"
+          title="Password"
+          subtitle={user?.passwordEnabled ? 'Change your password' : 'Set one to also sign in with your email'}
+          onPress={() => router.push('/settings/password')}
+        />
+        <ListRow
+          icon="logo-google"
+          title="Google"
+          subtitle={googleConnected ? `Connected as ${google?.emailAddress ?? 'your Google account'}` : 'Connect to sign in with Google'}
+          value={googleConnected ? 'On' : 'Off'}
+          onPress={() => router.push('/settings/google')}
+        />
+        <ListRow
+          icon="shield-checkmark"
+          title="Two-factor authentication"
+          subtitle="A code from your authenticator app when you sign in"
+          value={user?.totpEnabled ? 'On' : 'Off'}
+          onPress={() => router.push('/settings/two-factor')}
+        />
+      </ListGroup>
+
+      <SectionHeader title="Appearance" />
+      <ListGroup>
+        <ListRow
+          icon="contrast"
+          title="Theme"
+          subtitle="Light, Dark, Midnight or your phone's setting"
+          value={THEME_LABELS[preference]}
+          onPress={() => router.push('/appearance')}
+        />
         <ListRow
           icon="accessibility"
           title="Accessibility"
           subtitle="Text size, high contrast and motion"
           onPress={() => router.push('/accessibility')}
         />
-        <ListRow
-          icon="help-buoy"
-          title="Help and support"
-          subtitle={supportEmail ? `Email ${supportEmail}` : 'Report a problem on GitHub'}
-          onPress={() => contactSupport('MatIQ support')}
-        />
       </ListGroup>
 
-      <SectionHeader title="Security" />
+      <SectionHeader title="Analysis" />
       <ListGroup>
-        <ListRow
-          icon="shield-checkmark"
-          title="Two-factor authentication"
-          subtitle="Require a code from your authenticator app"
-          onPress={() => router.push('/settings/two-factor')}
-        />
         <ListRow
           icon="key"
           title="AI provider"
           subtitle="Use your own key for Claude, ChatGPT, Gemini or any AI"
           onPress={() => router.push('/settings/api-keys')}
+        />
+      </ListGroup>
+
+      <SectionHeader title="Help" />
+      <ListGroup>
+        <ListRow
+          icon="help-buoy"
+          title="Help and support"
+          subtitle={supportEmail ? `Email ${supportEmail}` : 'Report a problem on GitHub'}
+          onPress={() => contactSupport('MatIQ support')}
         />
       </ListGroup>
 
@@ -162,6 +203,6 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   version: { ...font.caption, textAlign: 'center', color: font.overline.color },
-});
+}));

@@ -35,6 +35,15 @@ export function useSignUp() {
   return { signUp: previewSignUp };
 }
 
+/** Clerk never asks to confirm it's you in the preview: the change just runs. */
+export function useReverification<T>(fetcher: T): T {
+  return fetcher;
+}
+
+export function useSession() {
+  return { isLoaded: true, isSignedIn: previewSessionUserId() !== null, session: null };
+}
+
 export function useSSO() {
   // No browser hand-off in the preview: behaves as if the window was closed.
   return { startSSOFlow: async () => ({ createdSessionId: null, setActive: undefined, signIn: undefined, signUp: undefined, authSessionResult: { type: 'cancel' } }) };

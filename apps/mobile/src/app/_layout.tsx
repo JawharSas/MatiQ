@@ -1,3 +1,5 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +16,8 @@ import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage } from '@/lib/storage';
 import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
-import { colors } from '@/ui/theme';
+import { colors, isDarkTheme } from '@/ui/theme';
+import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -65,17 +68,20 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
       {state.kind === 'ready' ? (
-        <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
-          <A11yProvider>
-            <QueryClientProvider client={queryClient}>
-              <AuthProvider>
-                <RootNavigator />
-              </AuthProvider>
-            </QueryClientProvider>
-          </A11yProvider>
-        </ClerkProvider>
+        // The theme comes from the encrypted store, which is open by now.
+        <ThemeProvider>
+          <ThemedStatusBar />
+          <ClerkProvider publishableKey={env.clerkPublishableKey} tokenCache={tokenCache}>
+            <A11yProvider>
+              <QueryClientProvider client={queryClient}>
+                <AuthProvider>
+                  <RootNavigator />
+                </AuthProvider>
+              </QueryClientProvider>
+            </A11yProvider>
+          </ClerkProvider>
+        </ThemeProvider>
       ) : state.kind === 'failed' ? (
         <Screen>
           <Title>MatIQ can't start</Title>
@@ -85,11 +91,18 @@ export default function RootLayout() {
       ) : (
         <Loading />
       )}
+      {state.kind !== 'ready' ? <StatusBar style="light" /> : null}
     </SafeAreaProvider>
   );
 }
 
+function ThemedStatusBar() {
+  const { theme } = useTheme();
+  return <StatusBar style={isDarkTheme(theme) ? 'light' : 'dark'} />;
+}
+
 function RootNavigator() {
+  useTheme();
   const { signedIn, initializing } = useAuth();
   const { reduceMotion } = useA11y();
   if (initializing) return <Loading />;
@@ -114,6 +127,7 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ headerShown: true, title: '', presentation: 'modal' }} />
       <Stack.Screen name="accessibility" options={{ headerShown: true, title: 'Accessibility', presentation: 'modal' }} />
+      <Stack.Screen name="appearance" options={{ headerShown: true, title: 'Appearance', presentation: 'modal' }} />
       <Stack.Screen name="auth/callback" />
     </Stack>
   );

@@ -1,19 +1,27 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
-import { colors } from '@/ui/theme';
+import { colors, isDarkTheme, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import { SignInError, useGoogleSignIn } from './oauth';
 
 // Google's "G", rendered by scripts/brand-assets.cjs. Colours follow the dark
-// theme of Google's sign-in branding guidelines.
+// and light themes of Google's sign-in branding guidelines.
 const G = require('../../../assets/brand/google-g.png');
-const GOOGLE_DARK = { background: '#131314', border: '#8E918F', text: '#E3E3E3' };
+const GOOGLE = {
+  dark: { background: '#131314', border: '#8E918F', text: '#E3E3E3' },
+  light: { background: '#FFFFFF', border: '#747775', text: '#1F1F1F' },
+};
+const google = () => (isDarkTheme() ? GOOGLE.dark : GOOGLE.light);
 
 /**
  * "Continue with Google": signs in, or creates the account on first use.
  * `onSecondFactor` runs when the account has two-factor on.
  */
 export function GoogleButton({ onError, onSecondFactor }: { onError: (message: string | null) => void; onSecondFactor?: () => void }) {
+  useTheme();
   const [busy, setBusy] = useState(false);
   const signInWithGoogle = useGoogleSignIn();
 
@@ -38,7 +46,7 @@ export function GoogleButton({ onError, onSecondFactor }: { onError: (message: s
       onPress={() => void press()}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
-      {busy ? <ActivityIndicator color={GOOGLE_DARK.text} /> : <Image source={G} style={styles.logo} accessible={false} />}
+      {busy ? <ActivityIndicator color={google().text} /> : <Image source={G} style={styles.logo} accessible={false} />}
       <Text style={styles.label}>Continue with Google</Text>
     </Pressable>
   );
@@ -46,6 +54,7 @@ export function GoogleButton({ onError, onSecondFactor }: { onError: (message: s
 
 /** "or continue with email" rule between the Google button and the form. */
 export function AuthDivider({ label }: { label: string }) {
+  useTheme();
   return (
     <View style={styles.divider} accessibilityRole="text">
       <View style={styles.rule} />
@@ -55,7 +64,7 @@ export function AuthDivider({ label }: { label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
   rule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
   dividerLabel: { color: colors.textFaint, fontSize: 13, fontWeight: '600' },
@@ -63,8 +72,8 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: GOOGLE_DARK.border,
-    backgroundColor: GOOGLE_DARK.background,
+    borderColor: google().border,
+    backgroundColor: google().background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -73,5 +82,5 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
   logo: { width: 20, height: 20 },
-  label: { color: GOOGLE_DARK.text, fontSize: 16, fontWeight: '600', letterSpacing: 0.1 },
-});
+  label: { color: google().text, fontSize: 16, fontWeight: '600', letterSpacing: 0.1 },
+}));

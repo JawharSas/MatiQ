@@ -21,6 +21,27 @@ pre-release channels are named in the release title.
   rehearsal branch first. Saved AI keys are not copied: Supabase's
   key-encryption key can't be read back, so people add them again.
 
+### App
+- Themes: Light, Dark (the original look) and Midnight (true black with
+  navy-tinted surfaces), or System (follows the phone). Every text colour
+  meets WCAG AA in every theme; the walkthrough checks Light and Midnight
+  with axe too. Chosen in Settings → Appearance and stored on the device.
+  `colors`, `font` and `themedStyles` follow the theme; files that read it
+  opt out of React Compiler (`'use no memo'`), whose caching would keep the
+  old colours. Camera and video overlays keep their fixed dark colours, and
+  the logo has a dark-"M" version for Light.
+- A Settings tab with everything essential: email, password, Google,
+  two-factor, theme, accessibility, AI provider, help, legal, data export,
+  sign-out and account deletion.
+- Password: change it (or set one for a Google-only account) in Settings;
+  "Forgot password?" on sign-in resets it with an email code, signs out
+  other devices, then continues with two-factor when it's on.
+- Google: connect it to an email account (or disconnect it once a password
+  is set) in Settings → Google.
+- Sensitive changes (password, Google, two-factor) ask the person to confirm
+  it's them in the app (password, email code, then authenticator or backup
+  code) when Clerk wants that, instead of asking them to sign in again.
+
 ### Videos
 - Videos up to 8 minutes for every account (migration
   `20261030000300_eight_minute_videos.sql`): `max_video_seconds` and the

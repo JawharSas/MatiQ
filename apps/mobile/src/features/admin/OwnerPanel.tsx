@@ -1,11 +1,14 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { useDeferredValue, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
 import { Body, Button, Caption, Card, ChoiceChips, ErrorText, Heading, Segmented, TextField, ToggleRow } from '@/ui/components';
-import { colors, font, spacing } from '@/ui/theme';
+import { colors, font, spacing, themedStyles } from '@/ui/theme';
+import { useTheme } from '@/ui/ThemeProvider';
 import {
   type AdminUserRow,
   type BlockedTerm,
@@ -30,6 +33,7 @@ import {
 type Tab = 'users' | 'overview' | 'disputes' | 'moderation' | 'content' | 'audit';
 
 export function OwnerPanel() {
+  useTheme();
   const [tab, setTab] = useState<Tab>('users');
   return (
     <View style={styles.stack}>
@@ -64,6 +68,7 @@ export function OwnerPanel() {
 }
 
 function UserSearch() {
+  useTheme();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const deferredQuery = useDeferredValue(query);
@@ -93,6 +98,7 @@ function UserSearch() {
 }
 
 function UserRow({ user }: { user: AdminUserRow }) {
+  useTheme();
   const setUnlimited = useSetUnlimited();
   const updateEntitlements = useUpdateEntitlements();
   const ban = useBanUser();
@@ -207,6 +213,7 @@ function UserRow({ user }: { user: AdminUserRow }) {
 }
 
 function Overview() {
+  useTheme();
   const overview = useUsageOverview();
   if (overview.error) return <ErrorText>{errorMessage(overview.error)}</ErrorText>;
   const data = overview.data;
@@ -247,6 +254,7 @@ function Overview() {
 }
 
 function Disputes() {
+  useTheme();
   const disputes = useRankedDisputes();
   if (disputes.error) return <ErrorText>{errorMessage(disputes.error)}</ErrorText>;
   return (
@@ -262,6 +270,7 @@ function Disputes() {
 }
 
 function DisputeCard({ dispute }: { dispute: RankedDispute }) {
+  useTheme();
   const router = useRouter();
   const resolve = useResolveDispute();
   const name = (uid: string | null, username: string | null) => (uid ? `@${username ?? 'deleted'}` : 'nobody');
@@ -316,6 +325,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 /** Bans (with unban), the word filter and recent strikes. */
 function Moderation() {
+  useTheme();
   const bans = useBans();
   const strikes = useStrikes();
   const unban = useUnbanUser();
@@ -375,6 +385,7 @@ function Moderation() {
 }
 
 function BlockedWords() {
+  useTheme();
   const terms = useBlockedTerms();
   const add = useAddBlockedTerm();
   const remove = useRemoveBlockedTerm();
@@ -435,6 +446,7 @@ const POST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** Copyright (DMCA) takedowns and other removals, by post ID from a notice or report. */
 function ContentTakedown() {
+  useTheme();
   const remove = useRemovePost();
   const [postId, setPostId] = useState('');
   const [reason, setReason] = useState('');
@@ -485,6 +497,7 @@ function ContentTakedown() {
 }
 
 function AuditLog() {
+  useTheme();
   const log = useAuditLog();
   if (log.error) return <ErrorText>{errorMessage(log.error)}</ErrorText>;
   return (
@@ -508,7 +521,7 @@ function AuditLog() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   stack: { gap: spacing.md },
   fill: { flex: 1 },
   rowHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -517,4 +530,4 @@ const styles = StyleSheet.create({
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   tile: { minWidth: '45%', flexGrow: 1 },
   tileValue: { fontSize: 28, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
-});
+}));
