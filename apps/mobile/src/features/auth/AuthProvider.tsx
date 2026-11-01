@@ -4,6 +4,7 @@ import { createContext, type ReactNode, use, useEffect, useState } from 'react';
 import { backend, setTokenGetter } from '@/lib/backend';
 import { fromPostgrest } from '@/lib/errors';
 import { clearCache } from '@/lib/storage';
+import { authInitializing } from './init-state';
 
 interface AuthState {
   /** Signed in with Clerk and the MatIQ account is ready. */
@@ -21,6 +22,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+const CLERK_LOAD_TIMEOUT_MS = 30_000;
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
 
@@ -38,10 +40,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<Error | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [clerkLoadTimedOut, setClerkLoadTimedOut] = useState(false);
 
   useEffect(() => {
     setTokenGetter(() => getToken());
   }, [getToken]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      setClerkLoadTimedOut(false);
+      return;
+    }
+    const timeout = setTimeout(() => setClerkLoadTimedOut(true), CLERK_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [isLoaded]);
 
   const clerkUserId = isSignedIn ? (user?.id ?? null) : null;
   // Plain values, so a refreshed user object (after turning on two-factor,
@@ -90,7 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext
       value={{
         signedIn: Boolean(clerkUserId && userId),
-        initializing: !isLoaded || Boolean(clerkUserId && !userId && !accountError),
+        initializing: authInitializing({
+          isClerkLoaded: isLoaded,
+          clerkLoadTimedOut,
+          clerkUserId,
+          userId,
+          accountError,
+        }),
         userId,
         email: user?.primaryEmailAddress?.emailAddress ?? '',
         accountError,
