@@ -17,6 +17,13 @@ out=$2
 pkg=app.matiq.mobile
 mkdir -p "$out"
 
+# The headless emulator can finish booting with the keyguard still active.
+# SecureStore uses Android Keystore and waits for credential-encrypted storage
+# to be unlocked, so dismiss it before the app's boot sequence opens storage.
+adb shell wm dismiss-keyguard || true
+adb shell input keyevent KEYCODE_WAKEUP || true
+adb shell input keyevent KEYCODE_MENU || true
+
 ui_dump() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 && adb pull /sdcard/ui.xml "$out/ui.xml" > /dev/null 2>&1
 }
