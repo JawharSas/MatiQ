@@ -1,6 +1,6 @@
 import { useAuth as useClerkAuth, useUser } from '@clerk/expo';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, type ReactNode, use, useEffect, useState } from 'react';
+import { createContext, type ReactNode, use, useEffect, useRef, useState } from 'react';
 import { backend, setTokenGetter } from '@/lib/backend';
 import { fromPostgrest } from '@/lib/errors';
 import { clearCache } from '@/lib/storage';
@@ -27,11 +27,12 @@ const CLERK_LOAD_TIMEOUT_MS = 30_000;
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
 
 /**
- * Clerk handles signing in (email and password, Google, two-factor). Once
- * a Clerk session exists, the backend client sends its token with every
- * request and the MatIQ account is opened with `register_user`: the same
- * account as before for people who had one (imported with their ID), a new
- * one on first sign-in, with the username and display name from sign-up.
+ * Clerk handles signing in (its native AuthView: email and password, Google,
+ * two-factor). Once a Clerk session exists, the backend client sends its
+ * token with every request and the MatIQ account is opened with
+ * `register_user`: the same account as before for people who had one
+ * (imported with their ID), a new one on first sign-in, named after the
+ * Clerk username and name.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -58,9 +59,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clerkUserId = isSignedIn ? (user?.id ?? null) : null;
   // Plain values, so a refreshed user object (after turning on two-factor,
   // say) doesn't open the account again.
+  // (Accounts made before Clerk's own sign-up screen kept these in unsafeMetadata.)
   const metadata = (user?.unsafeMetadata ?? {}) as { username?: unknown; displayName?: unknown };
-  const username = text(metadata.username);
+  const username = text(metadata.username) ?? text(user?.username);
   const displayName = text(metadata.displayName) ?? text(user?.fullName);
+
+  // The session can end outside the app's Sign out (Clerk's profile screen,
+  // a revoked session): this device's MatIQ data goes with it either way.
+  const hadSession = useRef(false);
+  useEffect(() => {
+    if (clerkUserId) {
+      hadSession.current = true;
+      return;
+    }
+    if (!hadSession.current) return;
+    hadSession.current = false;
+    clearCache();
+    queryClient.clear();
+  }, [clerkUserId, queryClient]);
+
   useEffect(() => {
     if (!clerkUserId) {
       setUserId(null);

@@ -81,7 +81,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Change profile picture"
             disabled={avatarBusy}
-            onPress={() => void updateAvatar(false)}
+            onPress={() => updateAvatar(false)}
             style={({ pressed }) => [styles.avatarRing, { opacity: avatarBusy || pressed ? 0.6 : 1 }]}
           >
             <Avatar path={card.avatar_path} name={card.display_name} size={88} />
@@ -118,7 +118,7 @@ export default function ProfileScreen() {
           <TextField label="Display name" value={draft.displayName} onChangeText={(v) => setDraft({ ...draft, displayName: v })} maxLength={50} />
           <TextField label="Bio" value={draft.bio} onChangeText={(v) => setDraft({ ...draft, bio: v })} multiline maxLength={280} />
           <ErrorText>{error}</ErrorText>
-          <Button label="Save" icon="checkmark" onPress={() => void save()} />
+          <Button label="Save" icon="checkmark" onPress={() => save()} />
           <Button label="Cancel" variant="secondary" onPress={() => setEditing(false)} />
         </Card>
       ) : (
@@ -134,7 +134,7 @@ export default function ProfileScreen() {
             }}
           />
           {card.avatar_path ? (
-            <Button label="Remove profile picture" variant="ghost" icon="trash-outline" disabled={avatarBusy} onPress={() => void updateAvatar(true)} />
+            <Button label="Remove profile picture" variant="ghost" icon="trash-outline" disabled={avatarBusy} onPress={() => updateAvatar(true)} />
           ) : null}
           {!card.avatar_path ? <Caption>Tap your picture to add one. Location and camera details are removed before upload.</Caption> : null}
         </Card>
@@ -179,7 +179,7 @@ const styles = themedStyles(() => ({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentFill,
     borderWidth: 3,
     borderColor: colors.background,
   },

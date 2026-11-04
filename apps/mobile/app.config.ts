@@ -14,7 +14,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
 /** Marketing version and release channel ("Pre-Beta V1.3.0"). */
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 const RELEASE_LABEL = 'Alpha';
 /** Monotonic build number for local / CI builds: 1.3.0 -> 10300 (EAS manages its own remotely). */
 const BUILD_NUMBER = APP_VERSION.split('.').reduce((total, part) => total * 100 + Number(part), 0);
@@ -32,7 +32,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // Brand assets are rendered from the vector mark by scripts/brand-assets.cjs.
   icon: './assets/brand/icon.png',
   // Root view colour behind every screen (expo-system-ui): no white flashes.
-  backgroundColor: '#0B0D10',
+  backgroundColor: '#0A0A0A',
   ios: {
     bundleIdentifier: 'app.matiq.mobile',
     buildNumber: String(BUILD_NUMBER),
@@ -49,11 +49,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'app.matiq.mobile',
     versionCode: BUILD_NUMBER,
+    // The window shrinks above the keyboard, so focused fields stay visible.
+    softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/brand/adaptive-icon.png',
       backgroundImage: './assets/brand/adaptive-icon-background.png',
       monochromeImage: './assets/brand/adaptive-icon-monochrome.png',
-      backgroundColor: '#0B0D10',
+      backgroundColor: '#0A0A0A',
     },
     allowBackup: false,
     permissions: ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
@@ -67,10 +69,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         image: './assets/brand/splash-icon.png',
         imageWidth: 180,
         resizeMode: 'contain',
-        backgroundColor: '#0B0D10',
+        backgroundColor: '#0A0A0A',
       },
     ],
     'expo-secure-store',
+    // Clerk's native sign-in and account screens (AuthView, UserProfileView), in MatIQ's colours.
+    ['@clerk/expo-native-components', { theme: './clerk-theme.json' }],
     'expo-video',
     ['expo-local-authentication', { faceIDPermission: 'MatIQ uses Face ID to protect sensitive settings.' }],
     [
@@ -84,6 +88,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-build-properties',
       {
+        // Clerk's native components need iOS 17.
+        ios: { deploymentTarget: '17.0' },
         android: {
           enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,

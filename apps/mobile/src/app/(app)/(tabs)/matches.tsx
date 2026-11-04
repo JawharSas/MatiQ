@@ -4,14 +4,14 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { formatClock } from '@matiq/rules-engine';
 import { Link, useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { byMonth, type Outcome, outcomeOf, recordText, summarize } from '@/features/analysis/match-record';
 import type { MatchStatus } from '@/features/analysis/useMatch';
 import { type MatchListItem, useMyMatches } from '@/features/analysis/useMyMatches';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
-import { Button, Caption, Card, EmptyState, ErrorText, StatTile } from '@/ui/components';
+import { Button, Caption, Card, EmptyState, ErrorText, LinkPressable, StatTile } from '@/ui/components';
 import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -102,7 +102,7 @@ function MatchRow({ match }: { match: MatchListItem }) {
 
   return (
     <Link href={{ pathname: '/match/[id]', params: { id: match.id } }} asChild>
-      <Pressable accessibilityRole="link" style={({ pressed }) => pressed && { opacity: 0.85 }}>
+      <LinkPressable accessibilityRole="link">
         <Card style={outcome ? { borderLeftWidth: 3, borderLeftColor: outcomes()[outcome].color } : undefined}>
           <View style={styles.row}>
             <View style={styles.icon} aria-hidden>
@@ -130,7 +130,7 @@ function MatchRow({ match }: { match: MatchListItem }) {
             )}
           </View>
         </Card>
-      </Pressable>
+      </LinkPressable>
     </Link>
   );
 }

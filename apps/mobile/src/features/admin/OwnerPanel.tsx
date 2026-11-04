@@ -525,7 +525,7 @@ const styles = themedStyles(() => ({
   stack: { gap: spacing.md },
   fill: { flex: 1 },
   rowHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  badge: { color: colors.accent, fontWeight: '800', fontSize: 11 },
+  badge: { color: colors.accent, fontWeight: '800', fontSize: 12 },
   pager: { flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   tile: { minWidth: '45%', flexGrow: 1 },

@@ -12,7 +12,7 @@ import { useUserId } from '@/features/auth/AuthProvider';
 import { createPost, useProfile } from '@/features/social/api';
 import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, postSchema } from '@/lib/validation';
-import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow } from '@/ui/components';
+import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow, withPressFeedback } from '@/ui/components';
 import { colors, font } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -74,7 +74,7 @@ export default function ShareScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selected }}
                   aria-checked={selected}
-                  style={styles.option}
+                  style={withPressFeedback(styles.option)}
                 >
                   {/* The ring shows the choice without relying on colour (WCAG 1.4.1). */}
                   <Ionicons aria-hidden name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? colors.accent : colors.textMuted} />
@@ -100,7 +100,7 @@ export default function ShareScreen() {
         <Caption>Viewers can open the scorecard{match.data?.has_video ? ' and video' : ''} of this match.</Caption>
       </Card>
       <ErrorText>{error}</ErrorText>
-      <Button label="Post" onPress={() => void share()} loading={busy} />
+      <Button label="Post" onPress={() => share()} loading={busy} />
       <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => router.back()} />
     </Screen>
   );

@@ -1,3 +1,4 @@
+import { persisted } from '@/lib/persisted';
 import { useQuery } from '@tanstack/react-query';
 import { fromPostgrest } from '@/lib/errors';
 import { backend } from '@/lib/backend';
@@ -22,6 +23,7 @@ export function remainingAnalyses(usage: MyUsage | undefined): number | 'unlimit
 export function useMyUsage() {
   return useQuery({
     queryKey: ['my-usage'],
+    ...persisted<MyUsage | undefined>('usage'),
     queryFn: async (): Promise<MyUsage | undefined> => {
       const { data, error } = await backend.rpc('get_my_usage');
       if (error) throw fromPostgrest(error);

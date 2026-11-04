@@ -3,7 +3,7 @@
 import { titleById } from '@matiq/rules-engine';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
@@ -11,7 +11,7 @@ import { type LeaderboardRow, useLeaderboard } from '@/features/ranked/api';
 import { DISCIPLINE_LABELS, TierBadge } from '@/features/ranked/components';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
-import { Caption, ErrorText, Segmented } from '@/ui/components';
+import { Caption, ErrorText, LinkPressable, Segmented } from '@/ui/components';
 import { colors, font, radius, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -56,8 +56,7 @@ function LadderRow({ row, isMe }: { row: LeaderboardRow; isMe: boolean }) {
   const title = row.featured_title ? titleById(row.featured_title) : undefined;
   return (
     <Link href={{ pathname: '/user/[id]', params: { id: row.user_id } }} asChild>
-      {/* Flattened: Link asChild hands the style to an <a> on web, which rejects arrays. */}
-      <Pressable accessibilityRole="link" style={StyleSheet.flatten([styles.row, isMe && styles.me])}>
+      <LinkPressable accessibilityRole="link" style={isMe ? { ...styles.row, ...styles.me } : styles.row}>
         <Text style={styles.position}>{row.ladder_position}</Text>
         <Avatar path={row.avatar_path} name={row.display_name} size={36} />
         <View style={styles.fill}>
@@ -73,7 +72,7 @@ function LadderRow({ row, isMe }: { row: LeaderboardRow; isMe: boolean }) {
           <Text style={styles.rating}>{row.rating}</Text>
           <TierBadge rating={row.rating} games={row.games} compact />
         </View>
-      </Pressable>
+      </LinkPressable>
     </Link>
   );
 }

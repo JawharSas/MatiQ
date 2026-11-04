@@ -17,7 +17,7 @@ export function UpdateRequired({ downloadUrl }: { downloadUrl: string }) {
           {APP_VERSION ? `MatIQ ${APP_VERSION} is no longer supported.` : 'This version of MatIQ is no longer supported.'} Install the latest
           version to keep training: your account, matches and rank come with you.
         </Body>
-        <Button label="Download the update" icon="download" onPress={() => void Linking.openURL(downloadUrl)} />
+        <Button label="Download the update" icon="download" onPress={() => Linking.openURL(downloadUrl)} />
       </Card>
       <Caption>Already installed it? Close this one and open the new MatIQ.</Caption>
     </Screen>

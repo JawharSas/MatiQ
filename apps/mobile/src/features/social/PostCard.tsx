@@ -6,7 +6,7 @@ import { Link } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { useUserId } from '@/features/auth/AuthProvider';
-import { Badge, Card } from '@/ui/components';
+import { Badge, Card, LinkPressable, withPressFeedback } from '@/ui/components';
 import { athleteColor, colors, font, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 import { type FeedItem, useToggleLike } from './api';
@@ -38,7 +38,7 @@ export function PostCard({ post }: { post: FeedItem }) {
   return (
     <Card>
       <Link href={{ pathname: '/user/[id]', params: { id: post.author_id } }} asChild>
-        <Pressable accessibilityRole="link" style={styles.author}>
+        <LinkPressable accessibilityRole="link" style={styles.author}>
           <Avatar path={post.avatar_path} name={post.display_name} size={44} />
           <View style={styles.fill}>
             <Text style={styles.name}>{post.display_name}</Text>
@@ -47,7 +47,7 @@ export function PostCard({ post }: { post: FeedItem }) {
             </Text>
           </View>
           {post.friends_only ? <Badge label="Friends" icon="people" /> : null}
-        </Pressable>
+        </LinkPressable>
       </Link>
 
       {/* User text is rendered as plain text - never as HTML or markdown. */}
@@ -55,7 +55,7 @@ export function PostCard({ post }: { post: FeedItem }) {
 
       {post.match_id && post.result && post.totals ? (
         <Link href={{ pathname: '/match/[id]', params: { id: post.match_id } }} asChild>
-          <Pressable accessibilityRole="link" style={({ pressed }) => [styles.fightCard, pressed && { opacity: 0.85 }]}>
+          <LinkPressable accessibilityRole="link" style={styles.fightCard}>
             <View style={styles.fightMeta}>
               {post.discipline ? <Badge label={DISCIPLINE_LABELS[post.discipline]} tone="accent" /> : null}
               {post.match_title ? (
@@ -78,7 +78,7 @@ export function PostCard({ post }: { post: FeedItem }) {
               <Text style={styles.viewScorecardText}>View scorecard</Text>
               <Ionicons name="chevron-forward" size={14} color={colors.accent} aria-hidden />
             </View>
-          </Pressable>
+          </LinkPressable>
         </Link>
       ) : null}
 
@@ -88,7 +88,7 @@ export function PostCard({ post }: { post: FeedItem }) {
           accessibilityState={{ selected: post.liked_by_me }}
           accessibilityLabel={`${post.liked_by_me ? 'Unlike' : 'Like'} post, ${post.like_count} ${post.like_count === 1 ? 'like' : 'likes'}`}
           onPress={() => like.mutate({ postId: post.post_id, liked: post.liked_by_me })}
-          style={styles.like}
+          style={withPressFeedback(styles.like)}
           hitSlop={8}
         >
           <Ionicons aria-hidden name={post.liked_by_me ? 'heart' : 'heart-outline'} size={22} color={post.liked_by_me ? colors.accent : colors.textMuted} />
@@ -106,22 +106,22 @@ export function PostCard({ post }: { post: FeedItem }) {
             }}
             asChild
           >
-            <Pressable
+            <LinkPressable
               accessibilityRole="link"
               accessibilityLabel={`Play highlight · ${formatClock(post.highlight_start_ms)}`}
               style={styles.playHighlight}
             >
               <Ionicons aria-hidden name="play" size={14} color={colors.accent} />
               <Text style={styles.playHighlightText}>Highlight · {formatClock(post.highlight_start_ms)}</Text>
-            </Pressable>
+            </LinkPressable>
           </Link>
         ) : null}
         {post.author_id !== viewerId ? (
           <Link href={{ pathname: '/report/[postId]', params: { postId: post.post_id } }} asChild>
-            <Pressable accessibilityRole="link" accessibilityLabel="Report post" style={styles.report} hitSlop={6}>
+            <LinkPressable accessibilityRole="link" accessibilityLabel="Report post" style={styles.report} hitSlop={6}>
               <Ionicons aria-hidden name="flag-outline" size={16} color={colors.textMuted} />
               <Text style={styles.reportText}>Report</Text>
-            </Pressable>
+            </LinkPressable>
           </Link>
         ) : null}
       </View>
@@ -185,8 +185,8 @@ const styles = themedStyles(() => ({
   cornerDot: { width: 8, height: 8, borderRadius: 4 },
   fighterName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: colors.text },
   won: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  wonText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.warning },
-  wonPlaceholder: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textMuted },
+  wonText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, color: colors.warning },
+  wonPlaceholder: { fontSize: 12, fontWeight: '800', letterSpacing: 0.8, color: colors.textMuted },
   score: { fontSize: 34, lineHeight: 40, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },
   viewScorecard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
   viewScorecardText: { fontSize: 13, fontWeight: '700', color: colors.accent },

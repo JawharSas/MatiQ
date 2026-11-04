@@ -17,7 +17,7 @@ the repository safely.
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
 | Stolen or phished password | Optional TOTP two-factor authentication. Once enrolled, `aal1` sessions are refused by restrictive RLS policies (tables, Realtime, Storage), a PostgREST pre-request hook (RPCs) and the Edge Function middleware. | `20261024000300_mfa_enforcement.sql`, `_shared/mfa.ts`, `settings/two-factor.tsx` |
 | Disguised or malicious uploads | Videos: the app reads the whole file before uploading (MP4/QuickTime structure, every chunk inside the media data, nothing hidden, every H.264/HEVC frame's NAL units); clients can only write `upload.*`; analyze-match moves the upload out of the client's reach, checks it again and only then publishes `video.*`, the only name viewers can read. Frames: JPEG start and end markers checked on the phone and the server. Buckets limit MIME types and sizes. | `rules-engine/src/media/video-check.ts`, `analyze-match/video.ts`, `20261029000300_video_upload_check.sql` |
-| Password guessing, credential stuffing, bots | Supabase Auth rate limits per IP (set by Deploy backend), a device lockout after 5 wrong passwords (30 s, doubling to 15 min), optional Cloudflare Turnstile on email sign-in and sign-up, one error message for unknown email and wrong password. | `backend.yml`, `features/auth/sign-in-throttle.ts`, `features/auth/Captcha.tsx` |
+| Password guessing, credential stuffing, bots | Clerk's attack protection on the sign-in screen (its native AuthView): account lockout after 10 wrong passwords for 60 minutes, breached-password checks (HIBP), enumeration protection, rate limits and optional bot protection, all set in the Clerk Dashboard. | Clerk Dashboard → Attack protection |
 | Vulnerable dependencies | Dependabot updates; CI audits the app's and the Edge Functions' runtime dependencies (high and critical fail unless allow-listed with a reason and review date); pull requests can't add dependencies with known high-severity advisories. | `scripts/audit-deps.mjs`, `.github/dependency-audit-allowlist.json`, `ci.yml` |
 | API responses misused by a browser (framing, sniffing, caching) | Every function response is `no-store` JSON with `nosniff`, a `default-src 'none'` CSP, `frame-ancestors 'none'` / `X-Frame-Options: DENY`, HSTS, `no-referrer`, a closed Permissions-Policy and COOP; CORS only for allow-listed origins. | `_shared/http.ts` |
 | Finding where someone is (IP address, GPS in videos) | No table, function or screen exposes another user's IP address, email or location; only Supabase's own auth logs hold IPs (owner-only, in the dashboard). Nothing a user posts makes other phones contact a server they choose (no external images, links or previews; avatars must be the owner's own storage path). Before upload the app blanks location (GPS) and phone make and model in a copy of the video (`findPersonalMetadata`); videos published before 1.4.1 are owner-only. | `rules-engine/src/media/video-check.ts`, `capture/video-check.ts`, `20261029000400_privacy_hardening.sql` |
@@ -215,12 +215,12 @@ repeat infringers in **Owner panel → Users**.
 ### Children's privacy (COPPA)
 
 - Everyone answers a neutral age screen (birth month and year, nothing
-  pre-selected, no hint of the cut-off) before using the app: on the email
-  sign-up form, and after the first Google sign-in.
-- Under 13 on the sign-up form: nothing is sent to the server. Under 13
-  after a Google sign-in: the `account` Edge Function deletes the account and
-  its storage at once and keeps nothing (`svc_record_age` stores no row).
-  Either way the device blocks another attempt for 24 hours.
+  pre-selected, no hint of the cut-off) before using the app, right after
+  their first sign-in (Clerk's sign-up screen asks only for the email,
+  password or Google).
+- Under 13: the server deletes the account and its storage at once and keeps
+  nothing (`svc_record_age` stores no row), and the device blocks another
+  attempt for 24 hours.
 - For everyone else the month is stored in `private.age_checks` (not exposed
   to the Data API, never shown to other users, included in the data export,
   deleted with the account).

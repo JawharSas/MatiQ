@@ -315,7 +315,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
         ) : null}
         {phase.progress !== undefined ? <Body>{Math.round(phase.progress * 100)}%</Body> : null}
         <Caption>Keep MatIQ open until the analysis starts. Results then appear on the match screen automatically.</Caption>
-        <Button label="Cancel" variant="secondary" onPress={() => void discard()} />
+        <Button label="Cancel" variant="secondary" onPress={() => discard()} />
       </Card>
     );
   }
@@ -364,7 +364,7 @@ export function DualInputHandler({ ranked = null, onExitRanked }: { ranked?: Ran
           onPress={() => setPhase({ kind: 'capture' })}
         />
         {phase.kind === 'failed' && matchIdRef.current ? (
-          <Button label="Discard this capture" variant="danger" onPress={() => void discard()} />
+          <Button label="Discard this capture" variant="danger" onPress={() => discard()} />
         ) : null}
       </Card>
     </View>

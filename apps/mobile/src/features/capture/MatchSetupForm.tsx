@@ -6,7 +6,7 @@ import { providerOption } from '@/features/api-keys/providers';
 import { type Discipline, variantsFor } from '@matiq/rules-engine';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/ui/text';
-import { Caption, Card, SectionHeader, Segmented, TextField, ToggleRow } from '@/ui/components';
+import { Caption, Card, SectionHeader, Segmented, TextField, ToggleRow, withPressFeedback } from '@/ui/components';
 import { colors, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 import type { MatchSetup } from './match-session';
@@ -82,7 +82,7 @@ export function MatchSetupForm({
                     aria-checked={selected}
                     accessibilityLabel={option.label}
                     onPress={() => onChange({ ...defaultSetup(option.value), title: value.title, uploadVideo: value.uploadVideo })}
-                    style={[styles.sport, selected && styles.sportSelected]}
+                    style={withPressFeedback([styles.sport, selected && styles.sportSelected])}
                   >
                     <MaterialCommunityIcons name={option.icon} size={26} color={selected ? colors.accent : colors.textMuted} />
                     <Text style={[styles.sportLabel, selected && { color: colors.text }]}>{option.label}</Text>

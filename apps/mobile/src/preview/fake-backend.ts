@@ -1063,7 +1063,6 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string, para
 
 /** Any 6-digit code works in the preview, except 000000 (to show the error path). */
 const codeOk = (code: string) => /^\d{6}$/.test(code) && code !== '000000';
-const PREVIEW_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const PREVIEW_BACKUP_CODES = ['prev-iewa-0001', 'prev-iewa-0002', 'prev-iewa-0003', 'prev-iewa-0004', 'prev-iewa-0005'];
 
 type ClerkResult = { error: { code: string; message: string } | null };
@@ -1090,8 +1089,6 @@ const totpOn = (uid: string) => db.mfa_factors.some((factor) => factor.user_id =
 /** Passwords changed in the preview (everyone starts with PREVIEW_PASSWORD), and who connected Google. */
 const passwords = new Map<string, string>();
 const passwordOf = (uid: string) => passwords.get(uid) ?? PREVIEW_PASSWORD;
-const googleConnected = new Set<string>();
-const googleConnecting = new Set<string>();
 
 export function subscribePreviewAuth(listener: () => void): () => void {
   authListeners.add(listener);
@@ -1237,71 +1234,17 @@ function buildUser() {
   const uid = me();
   if (!uid || !session) return null;
   const email = session.user.email;
-  const notify = () => setSession(session);
   return {
     id: uid,
     fullName: (profileOf(uid)?.display_name as string | undefined) ?? null,
+    username: (profileOf(uid)?.username as string | undefined) ?? null,
     unsafeMetadata: {},
     primaryEmailAddress: { emailAddress: email },
     totpEnabled: totpOn(uid),
     backupCodeEnabled: totpOn(uid),
     twoFactorEnabled: totpOn(uid),
     passwordEnabled: true,
-    externalAccounts: googleConnected.has(uid)
-      ? [
-          {
-            id: `google-${uid}`,
-            provider: 'google',
-            emailAddress: email.replace(/@.*/, '@gmail.com'),
-            verification: { status: 'verified' },
-            async destroy() {
-              await latency(150);
-              googleConnected.delete(uid);
-              notify();
-            },
-          },
-        ]
-      : [],
-    async updatePassword({ newPassword, currentPassword }: { newPassword: string; currentPassword?: string }) {
-      await latency(200);
-      if (currentPassword !== passwordOf(uid)) throw thrown('form_password_validation_failed');
-      passwords.set(uid, newPassword);
-      notify();
-      return previewUser();
-    },
-    /** Google's consent screen is skipped in the preview: the next reload finds the account connected. */
-    async createExternalAccount() {
-      await latency(150);
-      googleConnecting.add(uid);
-      return { verification: { externalVerificationRedirectURL: new URL('https://accounts.google.com/o/oauth2/v2/auth?preview=1') } };
-    },
-    async createTOTP() {
-      await latency(150);
-      return { id: 'totp', verified: false, secret: PREVIEW_TOTP_SECRET, uri: `otpauth://totp/MatIQ:${email}?secret=${PREVIEW_TOTP_SECRET}&issuer=MatIQ` };
-    },
-    async verifyTOTP({ code }: { code: string }) {
-      await latency(200);
-      if (!codeOk(code)) throw thrown('form_code_incorrect');
-      db.mfa_factors.push({ id: uuid(), user_id: uid, factor_type: 'totp', status: 'verified', created_at: now(), updated_at: now() });
-      notify();
-      return { id: 'totp', verified: true, backupCodes: PREVIEW_BACKUP_CODES };
-    },
-    async disableTOTP() {
-      db.mfa_factors = db.mfa_factors.filter((factor) => factor.user_id !== uid);
-      notify();
-      return { object: 'totp', deleted: true };
-    },
-    async createBackupCode() {
-      await latency(150);
-      return { id: 'backup', codes: PREVIEW_BACKUP_CODES };
-    },
-    async reload() {
-      if (googleConnecting.delete(uid)) {
-        googleConnected.add(uid);
-        notify();
-      }
-      return previewUser();
-    },
+    externalAccounts: [] as { provider: string; emailAddress: string }[],
     async getSessions() {
       return [];
     },
@@ -1322,7 +1265,7 @@ export function previewUser(): ReturnType<typeof buildUser> {
 
 // Storage --------------------------------------------------------------------------------
 
-const AVATAR_COLORS = ['#3B82F6', '#EF4444', '#F97316', '#22C55E', '#8B5CF6', '#EAB308', '#14B8A6', '#EC4899'];
+const AVATAR_COLORS = ['#3B82F6', '#EF4444', '#991B1B', '#22C55E', '#475569', '#0F766E', '#14B8A6', '#1E3A8A'];
 
 function avatarDataUri(path: string): string {
   const uid = path.split('/')[0] ?? '';

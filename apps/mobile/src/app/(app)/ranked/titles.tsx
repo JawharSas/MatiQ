@@ -44,7 +44,7 @@ export default function TitlesScreen() {
           <Card key={title.id} style={unlocked ? styles.unlocked : undefined}>
             <View style={styles.header}>
               <Text style={font.heading}>{title.name}</Text>
-              {unlocked ? <Text style={styles.badge}>{unlocked.is_featured ? '★ Featured' : 'Unlocked'}</Text> : null}
+              {unlocked ? <Text style={styles.badge}>{unlocked.is_featured ? 'Featured' : 'Unlocked'}</Text> : null}
             </View>
             <Caption>
               {title.description}

@@ -71,7 +71,7 @@ These are real settings that change the app; there is no overlay widget.
 | 2.4.4 Link purpose | A | Supports | Link text says where it goes ("Read the Privacy Policy", match titles). |
 | 2.4.5 Multiple ways | AA | Not applicable | Applies to sets of web pages; the app has a tab bar and in-context links. |
 | 2.4.6 Headings and labels | AA | Supports | Descriptive headings and field labels. |
-| 2.4.7 Focus visible | AA | Supports | 2 px white focus ring on buttons, rows, chips, tabs and checkboxes; inputs get an orange border when focused. |
+| 2.4.7 Focus visible | AA | Supports | 2 px white focus ring on buttons, rows, chips, tabs and checkboxes; inputs get a red accent border when focused. |
 | 2.4.11 Focus not obscured | AA | Supports | Screens scroll; the tab bar does not cover focused content. |
 | 2.5.1 Pointer gestures | A | Supports | No multi-finger or path gestures. |
 | 2.5.2 Pointer cancellation | A | Supports | Actions fire on release. |

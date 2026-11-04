@@ -6,6 +6,7 @@
  * Function.
  */
 
+import { persisted } from '@/lib/persisted';
 import type { CareerTotals, Discipline } from '@matiq/rules-engine';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
@@ -74,6 +75,7 @@ export function useRankedMatches() {
   // Challenges and results from the other fighter show up within a minute.
   return useQuery({
     queryKey: ['ranked', 'matches'],
+    ...persisted<RankedMatchRow[]>('ranked:matches'),
     queryFn: async () => {
       const { data, error } = await backend.from('ranked_matches').select(RANKED_COLUMNS).order('created_at', { ascending: false }).limit(60);
       if (error) throw fromPostgrest(error);
@@ -109,6 +111,7 @@ export function useRankedForMatch(matchId: string) {
 export function useRatings(userId: string) {
   return useQuery({
     queryKey: ['ranked', 'ratings', userId],
+    ...persisted<RatingRow[]>(`ranked:ratings:${userId}`),
     queryFn: async () => {
       const { data, error } = await backend
         .from('ranked_ratings')
@@ -138,6 +141,7 @@ export function useTitles(userId: string) {
 export function useLeaderboard(discipline: Discipline, scope: 'global' | 'friends') {
   return useQuery({
     queryKey: ['ranked', 'leaderboard', discipline, scope],
+    ...persisted<LeaderboardRow[]>(`ranked:leaderboard:${discipline}:${scope}`),
     queryFn: async () => {
       const { data, error } = await backend.rpc('get_leaderboard', { p_discipline: discipline, p_scope: scope, p_limit: 100 });
       if (error) throw fromPostgrest(error);

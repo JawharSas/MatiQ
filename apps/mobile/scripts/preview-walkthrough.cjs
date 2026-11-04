@@ -25,8 +25,6 @@ const DIST = path.resolve(process.argv[2] ?? 'dist-preview');
 const OUT = path.resolve(process.argv[3] ?? 'preview-screenshots');
 const EMAIL = 'demo@matiq.app';
 const PASSWORD = 'matiq-preview';
-const CHANGED_PASSWORD = 'Fresh-Mats-2026!';
-const RESET_PASSWORD = 'Reset-Mats-2026!';
 const PHONE = { width: 390, height: 844 };
 
 // Messages React and libraries log in development builds that are not app errors.
@@ -104,12 +102,13 @@ async function main() {
       await page.goto(url);
       await page.getByLabel('Email').waitFor();
       await shot('sign-in');
+      // Clerk's AuthView (the preview's stand-in): its errors are Clerk's.
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password', { exact: true }).fill('wrong-password');
-      await button('Sign in').click();
-      await see('Incorrect email or password');
+      await button('Continue').click();
+      await see('Password is incorrect');
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await button('Sign in').click();
+      await button('Continue').click();
     });
 
     await step('age check and consent gate', async () => {
@@ -278,22 +277,16 @@ async function main() {
       await page.goBack();
     });
 
-    await step('settings and two-factor', async () => {
+    await step('settings and account', async () => {
       await tab('Settings').click();
       await see('Delete account');
       await shot('settings', { tall: true });
-      await button('Two-factor authentication').click();
-      await button('Set up authenticator').click();
-      await see('Add MatIQ to your authenticator');
-      await shot('two-factor-setup', { tall: true });
-      await page.getByLabel('6-digit code').fill('000000');
-      await button('Turn on').click();
-      await see('That code is incorrect');
-      await page.getByLabel('6-digit code').fill('123456');
-      await button('Turn on').click();
-      await see('Backup codes');
-      await shot('two-factor-on', { tall: true });
-      await page.goBack();
+      // Clerk's UserProfileView (the preview's stand-in) with its own back button.
+      await button('Account and security').click();
+      await see('Email addresses');
+      await shot('account-and-security');
+      await button('Back').click();
+      await see('Delete account');
       await button('AI provider').click();
       await see('Use any AI');
       await page.getByLabel('API key').fill('sk-proj-preview0123456789abcdefghij');
@@ -328,32 +321,6 @@ async function main() {
       await button('Accessibility').click();
       await page.getByRole('tab', { name: 'Default' }).click();
       await page.getByRole('switch', { name: 'High contrast' }).click();
-      await page.goBack();
-    });
-
-    await step('account: password and Google', async () => {
-      await tab('Settings').click();
-      await button('Password').click();
-      await see('Choose a new password');
-      await field('Current password').fill('wrong-password');
-      await field('New password').fill(CHANGED_PASSWORD);
-      await field('Repeat the new password').fill(CHANGED_PASSWORD);
-      await button('Change password').click();
-      await see('Your current password is incorrect');
-      await shot('password-change', { tall: true });
-      await field('Current password').fill(PASSWORD);
-      await button('Change password').click();
-      await see('Password changed.');
-      await shot('password-changed');
-      await button('Done').click();
-      await button('Google').click();
-      await see('Not connected');
-      await shot('google-not-connected');
-      await button('Connect Google').click();
-      await see('Connected as');
-      await shot('google-connected');
-      await button('Disconnect Google').click();
-      await see('Not connected');
       await page.goBack();
     });
 
@@ -446,38 +413,23 @@ async function main() {
       await page.goBack();
     });
 
-    await step('sign out, forgotten password and two-factor sign-in', async () => {
+    await step('sign out from Clerk, banned sign-in, sign in again', async () => {
+      // Signing out inside Clerk's account screen ends the session: the app
+      // goes back to sign-in and clears this device's data.
       await tab('Settings').click();
-      await button('Sign out').click();
+      await button('Account and security').click();
+      await see('Email addresses');
+      // Settings' own Sign out row stays in the page under this screen, before it.
+      await page.getByRole('button', { name: 'Sign out', exact: true }).locator('visible=true').last().click();
       await page.getByLabel('Email').waitFor();
       // Tomás was banned in the owner panel.
       await page.getByLabel('Email').fill('tomas_ruiz@example.com');
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await button('Sign in').click();
+      await button('Continue').click();
       await see('This account is banned from MatIQ');
       await shot('sign-in-banned');
-      // Alex changed the password in Settings: the old one fails, so reset it by email.
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await button('Sign in').click();
-      await see('Incorrect email or password');
-      await button('Forgot password?').click();
-      await see('Reset your password');
-      await shot('reset-password');
-      await button('Send code').click();
-      await see('we sent a code to it');
-      await page.getByLabel('Code', { exact: true }).fill('000000');
-      await field('New password').fill(RESET_PASSWORD);
-      await field('Repeat the new password').fill(RESET_PASSWORD);
-      await button('Set new password').click();
-      await see("That code isn't right");
-      await shot('reset-password-code', { tall: true });
-      await page.getByLabel('Code', { exact: true }).fill('123456');
-      await button('Set new password').click();
-      // Two-factor is on, so the reset continues with the authenticator code.
-      await see('Enter the 6-digit code from your authenticator app');
-      await shot('mfa-challenge');
-      await page.getByLabel('Code', { exact: true }).fill('123456');
       await button('Continue').click();
       // Sam's "Three takedowns" post was removed in the owner panel.
       await see('rear naked choke');
@@ -498,7 +450,7 @@ async function main() {
       await button('Sign out').click();
       await page.getByLabel('Email').fill('sam_okafor@example.com');
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-      await button('Sign in').click();
+      await button('Continue').click();
       await see('Before you continue');
       await button('Continue').click();
       await page.getByRole('radio', { name: 'March' }).click();
@@ -523,20 +475,22 @@ async function main() {
     });
 
     await step('sign-up age check (COPPA)', async () => {
-      await button('Create an account').click();
+      // Clerk's AuthView signs the person up; MatIQ's age check comes next.
+      await button("Don't have an account? Sign up").click();
       await see('Create your account');
-      await shot('sign-up', { tall: true });
+      await shot('sign-up');
       await field('Email').fill('young@example.test');
-      await field(/^Password/).fill('Young-Fighter-2026!');
-      await field('Username').fill('young_fighter');
-      await field('Display name').fill('Young Fighter');
+      await field('Password').fill('Young-Fighter-2026!');
+      await button('Continue').click();
+      await see('Verify your email');
+      await field('Code').fill('123456');
+      await button('Continue').click();
+      await see('Before you continue');
       await page.getByRole('radio', { name: 'January' }).locator('visible=true').first().click();
       await field('Birth year').fill(String(new Date().getFullYear() - 8));
       await page.getByRole('checkbox', { name: /^I agree/ }).locator('visible=true').first().click();
-      await button('Create account').click();
-      await see('Account not created');
-      await shot('sign-up-not-created');
-      await button('Back to sign in').click();
+      await button('Continue').click();
+      // Under 13: the account is deleted, this device is locked, and sign-in says so.
       await see("we couldn't create a MatIQ account");
       await shot('sign-in-after-age-check');
     });

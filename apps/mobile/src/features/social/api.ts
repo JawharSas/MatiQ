@@ -5,8 +5,9 @@
  */
 
 import type { MatchResult, AthleteTotals } from '@matiq/rules-engine';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppError, fromPostgrest } from '@/lib/errors';
+import { persisted } from '@/lib/persisted';
 import { readCache, writeCache } from '@/lib/storage';
 import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
@@ -80,6 +81,25 @@ export function useToggleLike() {
         : await backend.from('post_likes').insert({ post_id: postId });
       if (error) throw fromPostgrest(error);
     },
+    // The heart and count change at once; a refused like puts them back.
+    onMutate: async ({ postId, liked }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const before = queryClient.getQueriesData<InfiniteData<FeedItem[]>>({ queryKey: ['feed'] });
+      queryClient.setQueriesData<InfiniteData<FeedItem[]>>({ queryKey: ['feed'] }, (feed) =>
+        feed && {
+          ...feed,
+          pages: feed.pages.map((page) =>
+            page.map((post) =>
+              post.post_id === postId ? { ...post, liked_by_me: !liked, like_count: Math.max(0, post.like_count + (liked ? -1 : 1)) } : post,
+            ),
+          ),
+        },
+      );
+      return { before };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [key, data] of context?.before ?? []) queryClient.setQueryData(key, data);
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 }
@@ -140,6 +160,7 @@ export interface ProfileCard {
 export function useProfile(userId: string) {
   return useQuery({
     queryKey: ['profile', userId],
+    ...persisted<ProfileCard | null>(`profile:${userId}`),
     queryFn: async () => {
       const { data, error } = await backend.rpc('get_profile', { p_user_id: userId });
       if (error) throw fromPostgrest(error);
@@ -171,6 +192,7 @@ export interface FriendEntry {
 export function useFriends() {
   return useQuery({
     queryKey: ['friends'],
+    ...persisted<FriendEntry[]>('friends'),
     queryFn: async () => {
       const { data, error } = await backend.rpc('get_friends');
       if (error) throw fromPostgrest(error);

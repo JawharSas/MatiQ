@@ -14,10 +14,6 @@ import { LEGAL_VERSIONS, type LegalDocumentId } from './documents';
 
 const pendingKey = (email: string) => `consent:pending:${email.toLowerCase()}`;
 
-export async function rememberConsentForSignup(email: string): Promise<void> {
-  (await openSecureStorage()).set(pendingKey(email), JSON.stringify(LEGAL_VERSIONS));
-}
-
 export async function acceptCurrentVersions(documents: LegalDocumentId[] = ['terms', 'privacy']): Promise<void> {
   const rows = documents.map((document) => ({ document, version: LEGAL_VERSIONS[document] }));
   const { error } = await backend.from('legal_acceptances').upsert(rows, {
