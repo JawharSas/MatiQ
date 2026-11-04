@@ -38,7 +38,7 @@ jobs:
           clerk() { curl -fsS -H "Authorization: Bearer $CLERK_SECRET_KEY" "$@"; }
           sid=$(clerk "https://api.clerk.com/v1/sessions?user_id=$USER_ID&status=active&limit=1" | jq -r 'if type == "array" then .[0].id else .data[0].id end // empty')
           if [ -z "$sid" ]; then echo "::error::That user has no active session. Sign in on a phone or emulator first."; exit 1; fi
-          jwt=$(clerk -X POST "https://api.clerk.com/v1/sessions/$sid/tokens" | jq -r '.jwt // empty')
+          jwt=$(clerk -X POST -H 'Content-Type: application/json' -d '{}' "https://api.clerk.com/v1/sessions/$sid/tokens" | jq -r '.jwt // empty')
           if [ -z "$jwt" ]; then echo "::error::Clerk did not return a session token."; exit 1; fi
           echo "::add-mask::$jwt"
           echo "Token claims (sub hidden):"
