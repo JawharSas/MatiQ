@@ -57,7 +57,8 @@ export default function SignIn() {
         </View>
       ) : null}
       <View style={styles.auth}>
-        <AuthView isDismissible={false} logo={<LogoMark size={56} />} />
+        {/* Clerk's screen is black and red in every theme (clerk-theme.json), so the logo is the white-M one. */}
+        <AuthView isDismissible={false} logo={<LogoMark size={56} onDark />} />
       </View>
       <View style={styles.footer}>
         <Caption>

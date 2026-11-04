@@ -9,12 +9,16 @@ import { useTheme } from './ThemeProvider';
 const MARK = require('../../assets/brand/logo-mark.png');
 const MARK_LIGHT = require('../../assets/brand/logo-mark-light.png');
 
-/** The MatIQ mark: a fighter with both arms raised, inside the cage. */
-export function LogoMark({ size = 40 }: { size?: number }) {
+/**
+ * The MatIQ mark: a fighter with both arms raised, inside the cage. `onDark`
+ * always uses the white "M", for surfaces that are black whatever the app's
+ * theme (Clerk's sign-in screen, themed black and red by clerk-theme.json).
+ */
+export function LogoMark({ size = 40, onDark = false }: { size?: number; onDark?: boolean }) {
   useTheme();
   return (
     <Image
-      source={isDarkTheme() ? MARK : MARK_LIGHT}
+      source={onDark || isDarkTheme() ? MARK : MARK_LIGHT}
       style={{ width: size, height: size }}
       accessibilityIgnoresInvertColors
       accessible={false}
