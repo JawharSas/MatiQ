@@ -22,7 +22,7 @@ Frankfurt because Object Storage and Functions are not offered in
 | --- | --- |
 | Neon project | `MatIQ Frankfurt` (`young-poetry-71915783`), AWS `eu-central-1`, Postgres 17, branch `production` (`br-empty-forest-b9dmqj7f`), database `neondb` |
 | Data API | `https://ep-soft-mode-b9v0ldxc.apirest.c-7.eu-central-1.aws.neon.tech/neondb/rest/v1`, schema `public`, anonymous role `anonymous`, max 1000 rows, tokens checked against Clerk's JWKS |
-| Clerk | application `app_3LPF8Bs7c4zq8KT6NE4JWS7grpM` (development instance `funny-locust-4840.clerk.accounts.dev`; JWKS `https://funny-locust-4840.clerk.accounts.dev/.well-known/jwks.json`) |
+| Clerk | application `app_3LPF8Bs7c4zq8KT6NE4JWS7grpM`: production instance `clerk.matiqdev.me` (the app and production; JWKS `https://clerk.matiqdev.me/.well-known/jwks.json`), development instance `funny-locust-4840.clerk.accounts.dev` (local builds). "Deploy Neon backend" points the Data API at `CLERK_ISSUER`'s JWKS (`scripts/neon-data-api-auth.sh`) and fails if it would reject that instance's tokens |
 | Old London project | `MatIQ` (`falling-morning-42423177`, `aws-eu-west-2`): not used (no Object Storage or Functions there) |
 
 Schema on Neon: `DATABASE_URL=… node scripts/neon-db.mjs` applies
