@@ -73,8 +73,13 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
     Settings → Account and security. Don't rebuild these flows by hand.
   - React to auth state with `useAuth()` / `useUser()`; never `setActive()`.
   - The age check and consent come after sign-in (`ConsentGate`).
-  - The database reads the user from Clerk's JWT through `pg_session_jwt`. RLS
-    is on for every table.
+  - The database reads the user from Clerk's JWT: SQL uses `app.uid()` /
+    `app.claims()`, never `auth.user_id()` or `auth.session()` first (loading
+    `pg_session_jwt` inside a SECURITY DEFINER function drops the request's
+    claims). Clerk tokens carry `"role": "authenticated"`. RLS is on for
+    every table.
+  - "Check sign-in" (Actions) proves sign-in against the live backend; the
+    Release workflow won't publish without it.
 - **Forced updates.** `public.app_requirements()` on Neon returns
   `min_version` and `download_url`.
   - The app reads it from the `api` function's `GET /app-requirements`.

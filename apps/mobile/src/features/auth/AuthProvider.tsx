@@ -110,7 +110,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // a minute, and one minted before a fix would fail the same way.
       if (attempt > 0) await getTokenRef.current({ skipCache: true }).catch(() => null);
       if (cancelled) return;
-      const { data, error } = await backend.rpc('register_user', { p_username: username, p_display_name: displayName });
+      const open = () => backend.rpc('register_user', { p_username: username, p_display_name: displayName });
+      let { data, error } = await open();
+      // The first request on a new database connection can come back "not
+      // signed in" although the same token works a moment later: try twice
+      // more, with a fresh token, before showing the error. A ban is final.
+      for (let retry = 1; retry <= 2 && (error || typeof data !== 'string'); retry++) {
+        if (cancelled || isBannedError(fromPostgrest(error))) break;
+        await new Promise((resolve) => setTimeout(resolve, retry * 800));
+        await getTokenRef.current({ skipCache: true }).catch(() => null);
+        if (cancelled) return;
+        ({ data, error } = await open());
+      }
       if (cancelled) return;
       if (error || typeof data !== 'string') {
         setAccountError(fromPostgrest(error) ?? new Error('No account'));

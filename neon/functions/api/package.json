@@ -1,6 +1,6 @@
 {
   "name": "@matiq/api",
-  "version": "1.8.6",
+  "version": "2.1.4",
   "private": true,
   "description": "MatIQ's server functions on Neon (account, analyze-match, api-keys, moderation, ranked, files), one Hono app.",
   "type": "module",

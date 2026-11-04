@@ -14,7 +14,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
 /** Marketing version and release channel ("Pre-Beta V1.3.0"). */
-const APP_VERSION = '1.8.6';
+const APP_VERSION = '2.1.4';
 const RELEASE_LABEL = 'Alpha';
 /** Monotonic build number for local / CI builds: 1.3.0 -> 10300 (EAS manages its own remotely). */
 const BUILD_NUMBER = APP_VERSION.split('.').reduce((total, part) => total * 100 + Number(part), 0);

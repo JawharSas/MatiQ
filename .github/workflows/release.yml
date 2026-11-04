@@ -203,10 +203,17 @@ jobs:
           path: emulator/
           if-no-files-found: ignore
 
+  # Signs in against the live backend the app uses, the app's way, and opens
+  # the account: nothing is published while sign-in is broken.
+  signin:
+    name: Sign-in check (live backend)
+    uses: ./.github/workflows/check-signin.yml
+    secrets: inherit
+
   publish:
     name: Publish GitHub release
     # Only an APK that opened on the emulator gets published.
-    needs: [android, ui-preview, emulator]
+    needs: [android, ui-preview, emulator, signin]
     if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
     runs-on: ubuntu-latest
     permissions:

@@ -463,9 +463,10 @@ async function main() {
       await button('Continue').click();
       await see('This account is banned from MatIQ');
       await shot('sign-in-banned');
-      // Signed in, but the account doesn't open the first time: Try again.
+      // Signed in, but the account doesn't open (three failures: the first
+      // try and the two automatic retries): the error screen, then Try again.
       await page.evaluate(() => {
-        window.__PREVIEW_FAIL_REGISTER = 1;
+        window.__PREVIEW_FAIL_REGISTER = 3;
       });
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
@@ -491,6 +492,10 @@ async function main() {
     await step('three strikes ban an account', async () => {
       await tab('Settings').click();
       await button('Sign out').click();
+      // One failed attempt to open the account is retried without showing an error.
+      await page.evaluate(() => {
+        window.__PREVIEW_FAIL_REGISTER = 1;
+      });
       await page.getByLabel('Email').fill('sam_okafor@example.com');
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Continue').click();
