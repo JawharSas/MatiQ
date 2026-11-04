@@ -102,7 +102,7 @@ jobs:
               echo "::error::Clerk's session tokens have no \"role\": \"authenticated\" claim, so the Data API runs every request as anonymous (42501 after sign-in). Add it under Clerk Dashboard -> Sessions -> Customize session token."
               exit 1
             fi
-            [ "${DEBUG_IDENTITY:-}" = true ] && { call zz_debug_identity POST "$jwt"; failed=0; }
+            [ "${DEBUG_IDENTITY:-}" = true ] && { keep=$failed; call zz_debug_identity POST "$jwt"; failed=$keep; }
             call register_user POST "$jwt"
             call am_i_owner GET "$jwt"
             [ "$round" = 5 ] || sleep 3
