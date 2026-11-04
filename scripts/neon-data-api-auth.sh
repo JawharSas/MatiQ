@@ -6,9 +6,14 @@
 # switching from Clerk's development instance to production it kept the old
 # URL, and every sign-in failed right after Clerk's screen. So this replaces
 # the provider through the Neon API (one provider at a time: the old one is
-# removed first), then sends the Data API a token naming Clerk's current key.
-# The answer must be a signature error (key found, fake signature), not
+# removed first), then sends the Data API tokens naming Clerk's current key.
+# Every answer must be a signature error (key found, fake signature), not
 # "jwk not found".
+#
+# Providers are removed from every branch of the project, not only this one:
+# the Data API's servers read the project's whole list, so an old provider
+# left on the rehearsal branch made a share of production's requests fail.
+# Every branch is deployed with the same CLERK_ISSUER.
 #
 # Needs NEON_API_KEY, NEON_PROJECT_ID, NEON_BRANCH (name or ID) and
 # CLERK_ISSUER. NEON_API_BASE and CHECK_ATTEMPTS are for tests.
@@ -29,22 +34,22 @@ if [ -z "$branch_id" ]; then
   exit 1
 fi
 
-# The providers this branch's Data API uses: scoped to it, or to every branch.
-providers=$(neon_get "$api/jwks" | jq -c --arg b "$branch_id" '[.jwks[]? | select(.branch_id == $b or .branch_id == null or .branch_id == "")]')
-if jq -e --arg u "$want" 'length == 1 and .[0].jwks_url == $u' <<<"$providers" >/dev/null; then
-  echo "The Data API already checks tokens against $want."
+providers=$(neon_get "$api/jwks" | jq -c '[.jwks[]?]')
+echo "Token providers in the project:"
+jq -r '.[] | "  \(.branch_id // "every branch"): \(.jwks_url)"' <<<"$providers"
+while IFS=$'\t' read -r id where url; do
+  [ -n "$id" ] || continue
+  echo "Removing the old token provider of $where: $url"
+  neon_write -X DELETE "$api/jwks/$id"
+done < <(jq -r --arg u "$want" '.[] | select(.jwks_url != $u) | [.id, (.branch_id // "every branch"), .jwks_url] | @tsv' <<<"$providers")
+# This branch's own provider (or one for every branch).
+if jq -e --arg u "$want" --arg b "$branch_id" 'any(.[]; .jwks_url == $u and (.branch_id == $b or .branch_id == null or .branch_id == ""))' <<<"$providers" >/dev/null; then
+  echo "The Data API checks tokens against $want."
 else
-  while IFS=$'\t' read -r id url; do
-    [ -n "$id" ] || continue
-    echo "Removing the Data API's old token provider: $url"
-    neon_write -X DELETE "$api/jwks/$id"
-  done < <(jq -r --arg u "$want" '.[] | select(.jwks_url != $u) | [.id, .jwks_url] | @tsv' <<<"$providers")
-  if ! jq -e --arg u "$want" 'any(.[]; .jwks_url == $u)' <<<"$providers" >/dev/null; then
-    echo "Adding $want"
-    neon_write -X POST -H 'Content-Type: application/json' \
-      -d "$(jq -n --arg u "$want" --arg b "$branch_id" '{jwks_url: $u, provider_name: "Clerk", branch_id: $b}')" \
-      "$api/jwks"
-  fi
+  echo "Adding $want"
+  neon_write -X POST -H 'Content-Type: application/json' \
+    -d "$(jq -n --arg u "$want" --arg b "$branch_id" '{jwks_url: $u, provider_name: "Clerk", branch_id: $b}')" \
+    "$api/jwks"
 fi
 
 # The proof: a token naming Clerk's current signing key.
@@ -56,14 +61,26 @@ if [ -z "$data_api" ] || [ -z "$kid" ]; then
 fi
 b64url() { base64 -w0 | tr '+/' '-_' | tr -d '='; }
 token="$(printf '{"alg":"RS256","kid":"%s","typ":"JWT"}' "$kid" | b64url).$(printf '{"sub":"deploy-check"}' | b64url).c2ln"
+# The Data API runs on several servers that pick up the change separately:
+# one good answer isn't enough, so it takes a run of them.
+needed="${CHECK_RUN:-20}"
 answer=''
 for attempt in $(seq 1 "$attempts"); do
-  answer=$(curl -sS --max-time 20 -H "Authorization: Bearer $token" "$data_api/rpc/am_i_owner" || true)
-  if grep -qi 'signature' <<<"$answer" && ! grep -qi 'jwk not found' <<<"$answer"; then
-    echo "The Data API knows Clerk's key $kid from $want."
+  good=0
+  for _ in $(seq 1 "$needed"); do
+    answer=$(curl -sS --max-time 20 -H "Authorization: Bearer $token" "$data_api/rpc/am_i_owner" || true)
+    if grep -qi 'signature' <<<"$answer" && ! grep -qi 'jwk not found' <<<"$answer"; then
+      good=$((good + 1))
+    else
+      break
+    fi
+  done
+  if [ "$good" -eq "$needed" ]; then
+    echo "The Data API knows Clerk's key $kid from $want ($needed answers in a row)."
     exit 0
   fi
+  echo "Not yet: $good good answer(s), then: $answer"
   [ "$attempt" -lt "$attempts" ] && sleep "${CHECK_INTERVAL:-10}"
 done
-echo "::error::The Data API does not accept tokens from $CLERK_ISSUER (it answered: $answer). Sign-in would fail right after Clerk's screen."
+echo "::error::The Data API does not reliably accept tokens from $CLERK_ISSUER (last answer: $answer). Sign-in would fail right after Clerk's screen."
 exit 1
