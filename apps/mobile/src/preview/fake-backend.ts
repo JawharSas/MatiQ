@@ -1421,6 +1421,12 @@ export const backend = {
     if (!handler) return { data: null, error: { code: 'PGRST202', message: `function ${name} not found`, details: null, hint: null } };
     if (!me()) return { data: null, error: { code: '42501', message: 'permission denied', details: null, hint: null } };
     if (isBanned(me())) return { data: null, error: BANNED };
+    // The walkthrough sets window.__PREVIEW_FAIL_REGISTER to make the account fail to open (Try again).
+    const failures = globalThis as { __PREVIEW_FAIL_REGISTER?: number };
+    if (name === 'register_user' && (failures.__PREVIEW_FAIL_REGISTER ?? 0) > 0) {
+      failures.__PREVIEW_FAIL_REGISTER = (failures.__PREVIEW_FAIL_REGISTER ?? 0) - 1;
+      return { data: null, error: { code: '42501', message: 'permission denied for function register_user', details: null, hint: null } };
+    }
     // register_user works before the age check, like on the server.
     if (!options.get && name !== 'register_user' && ageCheckPending()) return { data: null, error: AGE_CHECK_REQUIRED };
     try {

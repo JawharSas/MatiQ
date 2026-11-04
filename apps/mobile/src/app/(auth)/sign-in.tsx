@@ -8,7 +8,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ageCheckLocked } from '@/features/legal/age';
-import { errorMessage } from '@/lib/errors';
+import { AppError, errorMessage, isBannedError } from '@/lib/errors';
 import { LogoMark } from '@/ui/brand';
 import { Body, Button, Caption, Card, inlineLink, Screen } from '@/ui/components';
 import { colors, spacing, themedStyles } from '@/ui/theme';
@@ -26,7 +26,7 @@ import { useTheme } from '@/ui/ThemeProvider';
 export default function SignIn() {
   useTheme();
   const router = useRouter();
-  const { accountError, signOut } = useAuth();
+  const { accountError, retryAccount, signOut } = useAuth();
   const { isSignedIn } = useClerkAuth();
   const [notCreated, setNotCreated] = useState(false);
 
@@ -34,15 +34,30 @@ export default function SignIn() {
     void ageCheckLocked().then(setNotCreated);
   }, []);
 
-  // Clerk signed in, but the MatIQ account didn't open (a ban, no network).
+  // Clerk signed in, but the MatIQ account didn't open (a ban, no network, a
+  // server problem). Anything but a ban can be tried again; the code is
+  // there for support.
   if (isSignedIn && accountError) {
+    const banned = isBannedError(accountError);
+    const code = accountError instanceof AppError && accountError.code !== 'unknown' ? accountError.code : null;
     return (
       <Screen>
         <View style={styles.errorLogo}>
           <LogoMark size={56} />
         </View>
         <Card>
-          <Body>{errorMessage(accountError)}</Body>
+          {banned ? (
+            <Body>{errorMessage(accountError)}</Body>
+          ) : (
+            <>
+              <Body>You're signed in, but your MatIQ account didn't open.</Body>
+              <Caption>
+                {errorMessage(accountError)}
+                {code ? ` (error ${code})` : ''}
+              </Caption>
+              <Button label="Try again" icon="refresh" onPress={retryAccount} />
+            </>
+          )}
           <Button label="Sign out" variant="secondary" icon="log-out-outline" onPress={() => signOut()} />
         </Card>
       </Screen>

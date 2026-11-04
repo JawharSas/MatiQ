@@ -85,7 +85,16 @@ their verified email.
 - Realtime is gone: the match being analysed, live-recording batches and
   ranked challenges are polled (5 s, 5 s and 60 s).
 - Grants: `authenticated` keeps what it had; `anonymous` (Data API's name
-  for `anon`) gets nothing. Tokens never carry a `role` claim.
+  for `anon`) gets nothing.
+- The Data API runs each request as the role in the token's `role` claim,
+  and as `anonymous` when there is none. So every Clerk instance the app
+  uses adds `"role": "authenticated"` to its session tokens (Clerk Dashboard
+  -> Sessions -> Customize session token, or the instance config's
+  `session.claims`). Without it every signed-in request fails with 42501
+  ("You don't have permission to do that." in the app) right after sign-in.
+- "Check sign-in" (Actions) takes a signed-in user's live Clerk session and
+  makes the app's first calls with a real token, printing the token's
+  claims and the database's own answers.
 - Storage calls become `files` function calls returning presigned upload /
   download links after the same checks the storage policies made
   (own folder, fixed file names, size and type, banned users refused).
