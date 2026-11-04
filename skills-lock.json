@@ -37,6 +37,12 @@
       "skillPath": "skills/clerk-setup/SKILL.md",
       "computedHash": "c147413818d963ce644b92bbd4d0125f8bdccbf5477d3cee82c47b5adbfa9cd5"
     },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "913b9d37d0d54047dd65222bb8c67b2bf04e3cb87dcad1729068d7a8b2c8c396"
+    },
     "neon": {
       "source": "neondatabase/agent-skills",
       "sourceType": "github",
