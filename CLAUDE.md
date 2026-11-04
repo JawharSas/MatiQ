@@ -52,7 +52,7 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
 ## Conventions
 
 - **Theme.** `colors` and `font` from `src/ui/theme.ts` change in place when the
-  theme changes (Light, Dark, Midnight, or System).
+  theme changes (Light, Dark, Midnight, or System). The app opens in Dark.
   - Module styles use `themedStyles(() => ({...}))`.
   - Components call `useTheme()` so they re-render on a theme change.
   - Any file that reads the theme starts with `'use no memo'`. Without it,

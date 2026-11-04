@@ -26,6 +26,7 @@ export default function ShareScreen() {
   const profile = useProfile(userId);
   const [body, setBody] = useState('');
   const [friendsOnly, setFriendsOnly] = useState(false);
+  const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [highlight, setHighlight] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +45,7 @@ export default function ShareScreen() {
         matchId,
         body: parsed.data.body,
         friendsOnly: parsed.data.friendsOnly,
+        commentsEnabled,
         ...(chosen ? { highlight: { start: chosen.start, end: Math.min(chosen.end, chosen.start + 60_000) } } : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ['feed'] });
@@ -95,6 +97,16 @@ export default function ShareScreen() {
             isPublic
               ? 'Off: anyone signed in can see this post. On: only your friends.'
               : 'Your account is private, so only your friends can see this post.'
+          }
+        />
+        <ToggleRow
+          label="Allow comments"
+          value={commentsEnabled}
+          onValueChange={setCommentsEnabled}
+          description={
+            commentsEnabled
+              ? 'People who can see this post can comment on it. You can turn this off later.'
+              : 'Nobody can comment. You can turn comments on later from the post.'
           }
         />
         <Caption>Viewers can open the scorecard{match.data?.has_video ? ' and video' : ''} of this match.</Caption>

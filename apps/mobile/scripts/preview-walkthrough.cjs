@@ -153,6 +153,22 @@ async function main() {
       await page.setViewportSize(PHONE);
     });
 
+    await step('comments', async () => {
+      // Sam's post, where Jordan already commented.
+      await page.getByRole('link', { name: 'Comments, 1 comment' }).first().click();
+      await see('The near fall in the second was nasty.');
+      await field('Add a comment').fill('Clean chain wrestling. What was the setup on the first shot?');
+      await button('Post comment').click();
+      await see('What was the setup on the first shot?');
+      await shot('comments', { tall: true });
+      // The word filter applies to comments too.
+      await field('Add a comment').fill('nice p 0 r n');
+      await button('Post comment').click();
+      await see("That includes words MatIQ doesn't allow");
+      await page.goBack();
+      await see('Three takedowns');
+    });
+
     await step('record and analyse', async () => {
       await tab('Analyze').click();
       await see('Match setup');
@@ -197,7 +213,10 @@ async function main() {
       await button('Post').click();
       await see("This post wasn't shared");
       await shot('share-filtered');
-      await button('Cancel').click();
+      // Comments can be turned off before posting.
+      await page.getByLabel('Caption').fill('Back takes are finally clicking.');
+      await page.getByRole('switch', { name: 'Allow comments' }).click();
+      await button('Post').click();
       await see('Technique breakdown');
       await page.getByRole('tab', { name: 'Alex', exact: true }).click();
       await shot('bjj-dashboard-filtered', { tall: true });
@@ -209,6 +228,15 @@ async function main() {
       await matchLink('Live goes with Sam').click();
       await see('Technique breakdown');
       await shot('wrestling-dashboard', { tall: true });
+      await page.goBack();
+      // The post went out with comments off; its author can turn them on.
+      await tab('Feed').click();
+      await see('Back takes are finally clicking.');
+      await page.getByRole('link', { name: 'Comments off, 0 comments' }).first().click();
+      await see('You turned off comments on this post.');
+      await shot('comments-off');
+      await page.getByRole('switch', { name: 'Allow comments' }).click();
+      await button('Post comment').waitFor();
       await page.goBack();
     });
 

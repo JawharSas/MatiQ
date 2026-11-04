@@ -3,7 +3,36 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
-## [1.8.0] Alpha, 2026-11-04
+## [1.8.6] Alpha, 2026-11-04
+
+### Comments
+- Neon migration `20261104000100_post_comments`: `posts.comments_enabled`
+  (default on) and `post_comments` with RLS (visible with the post; banned
+  and blocked commenters hidden). Written only through `add_post_comment`
+  (visibility, comments on, 1 to 500 characters, word filter, 30 per 10
+  minutes), `delete_post_comment` (the comment's writer, the post's author
+  or the owner) and `set_post_comments` (the post's author). Read with
+  `get_post_comments` and `get_post_comment_state`; `get_feed` adds
+  `comment_count` and `comments_enabled`. Database tests in
+  `neon/tests/database/03_post_comments.test.sql`.
+- App: a comment button with the count on every post, a Comments screen
+  (list, composer, delete, and the author's Allow comments switch), and
+  Allow comments on the share screen. Comments are in the data export.
+- Web preview and walkthrough cover commenting, the word filter on
+  comments, sharing with comments off and turning them back on.
+
+### Black and red
+- The app opens in Dark (black and red) instead of following the phone;
+  Light, Midnight and System stay in Settings → Appearance.
+- Fighter 1's corner is white on black (near-black on white) instead of
+  blue; Fighter 2 stays red. Trophies, WIN and result badges are red
+  instead of gold.
+
+### Account switching
+- Switching accounts in Clerk's profile screen clears the previous
+  account's cached data, and the app shows no account until the new one
+  is open.
+
 
 ### Design
 - Red, black and white: neutral grey surfaces on black (Dark), true black
@@ -42,9 +71,10 @@ pre-release channels are named in the release title.
   crashes when it highlights your own row.
 
 ### Release
-- 1.7.0 was not published on its own: its APK build ran out of disk on the
-  GitHub runner. 1.8.0 is the first release on Neon and Clerk and carries
-  1.7.0's changes; its notes cover the move for players on 1.6.
+- 1.7.0 and 1.8.0 were not published on their own (1.7.0's APK build ran
+  out of disk on the GitHub runner). 1.8.6 is the first release on Neon and
+  Clerk and carries their changes; its notes cover the move for players on
+  1.6.
 - The release workflow frees disk space (unused .NET, Haskell, Swift,
   CodeQL, Boost and Docker images) before the Android build.
 
@@ -286,7 +316,7 @@ pre-release channels are named in the release title.
 - Privacy Policy: IP addresses (security logs only, never shown to other
   users) and the video metadata removal.
 
-### Sign-in
+### Account switching
 - Device lockout after 5 wrong passwords (30 seconds, doubling up to 15
   minutes); cleared by a successful sign-in.
 - Cloudflare Turnstile bot check on email sign-in and sign-up when
@@ -394,7 +424,7 @@ below ships in 1.4.1.
 
 ## [1.3.1] Pre-Beta, 2026-10-29
 
-### Sign-in
+### Account switching
 - **Continue with Google** on sign-in and sign-up: Supabase OAuth with PKCE
   in the system browser (`expo-web-browser`; Custom Tabs on Android,
   ASWebAuthenticationSession on iOS). The Google client secret stays in

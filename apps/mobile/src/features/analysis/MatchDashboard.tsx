@@ -141,7 +141,7 @@ function ScoreHeader({ scorecard, names }: { scorecard: Scorecard; names: Names 
     <Card style={styles.scoreCard}>
       <Badge label={method} tone={winner ? 'accent' : 'neutral'} icon={result.method === 'submission' ? 'flash' : 'stopwatch-outline'} />
       <View style={styles.resultRow}>
-        {winner ? <Ionicons name="trophy" size={22} color={colors.warning} /> : null}
+        {winner ? <Ionicons name="trophy" size={22} color={colors.accent} /> : null}
         <Text style={font.title}>{winner ? `${winner} wins` : 'Draw'}</Text>
       </View>
       <View style={styles.scoreRow}>

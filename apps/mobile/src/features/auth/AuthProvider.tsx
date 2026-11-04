@@ -38,9 +38,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { isLoaded, isSignedIn, getToken, signOut: clerkSignOut } = useClerkAuth();
   const { user } = useUser();
-  const [userId, setUserId] = useState<string | null>(null);
+  // The MatIQ account and the Clerk user it was opened for.
+  const [account, setAccount] = useState<{ clerkUserId: string; userId: string; isOwner: boolean } | null>(null);
   const [accountError, setAccountError] = useState<Error | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
   const [clerkLoadTimedOut, setClerkLoadTimedOut] = useState(false);
 
   useEffect(() => {
@@ -57,6 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoaded]);
 
   const clerkUserId = isSignedIn ? (user?.id ?? null) : null;
+  // Nobody until the account for this Clerk user is open: after switching
+  // accounts in Clerk's profile screen, the previous one never shows through.
+  const current = account && account.clerkUserId === clerkUserId ? account : null;
+  const userId = current?.userId ?? null;
   // Plain values, so a refreshed user object (after turning on two-factor,
   // say) doesn't open the account again.
   // (Accounts made before Clerk's own sign-up screen kept these in unsafeMetadata.)
@@ -64,24 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const username = text(metadata.username) ?? text(user?.username);
   const displayName = text(metadata.displayName) ?? text(user?.fullName);
 
-  // The session can end outside the app's Sign out (Clerk's profile screen,
-  // a revoked session): this device's MatIQ data goes with it either way.
-  const hadSession = useRef(false);
+  // The session can end or switch to another account outside the app's Sign
+  // out (Clerk's profile screen, a revoked session): this device's MatIQ data
+  // goes with the previous account either way.
+  const previousClerkUserId = useRef<string | null>(null);
   useEffect(() => {
-    if (clerkUserId) {
-      hadSession.current = true;
-      return;
-    }
-    if (!hadSession.current) return;
-    hadSession.current = false;
+    const previous = previousClerkUserId.current;
+    previousClerkUserId.current = clerkUserId;
+    if (previous === null || previous === clerkUserId) return;
     clearCache();
     queryClient.clear();
   }, [clerkUserId, queryClient]);
 
   useEffect(() => {
     if (!clerkUserId) {
-      setUserId(null);
-      setIsOwner(false);
+      setAccount(null);
       return;
     }
     let cancelled = false;
@@ -93,10 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccountError(fromPostgrest(error) ?? new Error('No account'));
         return;
       }
-      setUserId(data);
       // GET: answered even before the age check, when other requests are refused.
       const owner = await backend.rpc('am_i_owner', undefined, { get: true });
-      if (!cancelled) setIsOwner(owner.data === true);
+      if (!cancelled) setAccount({ clerkUserId, userId: data, isOwner: owner.data === true });
     })();
     return () => {
       cancelled = true;
@@ -111,8 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clerkSignOut();
     clearCache();
     queryClient.clear();
-    setUserId(null);
-    setIsOwner(false);
+    setAccount(null);
   };
 
   return (
@@ -129,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         email: user?.primaryEmailAddress?.emailAddress ?? '',
         accountError,
-        isOwner,
+        isOwner: current?.isOwner ?? false,
         signOut,
       }}
     >

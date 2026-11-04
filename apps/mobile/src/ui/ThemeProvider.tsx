@@ -21,11 +21,11 @@ export interface ThemeState {
   setPreference(preference: ThemePreference): void;
 }
 
-const ThemeContext = createContext<ThemeState>({ preference: 'system', theme: 'dark', setPreference: () => undefined });
+const ThemeContext = createContext<ThemeState>({ preference: 'dark', theme: 'dark', setPreference: () => undefined });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const scheme = useColorScheme();
-  const [preference, setPreference] = useState<ThemePreference>(() => readPreference('theme', THEME_PREFERENCES, 'system'));
+  const [preference, setPreference] = useState<ThemePreference>(() => readPreference('theme', THEME_PREFERENCES, 'dark'));
   const theme: ThemeName = preference === 'system' ? (scheme === 'light' ? 'light' : 'dark') : preference;
 
   // Before anything below renders, so every colour it reads is this theme's.

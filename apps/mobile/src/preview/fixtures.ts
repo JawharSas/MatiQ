@@ -30,6 +30,7 @@ export interface PreviewDb {
   match_live_batches: Row[];
   posts: Row[];
   post_likes: Row[];
+  post_comments: Row[];
   usage_ledger: Row[];
   ranked_matches: Row[];
   ranked_ratings: Row[];
@@ -192,6 +193,7 @@ export function createFixtures(): PreviewDb {
     match_live_batches: [],
     posts: [],
     post_likes: [],
+    post_comments: [],
     usage_ledger: [],
     ranked_matches: [],
     ranked_ratings: [],
@@ -341,6 +343,10 @@ export function createFixtures(): PreviewDb {
     { post_id: alexPost, user_id: USERS.sam, created_at: minutesAgo(200) },
     { post_id: alexPost, user_id: USERS.jordan, created_at: minutesAgo(180) },
     { post_id: samPost, user_id: USERS.jordan, created_at: minutesAgo(60) },
+  );
+  db.post_comments.push(
+    { id: id('c0000e47', 1), post_id: alexPost, author_id: USERS.sam, body: 'That back take was clean. Same entry every time?', created_at: minutesAgo(240) },
+    { id: id('c0000e47', 2), post_id: samPost, author_id: USERS.jordan, body: 'The near fall in the second was nasty.', created_at: minutesAgo(50) },
   );
 
   // Usage -----------------------------------------------------------------------------

@@ -58,6 +58,7 @@ export default function AppLayout() {
       <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
       <Stack.Screen name="share/[matchId]" options={{ title: 'Share', presentation: 'modal' }} />
       <Stack.Screen name="report/[postId]" options={{ title: 'Report post', presentation: 'modal' }} />
+      <Stack.Screen name="comments/[postId]" options={{ title: 'Comments' }} />
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
