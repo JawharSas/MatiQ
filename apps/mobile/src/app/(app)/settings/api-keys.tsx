@@ -234,11 +234,11 @@ export default function ApiKeysScreen() {
         <ErrorText>{error}</ErrorText>
         {check ? (
           <>
-            <Button label="Test and save" icon="checkmark-circle" onPress={() => void save()} loading={busy} />
+            <Button label="Test and save" icon="checkmark-circle" onPress={() => save()} loading={busy} />
             <Button label="Cancel" variant="secondary" onPress={reset} disabled={busy} />
           </>
         ) : (
-          <Button label="Check key" icon="key" onPress={() => void runCheck()} loading={busy} disabled={!apiKey.trim()} />
+          <Button label="Check key" icon="key" onPress={() => runCheck()} loading={busy} disabled={!apiKey.trim()} />
         )}
       </Card>
       <Caption>

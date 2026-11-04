@@ -38,7 +38,7 @@ export function ConsentGate({ missing, needsAge }: { missing: LegalDocumentId[];
       <Screen>
         <Title>We can't continue</Title>
         <Body>Sorry, MatIQ can't be used with this account on this device right now.</Body>
-        <Button label="Sign out" onPress={() => void signOut()} />
+        <Button label="Sign out" onPress={() => signOut()} />
       </Screen>
     );
   }
@@ -104,8 +104,8 @@ export function ConsentGate({ missing, needsAge }: { missing: LegalDocumentId[];
         </Card>
       ) : null}
       <ErrorText>{error}</ErrorText>
-      <Button label="Continue" onPress={() => void submit()} loading={busy} />
-      <Button label="Cancel" variant="secondary" hint="Signs you out without saving" disabled={busy} onPress={() => void signOut()} />
+      <Button label="Continue" onPress={() => submit()} loading={busy} />
+      <Button label="Cancel" variant="secondary" hint="Signs you out without saving" disabled={busy} onPress={() => signOut()} />
     </Screen>
   );
 }

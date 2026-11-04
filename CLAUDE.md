@@ -52,19 +52,27 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
 ## Conventions
 
 - **Theme.** `colors` and `font` from `src/ui/theme.ts` change in place when the
-  theme changes (Light, Dark, Midnight, or System).
+  theme changes (Light, Dark, Midnight, or System). The app opens in Dark.
   - Module styles use `themedStyles(() => ({...}))`.
   - Components call `useTheme()` so they re-render on a theme change.
   - Any file that reads the theme starts with `'use no memo'`. Without it,
     React Compiler (on in `app.config.ts`) keeps the old colours.
   - Camera and video overlays use the fixed `onVideo` palette.
+  - The palettes (`src/ui/palettes.ts`) are red, black and white: neutral
+    greys on black (Dark), true black (Midnight) and white (Light), with one
+    red accent; no orange, no gradients. `accent` is red for text and icons;
+    `accentFill` is the brand red behind filled controls (white labels).
+    `palettes.test.ts` checks every contrast and that both stay red.
 - **Accessibility.**
   - Every text colour must pass WCAG AA in every theme.
   - Interactive elements need labels and roles; radios need `aria-checked`.
   - The walkthrough fails on any axe violation.
-- **Auth.** Use `@clerk/expo` (Core 3, Future API).
-  - Sensitive changes (password, Google, two-factor) go through
-    `useVerifiedAction` (`src/features/auth/reverify.tsx`).
+- **Auth.** Clerk's native components (`@clerk/expo/native`, backed by
+  `@clerk/expo-native-components` and themed by `clerk-theme.json`).
+  - `AuthView` is the sign-in and sign-up screen; `UserProfileView` is
+    Settings → Account and security. Don't rebuild these flows by hand.
+  - React to auth state with `useAuth()` / `useUser()`; never `setActive()`.
+  - The age check and consent come after sign-in (`ConsentGate`).
   - The database reads the user from Clerk's JWT through `pg_session_jwt`. RLS
     is on for every table.
 - **Forced updates.** `public.app_requirements()` on Neon returns
@@ -76,6 +84,11 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
     `docs/NEON_CLERK_MIGRATION.md`).
 - **Migrations.** Never edit a migration that has shipped; add a new one with
   a later timestamp, and add database tests with it.
+- **UI rules.** Touch targets at least 44 pt; no text below 12 pt; skeletons
+  (`Loading`) instead of spinners; buttons ignore a second tap while busy
+  (`useSinglePress`: pass the action's promise); custom pressables use
+  `withPressFeedback`; lists cache with `persisted()`; empty lists offer a
+  next step; no emojis.
 - **Preview.** The web preview uses `src/preview/fake-backend.ts` and stubs.
   When you add a backend call or a Clerk flow, cover it there and in
   `scripts/preview-walkthrough.cjs`.

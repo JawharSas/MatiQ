@@ -1,15 +1,18 @@
 /**
- * Design tokens. Deep, borderless surfaces with the orange accent kept for the
- * one action that matters on a screen. Athlete A is blue and B is red, like
- * corner colours.
+ * Design tokens. Red, black and white: neutral grey surfaces with one red
+ * accent for the action that matters on a screen; flat colours, no
+ * gradients. `accent` is the red for text and icons, `accentFill` the brand
+ * red behind filled controls. Athlete A is blue and B is red, like corner
+ * colours.
  *
- * Three themes: Dark (MatIQ's original look), Midnight (true black for OLED
- * screens, navy-tinted surfaces) and Light. The person picks one in Settings
- * → Appearance, or follows the phone (ThemeProvider).
+ * Three themes: Dark (black), Midnight (true black for OLED screens) and
+ * Light (white). The person picks one in Settings → Appearance, or follows
+ * the phone (ThemeProvider).
  *
- * WCAG 2.2 AA in every theme: each text colour has at least 4.5:1 contrast on
- * every surface (including the tinted badge backgrounds), and `control`
- * (input, switch and checkbox outlines) at least 3:1 against the card it sits on.
+ * WCAG 2.2 AA in every theme, checked by palettes.test.ts: each text colour has
+ * at least 4.5:1 contrast on every surface (including the tinted badge
+ * backgrounds), and `control` (input, switch and checkbox outlines) at least
+ * 3:1 against the card it sits on.
  *
  * `colors` and `font` always hold the current theme: they are updated in place
  * when it changes, so anything read while rendering is current. Styles made
@@ -19,112 +22,15 @@
 
 import { type ImageStyle, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 
-export const THEMES = ['dark', 'midnight', 'light'] as const;
-export type ThemeName = (typeof THEMES)[number];
+import { PALETTES, type Palette, type ThemeName } from './palettes';
 
-export interface Palette {
-  background: string;
-  surface: string;
-  surfaceRaised: string;
-  surfaceHigh: string;
-  border: string;
-  hairline: string;
-  text: string;
-  textMuted: string;
-  textFaint: string;
-  accent: string;
-  accentSoft: string;
-  accentText: string;
-  athleteA: string;
-  athleteASoft: string;
-  athleteB: string;
-  athleteBSoft: string;
-  success: string;
-  successSoft: string;
-  warning: string;
-  warningSoft: string;
-  danger: string;
-  dangerSoft: string;
-  /** Outline of inputs, switches and checkboxes (3:1 against cards). */
-  control: string;
-  /** Keyboard focus ring. */
-  focus: string;
-}
-
-const dark: Palette = {
-  background: '#07090C',
-  surface: '#11151B',
-  surfaceRaised: '#191E26',
-  surfaceHigh: '#252C37',
-  border: '#232A35',
-  hairline: 'rgba(255,255,255,0.06)',
-  text: '#F5F7FA',
-  textMuted: '#8D97A8',
-  textFaint: '#8A93A2',
-  accent: '#F97316',
-  accentSoft: 'rgba(249,115,22,0.14)',
-  accentText: '#0B0D10',
-  athleteA: '#60A5FA',
-  athleteASoft: 'rgba(59,130,246,0.14)',
-  athleteB: '#F87171',
-  athleteBSoft: 'rgba(239,68,68,0.14)',
-  success: '#22C55E',
-  successSoft: 'rgba(34,197,94,0.14)',
-  warning: '#EAB308',
-  warningSoft: 'rgba(234,179,8,0.14)',
-  danger: '#F87171',
-  dangerSoft: 'rgba(239,68,68,0.12)',
-  control: '#6B7280',
-  focus: '#F5F7FA',
-};
-
-const midnight: Palette = {
-  ...dark,
-  background: '#000000',
-  surface: '#0A0E17',
-  surfaceRaised: '#111726',
-  surfaceHigh: '#1A2233',
-  border: '#1A2233',
-  hairline: 'rgba(148,163,184,0.10)',
-  textMuted: '#8E9AB2',
-  textFaint: '#8894AC',
-  control: '#6B7590',
-};
-
-const light: Palette = {
-  background: '#F3F5F8',
-  surface: '#FFFFFF',
-  surfaceRaised: '#F5F7FA',
-  surfaceHigh: '#E5E9F0',
-  border: '#DCE1E8',
-  hairline: 'rgba(15,23,42,0.08)',
-  text: '#0F172A',
-  textMuted: '#4A5568',
-  textFaint: '#535E70',
-  accent: '#A9380A',
-  accentSoft: 'rgba(194,65,12,0.09)',
-  accentText: '#FFFFFF',
-  athleteA: '#1D4ED8',
-  athleteASoft: 'rgba(29,78,216,0.10)',
-  athleteB: '#B91C1C',
-  athleteBSoft: 'rgba(185,28,28,0.09)',
-  success: '#166534',
-  successSoft: 'rgba(21,128,61,0.09)',
-  warning: '#7C4A03',
-  warningSoft: 'rgba(161,98,7,0.10)',
-  danger: '#B91C1C',
-  dangerSoft: 'rgba(185,28,28,0.09)',
-  control: '#6B7280',
-  focus: '#0F172A',
-};
-
-export const PALETTES: Record<ThemeName, Palette> = { dark, midnight, light };
+export { PALETTES, type Palette, THEMES, type ThemeName } from './palettes';
 
 /** For anything drawn over the camera or a video, which is dark whatever the theme. */
-export const onVideo: Palette = dark;
+export const onVideo: Palette = PALETTES.dark;
 
 /** The current theme's colours (updated in place by `applyTheme`). */
-export const colors: Palette = { ...dark };
+export const colors: Palette = { ...PALETTES.dark };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 

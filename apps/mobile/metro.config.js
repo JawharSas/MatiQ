@@ -19,6 +19,7 @@ const WEB_STUBS = {
   'expo-screen-capture': 'src/preview/stubs/screen-capture.ts',
   '@clerk/expo': 'src/preview/stubs/clerk.tsx',
   '@clerk/expo/token-cache': 'src/preview/stubs/clerk.tsx',
+  '@clerk/expo/native': 'src/preview/stubs/clerk-native.tsx',
   'expo-web-browser': 'src/preview/stubs/web-browser.ts',
 };
 

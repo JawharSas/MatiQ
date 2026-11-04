@@ -5,7 +5,7 @@ import { Text } from '@/ui/text';
 import { Camera, useCameraPermission, useMicrophonePermission } from 'react-native-vision-camera';
 import { errorMessage } from '@/lib/errors';
 import { readPreference, writePreference } from '@/lib/storage';
-import { Body, Button, Card, Segmented } from '@/ui/components';
+import { Body, Button, Card, Segmented, withPressFeedback } from '@/ui/components';
 import { onVideo, radius, spacing } from '@/ui/theme';
 import type { CapturePlan, FpsPreference } from './capture-plan';
 import { CaptureHud } from './CaptureHud';
@@ -146,12 +146,12 @@ export function LiveRecorder(props: LiveRecorderProps) {
             accessibilityLabel={recording ? 'Stop recording' : 'Start recording'}
             disabled={capture.state === 'finishing' || capture.probing || !capture.plan}
             onPress={recording ? () => void finish() : () => void begin()}
-            style={[styles.shutter, (capture.probing || !capture.plan) && { opacity: 0.4 }]}
+            style={({ pressed }) => [styles.shutter, pressed && { transform: [{ scale: 0.94 }] }, (capture.probing || !capture.plan) && { opacity: 0.4 }]}
           >
             <View style={recording ? styles.stopIcon : styles.recordIcon} />
           </Pressable>
           {idle ? (
-            <Pressable accessibilityRole="button" onPress={props.onCancel} style={styles.cancel}>
+            <Pressable accessibilityRole="button" onPress={props.onCancel} style={withPressFeedback(styles.cancel)}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           ) : null}

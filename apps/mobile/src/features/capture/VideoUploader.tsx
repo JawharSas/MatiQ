@@ -96,7 +96,7 @@ export function VideoUploader({
       </Caption>
       {checking ? <StatusText>Checking the video…</StatusText> : null}
       <ErrorText>{error}</ErrorText>
-      <Button label="Choose video" onPress={() => void pick()} loading={busy} />
+      <Button label="Choose video" onPress={() => pick()} loading={busy} />
       <Button label="Back" variant="secondary" onPress={onCancel} />
     </Card>
   );

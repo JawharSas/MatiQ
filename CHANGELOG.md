@@ -3,6 +3,102 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [1.8.6] Alpha, 2026-11-04
+
+### Comments
+- Neon migration `20261104000100_post_comments`: `posts.comments_enabled`
+  (default on) and `post_comments` with RLS (visible with the post; banned
+  and blocked commenters hidden). Written only through `add_post_comment`
+  (visibility, comments on, 1 to 500 characters, word filter, 30 per 10
+  minutes), `delete_post_comment` (the comment's writer, the post's author
+  or the owner) and `set_post_comments` (the post's author). Read with
+  `get_post_comments` and `get_post_comment_state`; `get_feed` adds
+  `comment_count` and `comments_enabled`. Database tests in
+  `neon/tests/database/03_post_comments.test.sql`.
+- App: a comment button with the count on every post, a Comments screen
+  (list, composer, delete, and the author's Allow comments switch), and
+  Allow comments on the share screen. Comments are in the data export.
+- Web preview and walkthrough cover commenting, the word filter on
+  comments, sharing with comments off and turning them back on.
+
+### Black and red
+- The app opens in Dark (black and red) instead of following the phone;
+  Light, Midnight and System stay in Settings → Appearance.
+- Fighter 1's corner is white on black (near-black on white) instead of
+  blue; Fighter 2 stays red. Trophies, WIN and result badges are red
+  instead of gold.
+
+### Accounts
+- Names can be kept for one account (`private.reserved_names`, managed in
+  the database): anyone else changing to one gets the usual "already taken"
+  answer, and a new account that brings one gets a generated name.
+- The Owner badge on the profile is red.
+
+### Account switching
+- Switching accounts in Clerk's profile screen clears the previous
+  account's cached data, and the app shows no account until the new one
+  is open.
+
+
+### Design
+- Red, black and white: neutral grey surfaces on black (Dark), true black
+  (Midnight) and white (Light), with one red accent and flat colours only
+  (no gradients, no orange). `accent` is the red for text and icons
+  (#FF5C5C on black, #B91C1C on white); the new `accentFill` token is the
+  brand red #DC2626 behind primary buttons, checked boxes, selected chips,
+  switches and the featured-title chip, with white labels.
+  `src/ui/palettes.ts` holds the themes as plain data and `palettes.test.ts`
+  checks every text colour at 4.5:1 on every surface and badge tint, white
+  on the red fill, the fill and control outlines at 3:1, and that the accent
+  and fill stay red. Light-theme warnings are a deep gold instead of amber.
+  App icon, splash, logo and Clerk's screens re-rendered in red on black.
+  The Grandmaster badge uses the belt's red bar.
+- Denser layout: screen gutters 16 pt, cards 14 pt padding and 16 pt radius,
+  buttons and inputs 48 pt, rows 56 pt (every target stays at 44 pt or more);
+  no text below 12 pt.
+
+### Sign-in: Clerk's native components
+- `AuthView` (`@clerk/expo/native`, `@clerk/expo-native-components` 0.4.4)
+  is the sign-in and sign-up screen, themed from `clerk-theme.json` through
+  its config plugin; iOS deployment target 17. The custom email, Google,
+  two-factor and reset flows, and their helpers, are gone.
+- `UserProfileView` is **Settings → Account and security** (email, password,
+  Google, two-factor, devices). A session ended there, or anywhere outside
+  the app's own Sign out, still clears this device's cached data.
+- New accounts take Clerk's username and name; the age check and consent
+  gate after sign-in are unchanged (under 13 still deletes the account and
+  locks the device).
+- Web preview: stand-ins for both views drive the sample accounts; the
+  walkthrough signs in, signs up, signs out from the account screen and
+  checks the under-13 path through them.
+- Lists that open a profile or match (feed, friends, leaderboard, matches)
+  keep their row layout and press feedback inside links (`LinkPressable`);
+  on the web a link takes one style object, so the leaderboard no longer
+  crashes when it highlights your own row.
+
+### Release
+- 1.7.0 and 1.8.0 were not published on their own (1.7.0's APK build ran
+  out of disk on the GitHub runner). 1.8.6 is the first release on Neon and
+  Clerk and carries their changes; its notes cover the move for players on
+  1.6.
+- The release workflow frees disk space (unused .NET, Haskell, Swift,
+  CodeQL, Boost and Docker images) before the Android build.
+
+### Behaviour
+- Buttons and list rows ignore a second tap while the first is running
+  (`useSinglePress`), so nothing is submitted twice.
+- `Loading` shows skeleton cards (pulsing unless motion is reduced) instead
+  of a spinner; the feed shows them while it loads.
+- `persisted()` keeps ranked matches, ratings, ladders, profiles, friends
+  and usage on the device (encrypted, cleared when the session ends), like
+  the feed and matches already were, so screens open with data at once.
+- Likes are optimistic and roll back if refused.
+- Keyboard: the shared scroll view insets content on iOS and Android
+  resizes the window, so focused fields stay visible.
+- Empty feed and friends lists offer next steps; every custom pressable
+  dims while held; the ranked titles use an icon instead of a star
+  character.
+
 ## [1.7.0] Alpha, 2026-10-30
 
 ### Updates

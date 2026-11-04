@@ -17,13 +17,13 @@ the repository safely.
 | Quota bypass / cost abuse | Atomic reservation with row lock, per-user rate limits on every function, frame caps, video-length entitlement, auth rate limits. | `_shared/quota.ts`, `_shared/middleware.ts`, `config.toml` |
 | Stolen or phished password | Optional TOTP two-factor authentication. Once enrolled, `aal1` sessions are refused by restrictive RLS policies (tables, Realtime, Storage), a PostgREST pre-request hook (RPCs) and the Edge Function middleware. | `20261024000300_mfa_enforcement.sql`, `_shared/mfa.ts`, `settings/two-factor.tsx` |
 | Disguised or malicious uploads | Videos: the app reads the whole file before uploading (MP4/QuickTime structure, every chunk inside the media data, nothing hidden, every H.264/HEVC frame's NAL units); clients can only write `upload.*`; analyze-match moves the upload out of the client's reach, checks it again and only then publishes `video.*`, the only name viewers can read. Frames: JPEG start and end markers checked on the phone and the server. Buckets limit MIME types and sizes. | `rules-engine/src/media/video-check.ts`, `analyze-match/video.ts`, `20261029000300_video_upload_check.sql` |
-| Password guessing, credential stuffing, bots | Supabase Auth rate limits per IP (set by Deploy backend), a device lockout after 5 wrong passwords (30 s, doubling to 15 min), optional Cloudflare Turnstile on email sign-in and sign-up, one error message for unknown email and wrong password. | `backend.yml`, `features/auth/sign-in-throttle.ts`, `features/auth/Captcha.tsx` |
+| Password guessing, credential stuffing, bots | Clerk's attack protection on the sign-in screen (its native AuthView): account lockout after 10 wrong passwords for 60 minutes, breached-password checks (HIBP), enumeration protection, rate limits and optional bot protection, all set in the Clerk Dashboard. | Clerk Dashboard → Attack protection |
 | Vulnerable dependencies | Dependabot updates; CI audits the app's and the Edge Functions' runtime dependencies (high and critical fail unless allow-listed with a reason and review date); pull requests can't add dependencies with known high-severity advisories. | `scripts/audit-deps.mjs`, `.github/dependency-audit-allowlist.json`, `ci.yml` |
 | API responses misused by a browser (framing, sniffing, caching) | Every function response is `no-store` JSON with `nosniff`, a `default-src 'none'` CSP, `frame-ancestors 'none'` / `X-Frame-Options: DENY`, HSTS, `no-referrer`, a closed Permissions-Policy and COOP; CORS only for allow-listed origins. | `_shared/http.ts` |
 | Finding where someone is (IP address, GPS in videos) | No table, function or screen exposes another user's IP address, email or location; only Supabase's own auth logs hold IPs (owner-only, in the dashboard). Nothing a user posts makes other phones contact a server they choose (no external images, links or previews; avatars must be the owner's own storage path). Before upload the app blanks location (GPS) and phone make and model in a copy of the video (`findPersonalMetadata`); videos published before 1.4.1 are owner-only. | `rules-engine/src/media/video-check.ts`, `capture/video-check.ts`, `20261029000400_privacy_hardening.sql` |
 | Discovering the backend | The Supabase URL and publishable key are in every build (an app must know its server), so the protection is what they allow: nothing for anonymous callers (no table grants, no callable functions but the request hooks, so the API description is empty), GraphQL removed, RLS on every row, secrets only in functions. A custom domain (Supabase Pro add-on) hides the project name but not the server itself. | `20261029000400_privacy_hardening.sql`, `07_rls_and_uploads.test.sql` |
 | Location leaks from photos | Profile pictures are re-encoded on the device (pixels only, no EXIF) before upload; private bucket, one-hour signed URLs. | `features/social/avatar.ts` |
-| Sexual content, hate and harassment | Names, bios, match titles, dispute notes and posts go through a database word filter that sees through spacing, look-alike characters and stretched letters; a matching post is held back and counts as a strike (3 in 30 days ban the account). The AI checks every analysed batch of frames and every profile picture (uploaded as `pending.jpg`, readable only by its owner, published by the `moderation` function after the check); a confident 18+ finding moves the files to the locked `moderation-quarantine` bucket and bans the account at once. | `20261029000500_moderation.sql`, `_shared/moderation.ts`, `supabase/functions/moderation`, `analyze-match/pipeline.ts` |
+| Sexual content, hate and harassment | Names, bios, match titles, dispute notes, posts and comments go through a database word filter that sees through spacing, look-alike characters and stretched letters; a matching post is held back and counts as a strike (3 in 30 days ban the account); a matching comment is refused. The AI checks every analysed batch of frames and every profile picture (uploaded as `pending.jpg`, readable only by its owner, published by the `moderation` function after the check); a confident 18+ finding moves the files to the locked `moderation-quarantine` bucket and bans the account at once. | `20261029000500_moderation.sql`, `neon/migrations/20261104000100_post_comments.sql`, `_shared/moderation.ts`, `supabase/functions/moderation`, `analyze-match/pipeline.ts` |
 | Banned users coming back | A ban sets `banned_until` in Supabase Auth (no sign-in or token refresh), ends sessions, suspends the account and hides its profile, posts and shared matches. The networks it used in the last 30 days are blocked for 30 days: the request hook and the function middleware refuse any account calling from them. Only keyed one-way fingerprints (HMAC-SHA256, IPv6 per /64) of the addresses are stored. | `20261029000500_moderation.sql`, `_shared/middleware.ts` |
 | Live-analysis abuse (re-analysing frames, injecting paths) | Batches are claimed atomically: no overlapping frames, per-match frame budget, unique batch index, frames resolved against the user's own storage folder. One quota unit per match. | `20261024000200_live_analysis.sql`, `analyze-match/pipeline.ts` |
 | Rating manipulation (fake results, alt-account farming, races) | Ratings, history and titles are written only by the `ranked` function via `svc_apply_ranked_result` (no client write grants). Results come from an analysed recording linked before upload; the opponent can watch it and dispute; a recorder's own win needs the opponent's confirmation; max 3 ranked matches per pair per week; versioned rows reject concurrent overwrites; settlement applies once. | `20261028000100_ranked.sql`, `supabase/functions/ranked` |
@@ -215,12 +215,12 @@ repeat infringers in **Owner panel → Users**.
 ### Children's privacy (COPPA)
 
 - Everyone answers a neutral age screen (birth month and year, nothing
-  pre-selected, no hint of the cut-off) before using the app: on the email
-  sign-up form, and after the first Google sign-in.
-- Under 13 on the sign-up form: nothing is sent to the server. Under 13
-  after a Google sign-in: the `account` Edge Function deletes the account and
-  its storage at once and keeps nothing (`svc_record_age` stores no row).
-  Either way the device blocks another attempt for 24 hours.
+  pre-selected, no hint of the cut-off) before using the app, right after
+  their first sign-in (Clerk's sign-up screen asks only for the email,
+  password or Google).
+- Under 13: the server deletes the account and its storage at once and keeps
+  nothing (`svc_record_age` stores no row), and the device blocks another
+  attempt for 24 hours.
 - For everyone else the month is stored in `private.age_checks` (not exposed
   to the Data API, never shown to other users, included in the data export,
   deleted with the account).
@@ -270,10 +270,12 @@ Supabase → Authentication → Attack Protection.
 What runs on its own:
 
 - **Word filter** (`private.blocked_terms`): names, bios, match titles,
-  dispute notes and posts. Edit the list in the Owner panel → Moderation (end
-  a word with `*` to catch its endings). A post that matches is held back
-  (only its author sees it, and the app deletes it) and counts as a strike;
-  three strikes in 30 days ban the account. Strikes are kept 90 days.
+  dispute notes, posts and comments. Edit the list in the Owner panel →
+  Moderation (end a word with `*` to catch its endings). A post that matches
+  is held back (only its author sees it, and the app deletes it) and counts
+  as a strike; three strikes in 30 days ban the account. Strikes are kept 90
+  days. A comment that matches is refused. Post authors can delete any
+  comment on their posts and turn comments off.
 - **18+ check by the AI**: every analysis batch reports whether the frames
   show sexual content. A finding with confidence 0.7 or more moves the
   match's frames and video to the `moderation-quarantine` bucket, bans the

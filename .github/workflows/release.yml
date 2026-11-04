@@ -46,6 +46,17 @@ jobs:
       EXPO_PUBLIC_DMCA_AGENT_PHONE: ${{ vars.EXPO_PUBLIC_DMCA_AGENT_PHONE }}
       APP_VARIANT: production
     steps:
+      - name: Free disk space
+        # The release build outgrew a fresh runner's free space ("No space
+        # left on device" in Gradle's last tasks). Remove preinstalled
+        # toolchains this job never uses; the Android SDK, Java and Node stay.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+            /usr/share/swift /usr/local/share/powershell /opt/hostedtoolcache/CodeQL \
+            /usr/local/julia* /opt/az /usr/local/share/vcpkg
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          df -h /
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:

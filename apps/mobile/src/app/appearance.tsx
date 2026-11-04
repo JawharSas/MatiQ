@@ -9,8 +9,8 @@ import { type ThemePreference, useTheme } from '@/ui/ThemeProvider';
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
   { value: 'system', title: 'System', description: "Light or Dark, following your phone's setting" },
-  { value: 'light', title: 'Light', description: 'Dark text on light surfaces, easy to read in daylight' },
-  { value: 'dark', title: 'Dark', description: "MatIQ's classic look" },
+  { value: 'light', title: 'Light', description: 'Black text on white with red, easy to read in daylight' },
+  { value: 'dark', title: 'Dark', description: "Black with red, MatIQ's own look" },
   { value: 'midnight', title: 'Midnight', description: 'True black, gentle at night and on OLED screens' },
 ];
 

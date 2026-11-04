@@ -250,6 +250,14 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
       case 'update': {
         const rows = this.matching(viewer).filter((row) => canWrite(this.table, row, viewer!));
         checkUpdate(this.table, this.values as Row);
+        if (this.table === 'profiles') {
+          for (const row of rows) {
+            for (const column of ['username', 'display_name']) {
+              const value = (this.values as Row)[column];
+              if (value !== undefined && value !== row[column] && reservedForOther(value, row.id)) fail('23505', 'duplicate key value');
+            }
+          }
+        }
         for (const row of rows) {
           Object.assign(row, this.values);
         }
@@ -335,6 +343,22 @@ const FILTERED_COLUMNS: Record<string, string[]> = {
   profiles: ['username', 'display_name', 'bio'],
   matches: ['title', 'athlete_a_label', 'athlete_b_label'],
 };
+
+// Names only one account may use (neon/migrations/20261104000200_reserved_names.sql):
+// anyone else is told the name is taken, like any name in use. The real list
+// lives only in the database; this is a sample for the preview.
+const RESERVED_NAMES: Record<string, string> = { coachmax: 'coach.max@example.com' };
+const LOOK_ALIKES: Record<string, string> = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's' };
+const nameKey = (name: unknown) =>
+  String(name ?? '')
+    .toLowerCase()
+    .replace(/[013457@$]/g, (c) => LOOK_ALIKES[c]!)
+    .replace(/[^a-z0-9]+/g, '');
+
+function reservedForOther(name: unknown, uid: string): boolean {
+  const owner = RESERVED_NAMES[nameKey(name)];
+  return owner !== undefined && String(db.users.find((u) => u.id === uid)?.email ?? '').toLowerCase() !== owner;
+}
 
 function checkUpdate(table: string, values: Row) {
   if ((FILTERED_COLUMNS[table] ?? []).some((column) => textViolation(values[column]))) fail('22023', 'content_not_allowed');
@@ -575,7 +599,23 @@ function feedItem(post: Row, viewer: string) {
     totals: scorecard?.totals ?? null,
     like_count: db.post_likes.filter((like) => like.post_id === post.id).length,
     liked_by_me: db.post_likes.some((like) => like.post_id === post.id && like.user_id === viewer),
+    comment_count: visibleComments(post.id, viewer).length,
+    comments_enabled: post.comments_enabled !== false,
   };
+}
+
+/** A post the viewer can see, as the database's posts policy decides; null otherwise. */
+function visiblePost(postId: string, viewer: string) {
+  const post = db.posts.find((p) => p.id === postId);
+  if (!post || (post.moderation != null && post.author_id !== viewer) || !canViewAuthor(viewer, post.author_id, post.friends_only)) return null;
+  return post;
+}
+
+function visibleComments(postId: string, viewer: string) {
+  if (!visiblePost(postId, viewer)) return [];
+  return db.post_comments.filter(
+    (c) => c.post_id === postId && (c.author_id === viewer || (!isBanned(c.author_id) && !blocked(viewer, c.author_id))),
+  );
 }
 
 function relationship(viewer: string, other: string) {
@@ -633,6 +673,61 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
       .slice(0, p_limit)
       .map((post) => feedItem(post, viewer)),
+
+  get_post_comments: ({ p_post_id, p_limit = 100 }, viewer) => {
+    const post = visiblePost(p_post_id, viewer);
+    return visibleComments(p_post_id, viewer)
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, p_limit)
+      .map((c) => {
+        const author = profileOf(c.author_id)!;
+        return {
+          comment_id: c.id,
+          author_id: c.author_id,
+          username: author.username,
+          display_name: author.display_name,
+          avatar_path: author.avatar_path,
+          body: c.body,
+          created_at: c.created_at,
+          can_delete: c.author_id === viewer || post?.author_id === viewer,
+        };
+      });
+  },
+
+  get_post_comment_state: ({ p_post_id }, viewer) => {
+    const post = visiblePost(p_post_id, viewer);
+    if (!post) return [];
+    return [{ author_id: post.author_id, comments_enabled: post.comments_enabled !== false, comment_count: visibleComments(p_post_id, viewer).length }];
+  },
+
+  add_post_comment: ({ p_post_id, p_body }, viewer) => {
+    if (isBanned(viewer) || entitlementsOf(viewer).is_suspended) fail('42501', 'not authorized');
+    const post = visiblePost(p_post_id, viewer);
+    if (!post || post.moderation != null) fail('P0002', 'post not found');
+    if (post!.comments_enabled === false) fail('42501', 'comments_off', 'The author turned off comments on this post.');
+    const body = String(p_body ?? '').trim();
+    if (body.length === 0 || body.length > 500) fail('22023', 'invalid comment');
+    if (textViolation(body)) fail('22023', 'content_not_allowed', 'This text breaks the MatIQ community rules.');
+    const comment = { id: uuid(), post_id: p_post_id, author_id: viewer, body, created_at: now() };
+    db.post_comments.push(comment);
+    return comment.id;
+  },
+
+  delete_post_comment: ({ p_comment_id }, viewer) => {
+    const comment = db.post_comments.find((c) => c.id === p_comment_id);
+    if (!comment) return false;
+    const postAuthor = db.posts.find((p) => p.id === comment.post_id)?.author_id;
+    if (comment.author_id !== viewer && postAuthor !== viewer && !isOwner(viewer)) return false;
+    db.post_comments = db.post_comments.filter((c) => c.id !== p_comment_id);
+    return true;
+  },
+
+  set_post_comments: ({ p_post_id, p_enabled }, viewer) => {
+    const post = db.posts.find((p) => p.id === p_post_id && p.author_id === viewer);
+    if (!post) return false;
+    post.comments_enabled = p_enabled !== false;
+    return true;
+  },
 
   get_profile: ({ p_user_id }, viewer) => {
     const p = profileOf(p_user_id);
@@ -1063,7 +1158,6 @@ const FUNCTIONS: Record<string, (body: Row, method: string, viewer: string, para
 
 /** Any 6-digit code works in the preview, except 000000 (to show the error path). */
 const codeOk = (code: string) => /^\d{6}$/.test(code) && code !== '000000';
-const PREVIEW_TOTP_SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 const PREVIEW_BACKUP_CODES = ['prev-iewa-0001', 'prev-iewa-0002', 'prev-iewa-0003', 'prev-iewa-0004', 'prev-iewa-0005'];
 
 type ClerkResult = { error: { code: string; message: string } | null };
@@ -1090,8 +1184,6 @@ const totpOn = (uid: string) => db.mfa_factors.some((factor) => factor.user_id =
 /** Passwords changed in the preview (everyone starts with PREVIEW_PASSWORD), and who connected Google. */
 const passwords = new Map<string, string>();
 const passwordOf = (uid: string) => passwords.get(uid) ?? PREVIEW_PASSWORD;
-const googleConnected = new Set<string>();
-const googleConnecting = new Set<string>();
 
 export function subscribePreviewAuth(listener: () => void): () => void {
   authListeners.add(listener);
@@ -1237,71 +1329,17 @@ function buildUser() {
   const uid = me();
   if (!uid || !session) return null;
   const email = session.user.email;
-  const notify = () => setSession(session);
   return {
     id: uid,
     fullName: (profileOf(uid)?.display_name as string | undefined) ?? null,
+    username: (profileOf(uid)?.username as string | undefined) ?? null,
     unsafeMetadata: {},
     primaryEmailAddress: { emailAddress: email },
     totpEnabled: totpOn(uid),
     backupCodeEnabled: totpOn(uid),
     twoFactorEnabled: totpOn(uid),
     passwordEnabled: true,
-    externalAccounts: googleConnected.has(uid)
-      ? [
-          {
-            id: `google-${uid}`,
-            provider: 'google',
-            emailAddress: email.replace(/@.*/, '@gmail.com'),
-            verification: { status: 'verified' },
-            async destroy() {
-              await latency(150);
-              googleConnected.delete(uid);
-              notify();
-            },
-          },
-        ]
-      : [],
-    async updatePassword({ newPassword, currentPassword }: { newPassword: string; currentPassword?: string }) {
-      await latency(200);
-      if (currentPassword !== passwordOf(uid)) throw thrown('form_password_validation_failed');
-      passwords.set(uid, newPassword);
-      notify();
-      return previewUser();
-    },
-    /** Google's consent screen is skipped in the preview: the next reload finds the account connected. */
-    async createExternalAccount() {
-      await latency(150);
-      googleConnecting.add(uid);
-      return { verification: { externalVerificationRedirectURL: new URL('https://accounts.google.com/o/oauth2/v2/auth?preview=1') } };
-    },
-    async createTOTP() {
-      await latency(150);
-      return { id: 'totp', verified: false, secret: PREVIEW_TOTP_SECRET, uri: `otpauth://totp/MatIQ:${email}?secret=${PREVIEW_TOTP_SECRET}&issuer=MatIQ` };
-    },
-    async verifyTOTP({ code }: { code: string }) {
-      await latency(200);
-      if (!codeOk(code)) throw thrown('form_code_incorrect');
-      db.mfa_factors.push({ id: uuid(), user_id: uid, factor_type: 'totp', status: 'verified', created_at: now(), updated_at: now() });
-      notify();
-      return { id: 'totp', verified: true, backupCodes: PREVIEW_BACKUP_CODES };
-    },
-    async disableTOTP() {
-      db.mfa_factors = db.mfa_factors.filter((factor) => factor.user_id !== uid);
-      notify();
-      return { object: 'totp', deleted: true };
-    },
-    async createBackupCode() {
-      await latency(150);
-      return { id: 'backup', codes: PREVIEW_BACKUP_CODES };
-    },
-    async reload() {
-      if (googleConnecting.delete(uid)) {
-        googleConnected.add(uid);
-        notify();
-      }
-      return previewUser();
-    },
+    externalAccounts: [] as { provider: string; emailAddress: string }[],
     async getSessions() {
       return [];
     },
@@ -1322,7 +1360,7 @@ export function previewUser(): ReturnType<typeof buildUser> {
 
 // Storage --------------------------------------------------------------------------------
 
-const AVATAR_COLORS = ['#3B82F6', '#EF4444', '#F97316', '#22C55E', '#8B5CF6', '#EAB308', '#14B8A6', '#EC4899'];
+const AVATAR_COLORS = ['#3B82F6', '#EF4444', '#991B1B', '#22C55E', '#475569', '#0F766E', '#14B8A6', '#1E3A8A'];
 
 function avatarDataUri(path: string): string {
   const uid = path.split('/')[0] ?? '';

@@ -15,7 +15,7 @@ import { UpdateRequired } from '@/features/update/UpdateRequired';
 import { useUpdateRequired } from '@/features/update/useUpdateRequired';
 import { isBannedError } from '@/lib/errors';
 import { enableCertificatePinning } from '@/lib/ssl-pinning';
-import { openSecureStorage } from '@/lib/storage';
+import { openSecureStorage, writeCache } from '@/lib/storage';
 import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
 import { colors, isDarkTheme } from '@/ui/theme';
@@ -32,7 +32,14 @@ const onError = (error: unknown) => {
 };
 
 const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: (error, query) => query.queryKey[0] !== 'age-check' && onError(error) }),
+  queryCache: new QueryCache({
+    onError: (error, query) => query.queryKey[0] !== 'age-check' && onError(error),
+    // Queries made with persisted() keep their last result on this device.
+    onSuccess: (data, query) => {
+      const key = query.meta?.persist;
+      if (typeof key === 'string' && data !== undefined) writeCache(key, data);
+    },
+  }),
   mutationCache: new MutationCache({ onError }),
   defaultOptions: {
     queries: { retry: 1, staleTime: 15_000 },

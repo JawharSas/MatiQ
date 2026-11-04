@@ -5,8 +5,9 @@
  */
 
 import type { MatchResult, AthleteTotals } from '@matiq/rules-engine';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppError, fromPostgrest } from '@/lib/errors';
+import { persisted } from '@/lib/persisted';
 import { readCache, writeCache } from '@/lib/storage';
 import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
@@ -35,6 +36,9 @@ export interface FeedItem {
   totals: Record<'A' | 'B', AthleteTotals> | null;
   like_count: number;
   liked_by_me: boolean;
+  comment_count: number;
+  /** Off when the author turned comments off (when sharing, or later). */
+  comments_enabled: boolean;
 }
 
 export interface FeedFilter {
@@ -80,6 +84,25 @@ export function useToggleLike() {
         : await backend.from('post_likes').insert({ post_id: postId });
       if (error) throw fromPostgrest(error);
     },
+    // The heart and count change at once; a refused like puts them back.
+    onMutate: async ({ postId, liked }) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const before = queryClient.getQueriesData<InfiniteData<FeedItem[]>>({ queryKey: ['feed'] });
+      queryClient.setQueriesData<InfiniteData<FeedItem[]>>({ queryKey: ['feed'] }, (feed) =>
+        feed && {
+          ...feed,
+          pages: feed.pages.map((page) =>
+            page.map((post) =>
+              post.post_id === postId ? { ...post, liked_by_me: !liked, like_count: Math.max(0, post.like_count + (liked ? -1 : 1)) } : post,
+            ),
+          ),
+        },
+      );
+      return { before };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [key, data] of context?.before ?? []) queryClient.setQueryData(key, data);
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 }
@@ -88,6 +111,7 @@ export async function createPost(input: {
   matchId: string | null;
   body: string;
   friendsOnly: boolean;
+  commentsEnabled: boolean;
   highlight?: { start: number; end: number };
 }): Promise<void> {
   const { data, error } = await backend
@@ -96,6 +120,7 @@ export async function createPost(input: {
       match_id: input.matchId,
       body: cleanText(input.body, { multiline: true }),
       friends_only: input.friendsOnly,
+      comments_enabled: input.commentsEnabled,
       highlight_start_ms: input.highlight?.start ?? null,
       highlight_end_ms: input.highlight?.end ?? null,
     })
@@ -121,6 +146,113 @@ export async function deletePost(postId: string): Promise<void> {
   if (error) throw fromPostgrest(error);
 }
 
+// Comments ---------------------------------------------------------------------
+
+export interface PostComment {
+  comment_id: string;
+  author_id: string;
+  username: string;
+  display_name: string;
+  avatar_path: string | null;
+  body: string;
+  created_at: string;
+  /** The comment's writer or the post's author. */
+  can_delete: boolean;
+}
+
+export interface CommentState {
+  author_id: string;
+  comments_enabled: boolean;
+  comment_count: number;
+}
+
+export const COMMENT_MAX_LENGTH = 500;
+
+/** The post's newest comments, oldest first, as a conversation reads. */
+export function useComments(postId: string) {
+  return useQuery({
+    queryKey: ['comments', postId],
+    ...persisted<PostComment[]>(`comments:${postId}`),
+    queryFn: async () => {
+      const { data, error } = await backend.rpc('get_post_comments', { p_post_id: postId, p_limit: 100 }, { get: true });
+      if (error) throw fromPostgrest(error);
+      return ((data ?? []) as PostComment[]).slice().reverse();
+    },
+  });
+}
+
+/** Who wrote the post and whether it takes comments; null when it can't be seen. */
+export function useCommentState(postId: string) {
+  return useQuery({
+    queryKey: ['comments', postId, 'state'],
+    queryFn: async () => {
+      const { data, error } = await backend.rpc('get_post_comment_state', { p_post_id: postId }, { get: true });
+      if (error) throw fromPostgrest(error);
+      return ((data ?? []) as CommentState[])[0] ?? null;
+    },
+  });
+}
+
+function refreshComments(queryClient: ReturnType<typeof useQueryClient>, postId: string) {
+  void queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+  void queryClient.invalidateQueries({ queryKey: ['feed'] });
+}
+
+export function useAddComment(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: string) => {
+      const { error } = await backend.rpc('add_post_comment', { p_post_id: postId, p_body: cleanText(body, { multiline: true }) });
+      if (error) throw fromPostgrest(error);
+    },
+    onSuccess: () => refreshComments(queryClient, postId),
+  });
+}
+
+export function useDeleteComment(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      const { error } = await backend.rpc('delete_post_comment', { p_comment_id: commentId });
+      if (error) throw fromPostgrest(error);
+    },
+    // Gone from the list at once; a refusal puts it back.
+    onMutate: async (commentId) => {
+      await queryClient.cancelQueries({ queryKey: ['comments', postId] });
+      const before = queryClient.getQueryData<PostComment[]>(['comments', postId]);
+      queryClient.setQueryData<PostComment[]>(['comments', postId], (list) => list?.filter((c) => c.comment_id !== commentId));
+      return { before };
+    },
+    onError: (_error, _commentId, context) => {
+      if (context?.before) queryClient.setQueryData(['comments', postId], context.before);
+    },
+    onSettled: () => refreshComments(queryClient, postId),
+  });
+}
+
+/** The post's author turns its comments on or off. */
+export function useSetCommentsEnabled(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { data, error } = await backend.rpc('set_post_comments', { p_post_id: postId, p_enabled: enabled });
+      if (error) throw fromPostgrest(error);
+      if (data !== true) throw new AppError('42501', "You can't change this post's comments.");
+    },
+    onMutate: async (enabled) => {
+      const key = ['comments', postId, 'state'];
+      await queryClient.cancelQueries({ queryKey: key });
+      const before = queryClient.getQueryData<CommentState | null>(key);
+      queryClient.setQueryData<CommentState | null>(key, (state) => state && { ...state, comments_enabled: enabled });
+      return { before };
+    },
+    onError: (_error, _enabled, context) => {
+      queryClient.setQueryData(['comments', postId, 'state'], context?.before);
+    },
+    onSettled: () => refreshComments(queryClient, postId),
+  });
+}
+
 // Profiles ---------------------------------------------------------------------
 
 export interface ProfileCard {
@@ -140,6 +272,7 @@ export interface ProfileCard {
 export function useProfile(userId: string) {
   return useQuery({
     queryKey: ['profile', userId],
+    ...persisted<ProfileCard | null>(`profile:${userId}`),
     queryFn: async () => {
       const { data, error } = await backend.rpc('get_profile', { p_user_id: userId });
       if (error) throw fromPostgrest(error);
@@ -171,6 +304,7 @@ export interface FriendEntry {
 export function useFriends() {
   return useQuery({
     queryKey: ['friends'],
+    ...persisted<FriendEntry[]>('friends'),
     queryFn: async () => {
       const { data, error } = await backend.rpc('get_friends');
       if (error) throw fromPostgrest(error);

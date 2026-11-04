@@ -58,12 +58,12 @@ export default function AppLayout() {
       <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
       <Stack.Screen name="share/[matchId]" options={{ title: 'Share', presentation: 'modal' }} />
       <Stack.Screen name="report/[postId]" options={{ title: 'Report post', presentation: 'modal' }} />
+      <Stack.Screen name="comments/[postId]" options={{ title: 'Comments' }} />
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
-      <Stack.Screen name="settings/password" options={{ title: 'Password' }} />
-      <Stack.Screen name="settings/google" options={{ title: 'Google' }} />
+      {/* Clerk's profile screen brings its own header and back button. */}
+      <Stack.Screen name="settings/account" options={{ headerShown: false }} />
       <Stack.Screen name="settings/api-keys" options={{ title: 'AI provider' }} />
-      <Stack.Screen name="settings/two-factor" options={{ title: 'Two-factor authentication' }} />
       <Stack.Screen name="admin" options={{ title: 'Owner panel' }} />
       <Stack.Screen name="ranked/opponents" options={{ title: 'Opponents' }} />
       <Stack.Screen name="ranked/leaderboard" options={{ title: 'Ladder' }} />

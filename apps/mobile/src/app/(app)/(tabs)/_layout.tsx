@@ -39,7 +39,7 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, lineHeight: 14, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 12, lineHeight: 15, fontWeight: '600' },
         sceneStyle: { backgroundColor: colors.background },
       }}
     >

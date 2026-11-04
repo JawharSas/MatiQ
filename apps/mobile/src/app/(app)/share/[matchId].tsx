@@ -12,7 +12,7 @@ import { useUserId } from '@/features/auth/AuthProvider';
 import { createPost, useProfile } from '@/features/social/api';
 import { errorMessage, isBannedError } from '@/lib/errors';
 import { firstIssue, postSchema } from '@/lib/validation';
-import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow } from '@/ui/components';
+import { Button, Caption, Card, ErrorText, Heading, Loading, Screen, TextField, ToggleRow, withPressFeedback } from '@/ui/components';
 import { colors, font } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -26,6 +26,7 @@ export default function ShareScreen() {
   const profile = useProfile(userId);
   const [body, setBody] = useState('');
   const [friendsOnly, setFriendsOnly] = useState(false);
+  const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [highlight, setHighlight] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +45,7 @@ export default function ShareScreen() {
         matchId,
         body: parsed.data.body,
         friendsOnly: parsed.data.friendsOnly,
+        commentsEnabled,
         ...(chosen ? { highlight: { start: chosen.start, end: Math.min(chosen.end, chosen.start + 60_000) } } : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ['feed'] });
@@ -74,7 +76,7 @@ export default function ShareScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: selected }}
                   aria-checked={selected}
-                  style={styles.option}
+                  style={withPressFeedback(styles.option)}
                 >
                   {/* The ring shows the choice without relying on colour (WCAG 1.4.1). */}
                   <Ionicons aria-hidden name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? colors.accent : colors.textMuted} />
@@ -97,10 +99,20 @@ export default function ShareScreen() {
               : 'Your account is private, so only your friends can see this post.'
           }
         />
+        <ToggleRow
+          label="Allow comments"
+          value={commentsEnabled}
+          onValueChange={setCommentsEnabled}
+          description={
+            commentsEnabled
+              ? 'People who can see this post can comment on it. You can turn this off later.'
+              : 'Nobody can comment. You can turn comments on later from the post.'
+          }
+        />
         <Caption>Viewers can open the scorecard{match.data?.has_video ? ' and video' : ''} of this match.</Caption>
       </Card>
       <ErrorText>{error}</ErrorText>
-      <Button label="Post" onPress={() => void share()} loading={busy} />
+      <Button label="Post" onPress={() => share()} loading={busy} />
       <Button label="Cancel" variant="secondary" disabled={busy} onPress={() => router.back()} />
     </Screen>
   );

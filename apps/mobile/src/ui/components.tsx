@@ -1,12 +1,15 @@
 'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Children, type ComponentProps, Fragment, type ReactNode, useState } from 'react';
+import { Children, type ComponentProps, Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
+  type PressableProps,
   type PressableStateCallbackType,
   ScrollView,
+  type StyleProp,
   StyleSheet,
   Switch,
   TextInput,
@@ -24,6 +27,57 @@ export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /** Pressable state on web also reports keyboard focus. */
 type PressState = PressableStateCallbackType & { focused?: boolean };
+
+/**
+ * A tap handler that can't run twice at once: a second tap is ignored while
+ * the first one's promise is pending or, when it returns none, for the
+ * moment before the screen shows its loading state (an accidental double
+ * tap lands within it; a deliberate second try doesn't). Stops double submits.
+ */
+export function useSinglePress(onPress: () => void | Promise<unknown>): () => void {
+  const running = useRef(false);
+  return () => {
+    if (running.current) return;
+    running.current = true;
+    const release = () => {
+      running.current = false;
+    };
+    try {
+      const result = onPress();
+      if (result instanceof Promise) void result.finally(release);
+      else setTimeout(release, 350);
+    } catch (error) {
+      release();
+      throw error;
+    }
+  };
+}
+
+/**
+ * Pressed-state feedback for a custom Pressable's style: it dims while held
+ * (no movement, so it suits reduced motion too).
+ *
+ *   <Pressable style={withPressFeedback(styles.row)} />
+ *
+ * Inside <Link asChild>, use LinkPressable.
+ */
+export function withPressFeedback(style: StyleProp<ViewStyle>): (state: PressableStateCallbackType) => StyleProp<ViewStyle> {
+  return ({ pressed }) => [style, pressed && { opacity: 0.7 }];
+}
+
+/**
+ * A Pressable inside <Link asChild>. Link passes its props on as they are (an
+ * <a> on the web), which drops a style function, so the layout and the
+ * pressed dim go on an inner View here instead.
+ *
+ * On the web Link merges `style` by spreading it, so it takes one style
+ * object: merge several with a spread.
+ *
+ *   <Link href="/user/1" asChild><LinkPressable style={styles.row}>...</LinkPressable></Link>
+ */
+export function LinkPressable({ style, children, ...props }: Omit<PressableProps, 'style' | 'children'> & { style?: ViewStyle; children: ReactNode }) {
+  return <Pressable {...props}>{({ pressed }) => <View style={[style, pressed && { opacity: 0.7 }]}>{children}</View>}</Pressable>;
+}
 
 /** Visible keyboard focus (WCAG 2.4.7) and the press feedback, without motion when it is reduced. */
 export function usePressStyle() {
@@ -45,7 +99,14 @@ export function Screen({ children, scroll = true, focusable = false }: { childre
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.screenContent} keyboardShouldPersistTaps="handled" tabIndex={focusable ? 0 : undefined}>
+        // The keyboard never covers a field: iOS insets the content, Android resizes the window (app.config.ts).
+        <ScrollView
+          contentContainerStyle={styles.screenContent}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
+          tabIndex={focusable ? 0 : undefined}
+        >
           {children}
         </ScrollView>
       ) : (
@@ -137,7 +198,8 @@ export function Button({
   hint,
 }: {
   label: string;
-  onPress: () => void;
+  /** May return a promise: further presses are ignored until it settles. */
+  onPress: () => void | Promise<unknown>;
   variant?: ButtonVariant;
   /** `sm` for actions inside a list item. */
   size?: 'md' | 'sm';
@@ -150,6 +212,7 @@ export function Button({
   useTheme();
   const { highContrast } = useA11y();
   const pressStyle = usePressStyle();
+  const handlePress = useSinglePress(onPress);
   const inactive = disabled || loading;
   const labelColor = buttonLabelColor()[variant];
   return (
@@ -159,7 +222,7 @@ export function Button({
       accessibilityLabel={label}
       accessibilityHint={hint}
       accessibilityState={{ disabled: inactive, busy: loading }}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={inactive}
       style={(state) => [
         styles.button,
@@ -249,7 +312,7 @@ export function ToggleRow({
         onValueChange={onValueChange}
         disabled={disabled}
         // The "off" track keeps 3:1 against the card so the switch stays visible (WCAG 1.4.11).
-        trackColor={{ true: colors.accent, false: colors.control }}
+        trackColor={{ true: colors.accentFill, false: colors.control }}
         // Explicit on every platform: Android and web otherwise use their own accent colours.
         thumbColor={colors.text}
         // @ts-expect-error react-native-web only: the "on" knob colour.
@@ -434,16 +497,16 @@ export function ListRow({
   title: string;
   subtitle?: string;
   value?: string;
-  onPress?: () => void;
+  onPress?: () => void | Promise<unknown>;
   destructive?: boolean;
 }) {
   useTheme();
-  const pressStyle = usePressStyle();
+  const handlePress = useSinglePress(onPress ?? (() => undefined));
   return (
     <Pressable
       // The name comes from the visible title, subtitle and value (WCAG 2.5.3).
       accessibilityRole={onPress ? 'button' : undefined}
-      onPress={onPress}
+      onPress={onPress ? handlePress : undefined}
       disabled={!onPress}
       style={(state) => [styles.listRow, state.pressed && { backgroundColor: colors.surfaceRaised }, (state as PressState).focused && styles.focusRing]}
     >
@@ -526,21 +589,55 @@ export function StatusText({ children }: { children: ReactNode }) {
   );
 }
 
-export function Loading({ label = 'Loading' }: { label?: string }) {
+/**
+ * While a screen loads: placeholder cards shaped like content, not a
+ * spinner. They pulse gently unless the person turned motion off.
+ */
+export function Loading({ label = 'Loading', inline = false }: { label?: string; /** Inside a list that already has its padding. */ inline?: boolean }) {
   useTheme();
+  const { reduceMotion } = useA11y();
+  const [pulse] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.5, duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, reduceMotion]);
   return (
-    <View style={[styles.fill, styles.center, { backgroundColor: colors.background }]}>
-      <ActivityIndicator color={colors.accent} accessibilityLabel={label} />
+    <View style={inline ? styles.skeletonInline : [styles.fill, styles.skeletonPage]} accessibilityRole="progressbar" accessibilityLabel={label} aria-busy>
+      {[0, 1, 2].map((card) => (
+        <Animated.View key={card} style={[styles.skeletonCard, { opacity: pulse }]} aria-hidden>
+          <View style={styles.row}>
+            <View style={styles.skeletonAvatar} />
+            <View style={[styles.fill, { gap: spacing.sm }]}>
+              <View style={[styles.skeletonLine, { width: '55%' }]} />
+              <View style={[styles.skeletonLine, { width: '30%' }]} />
+            </View>
+          </View>
+          <View style={[styles.skeletonLine, { width: '92%' }]} />
+          <View style={[styles.skeletonLine, { width: '68%' }]} />
+        </Animated.View>
+      ))}
     </View>
   );
 }
 
 export const styles = themedStyles(() => ({
   fill: { flex: 1 },
+  skeletonPage: { backgroundColor: colors.background, paddingHorizontal: spacing.lg, paddingTop: spacing.xl, gap: spacing.md },
+  skeletonInline: { gap: spacing.md },
+  skeletonCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, gap: 10 },
+  skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceHigh },
+  skeletonLine: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh },
   center: { alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   screen: { flex: 1, backgroundColor: colors.background },
-  screenContent: { paddingHorizontal: 20, paddingTop: spacing.md, gap: spacing.lg, paddingBottom: 40 },
+  screenContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md, paddingBottom: spacing.xl },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,17 +648,17 @@ export const styles = themedStyles(() => ({
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.hairline,
-    padding: 18,
-    gap: spacing.md,
+    padding: 14,
+    gap: 10,
   },
   highContrastBorder: { borderWidth: 1.5, borderColor: colors.textMuted },
   pressed: { opacity: 0.85, transform: [{ scale: 0.985 }] },
   focusRing: { outlineColor: colors.focus, outlineStyle: 'solid', outlineWidth: 2, outlineOffset: 2 },
   button: {
-    minHeight: 52,
+    minHeight: 48,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -569,7 +666,7 @@ export const styles = themedStyles(() => ({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
-  button_primary: { backgroundColor: colors.accent },
+  button_primary: { backgroundColor: colors.accentFill },
   button_secondary: { backgroundColor: colors.surfaceRaised },
   button_danger: { backgroundColor: colors.dangerSoft },
   button_ghost: { backgroundColor: 'transparent', minHeight: 44 },
@@ -580,7 +677,7 @@ export const styles = themedStyles(() => ({
   field: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   input: {
-    minHeight: 52,
+    minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
     // Visible outline: the field boundary keeps 3:1 against the card (WCAG 1.4.11).
@@ -588,7 +685,7 @@ export const styles = themedStyles(() => ({
     backgroundColor: colors.surfaceRaised,
     color: colors.text,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   inputMultiline: { minHeight: 104, paddingTop: 14, textAlignVertical: 'top' },
   errorInline: { color: colors.danger, fontSize: 13 },
@@ -613,7 +710,7 @@ export const styles = themedStyles(() => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkBoxChecked: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkBoxChecked: { backgroundColor: colors.accentFill, borderColor: colors.accentFill },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     flexGrow: 1,
@@ -626,7 +723,7 @@ export const styles = themedStyles(() => ({
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  chipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipSelected: { backgroundColor: colors.accentFill, borderColor: colors.accentFill },
   chipLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
   chipLabelSelected: { color: colors.accentText, fontWeight: '800' },
   segmented: {
@@ -661,7 +758,7 @@ export const styles = themedStyles(() => ({
     overflow: 'hidden',
   },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 64 },
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 60, paddingHorizontal: 14, paddingVertical: 12 },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.md, paddingVertical: 10 },
   listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
   statTile: { flex: 1, backgroundColor: colors.surfaceRaised, borderRadius: radius.lg, padding: 14, gap: 4 },
   statValue: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },

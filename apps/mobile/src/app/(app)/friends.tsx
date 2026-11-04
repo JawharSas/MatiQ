@@ -3,12 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useDeferredValue, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/ui/text';
 import { type FriendEntry, searchProfiles, useFriendAction, useFriends } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
 import { errorMessage } from '@/lib/errors';
-import { Button, Caption, Card, ErrorText, Heading, Screen, TextField } from '@/ui/components';
+import { Button, Caption, Card, EmptyState, ErrorText, Heading, LinkPressable, Screen, TextField } from '@/ui/components';
 import { font, spacing } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -67,7 +67,9 @@ export default function FriendsScreen() {
           </Card>
         ) : null,
       )}
-      {friends.data?.length === 0 ? <Caption>No friends yet. Search for training partners above.</Caption> : null}
+      {friends.data?.length === 0 ? (
+        <EmptyState icon="people-outline" title="No training partners yet" body="Search above by username to add the people you train with. Their matches then show in your Friends feed." />
+      ) : null}
     </Screen>
   );
 }
@@ -76,13 +78,13 @@ function ProfileLink({ id, name, username, avatarPath }: { id: string; name: str
   useTheme();
   return (
     <Link href={{ pathname: '/user/[id]', params: { id } }} asChild>
-      <Pressable accessibilityRole="link" style={{ paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+      <LinkPressable accessibilityRole="link" style={{ paddingVertical: spacing.xs, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 44 }}>
         <Avatar path={avatarPath} name={name} />
         <View>
           <Text style={font.body}>{name}</Text>
           <Caption>@{username}</Caption>
         </View>
-      </Pressable>
+      </LinkPressable>
     </Link>
   );
 }

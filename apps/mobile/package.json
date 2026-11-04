@@ -1,6 +1,6 @@
 {
   "name": "@matiq/mobile",
-  "version": "1.7.0",
+  "version": "1.8.6",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@clerk/expo": "4.14.4",
+    "@clerk/expo-native-components": "0.4.4",
     "@expo/vector-icons": "15.1.1",
     "@matiq/rules-engine": "*",
     "@supabase/postgrest-js": "2.117.3",

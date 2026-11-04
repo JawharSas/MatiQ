@@ -35,11 +35,6 @@ export async function ageCheckLocked(): Promise<boolean> {
   return Number.isFinite(until) && until > Date.now();
 }
 
-/** Email sign-ups have no session yet: keep the month until the first sign-in. */
-export async function rememberBirthMonthForSignup(email: string, birth: BirthMonth): Promise<void> {
-  (await openSecureStorage()).set(pendingKey(email), JSON.stringify(birth));
-}
-
 /**
  * 'done' when the check is on record, 'needed' when the person must answer it,
  * 'not_eligible' when the month remembered from sign-up was under 13 (the

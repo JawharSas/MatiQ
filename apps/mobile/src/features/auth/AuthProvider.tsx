@@ -1,6 +1,6 @@
 import { useAuth as useClerkAuth, useUser } from '@clerk/expo';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, type ReactNode, use, useEffect, useState } from 'react';
+import { createContext, type ReactNode, use, useEffect, useRef, useState } from 'react';
 import { backend, setTokenGetter } from '@/lib/backend';
 import { fromPostgrest } from '@/lib/errors';
 import { clearCache } from '@/lib/storage';
@@ -27,19 +27,20 @@ const CLERK_LOAD_TIMEOUT_MS = 30_000;
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
 
 /**
- * Clerk handles signing in (email and password, Google, two-factor). Once
- * a Clerk session exists, the backend client sends its token with every
- * request and the MatIQ account is opened with `register_user`: the same
- * account as before for people who had one (imported with their ID), a new
- * one on first sign-in, with the username and display name from sign-up.
+ * Clerk handles signing in (its native AuthView: email and password, Google,
+ * two-factor). Once a Clerk session exists, the backend client sends its
+ * token with every request and the MatIQ account is opened with
+ * `register_user`: the same account as before for people who had one
+ * (imported with their ID), a new one on first sign-in, named after the
+ * Clerk username and name.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { isLoaded, isSignedIn, getToken, signOut: clerkSignOut } = useClerkAuth();
   const { user } = useUser();
-  const [userId, setUserId] = useState<string | null>(null);
+  // The MatIQ account and the Clerk user it was opened for.
+  const [account, setAccount] = useState<{ clerkUserId: string; userId: string; isOwner: boolean } | null>(null);
   const [accountError, setAccountError] = useState<Error | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
   const [clerkLoadTimedOut, setClerkLoadTimedOut] = useState(false);
 
   useEffect(() => {
@@ -56,15 +57,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoaded]);
 
   const clerkUserId = isSignedIn ? (user?.id ?? null) : null;
+  // Nobody until the account for this Clerk user is open: after switching
+  // accounts in Clerk's profile screen, the previous one never shows through.
+  const current = account && account.clerkUserId === clerkUserId ? account : null;
+  const userId = current?.userId ?? null;
   // Plain values, so a refreshed user object (after turning on two-factor,
   // say) doesn't open the account again.
+  // (Accounts made before Clerk's own sign-up screen kept these in unsafeMetadata.)
   const metadata = (user?.unsafeMetadata ?? {}) as { username?: unknown; displayName?: unknown };
-  const username = text(metadata.username);
+  const username = text(metadata.username) ?? text(user?.username);
   const displayName = text(metadata.displayName) ?? text(user?.fullName);
+
+  // The session can end or switch to another account outside the app's Sign
+  // out (Clerk's profile screen, a revoked session): this device's MatIQ data
+  // goes with the previous account either way.
+  const previousClerkUserId = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousClerkUserId.current;
+    previousClerkUserId.current = clerkUserId;
+    if (previous === null || previous === clerkUserId) return;
+    clearCache();
+    queryClient.clear();
+  }, [clerkUserId, queryClient]);
+
   useEffect(() => {
     if (!clerkUserId) {
-      setUserId(null);
-      setIsOwner(false);
+      setAccount(null);
       return;
     }
     let cancelled = false;
@@ -76,10 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccountError(fromPostgrest(error) ?? new Error('No account'));
         return;
       }
-      setUserId(data);
       // GET: answered even before the age check, when other requests are refused.
       const owner = await backend.rpc('am_i_owner', undefined, { get: true });
-      if (!cancelled) setIsOwner(owner.data === true);
+      if (!cancelled) setAccount({ clerkUserId, userId: data, isOwner: owner.data === true });
     })();
     return () => {
       cancelled = true;
@@ -94,8 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clerkSignOut();
     clearCache();
     queryClient.clear();
-    setUserId(null);
-    setIsOwner(false);
+    setAccount(null);
   };
 
   return (
@@ -112,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         email: user?.primaryEmailAddress?.emailAddress ?? '',
         accountError,
-        isOwner,
+        isOwner: current?.isOwner ?? false,
         signOut,
       }}
     >

@@ -1,5 +1,6 @@
 'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
 
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { type Discipline, type TierId, tierFor, titleById } from '@matiq/rules-engine';
 import { View } from 'react-native';
 import { Text } from '@/ui/text';
@@ -22,7 +23,7 @@ const BELT_COLORS: Record<TierId, { fill: string; text: string }> = {
   silver: { fill: '#2563EB', text: '#FFFFFF' },
   gold: { fill: '#7C3AED', text: '#FFFFFF' },
   platinum: { fill: '#7C4A1E', text: '#FFFFFF' },
-  grandmaster: { fill: '#0B0B0B', text: '#F97316' },
+  grandmaster: { fill: '#0B0B0B', text: '#F87171' },
 };
 
 export function TierBadge({ rating, games, compact = false }: { rating: number; games: number; compact?: boolean }) {
@@ -61,7 +62,8 @@ export function TitleChip({ titleId, featured = false }: { titleId: string; feat
   if (!title) return null;
   return (
     <View style={[styles.chip, featured && styles.chipFeatured]}>
-      <Text style={[styles.chipText, featured && { color: colors.accentText }]}>{featured ? '★ ' : ''}{title.name}</Text>
+      {featured ? <Ionicons name="star" size={12} color={colors.accentText} aria-hidden /> : null}
+      <Text style={[styles.chipText, featured && { color: colors.accentText }]}>{title.name}</Text>
     </View>
   );
 }
@@ -114,8 +116,8 @@ const styles = themedStyles(() => ({
   badgeText: { fontSize: 12, fontWeight: '800' },
   track: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceRaised, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3 },
-  chip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  chipFeatured: { backgroundColor: colors.accent, borderColor: colors.accent, alignSelf: 'flex-start' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  chipFeatured: { backgroundColor: colors.accentFill, borderColor: colors.accentFill, alignSelf: 'flex-start' },
   chipText: { color: colors.text, fontSize: 12, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

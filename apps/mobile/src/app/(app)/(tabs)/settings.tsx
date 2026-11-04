@@ -23,8 +23,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { signOut, email } = useAuth();
   const { user } = useUser();
-  const google = user?.externalAccounts.find((account) => account.provider === 'google');
-  const googleConnected = google?.verification?.status === 'verified';
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -78,24 +76,11 @@ export default function SettingsScreen() {
       <ListGroup>
         <ListRow icon="mail" title="Email" subtitle={email || 'Not set'} />
         <ListRow
-          icon="lock-closed"
-          title="Password"
-          subtitle={user?.passwordEnabled ? 'Change your password' : 'Set one to also sign in with your email'}
-          onPress={() => router.push('/settings/password')}
-        />
-        <ListRow
-          icon="logo-google"
-          title="Google"
-          subtitle={googleConnected ? `Connected as ${google?.emailAddress ?? 'your Google account'}` : 'Connect to sign in with Google'}
-          value={googleConnected ? 'On' : 'Off'}
-          onPress={() => router.push('/settings/google')}
-        />
-        <ListRow
-          icon="shield-checkmark"
-          title="Two-factor authentication"
-          subtitle="A code from your authenticator app when you sign in"
-          value={user?.totpEnabled ? 'On' : 'Off'}
-          onPress={() => router.push('/settings/two-factor')}
+          icon="person-circle"
+          title="Account and security"
+          subtitle="Password, Google, two-factor and devices"
+          value={user?.twoFactorEnabled ? '2FA on' : undefined}
+          onPress={() => router.push('/settings/account')}
         />
       </ListGroup>
 
@@ -170,12 +155,12 @@ export default function SettingsScreen() {
 
       <SectionHeader title="Session" />
       <ListGroup>
-        <ListRow icon="log-out" tone="neutral" title="Sign out" onPress={() => void signOut()} />
+        <ListRow icon="log-out" tone="neutral" title="Sign out" onPress={() => signOut()} />
         <ListRow
           icon="phone-portrait"
           tone="neutral"
           title="Sign out of all devices"
-          onPress={() => void signOut({ everywhere: true })}
+          onPress={() => signOut({ everywhere: true })}
         />
       </ListGroup>
 
