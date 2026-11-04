@@ -92,14 +92,16 @@ their verified email.
   -> Sessions -> Customize session token, or the instance config's
   `session.claims`). Without it every signed-in request fails with 42501
   ("You don't have permission to do that." in the app) right after sign-in.
-- "Check sign-in" (Actions) takes a signed-in user's live Clerk session and
-  makes the app's first calls with a real token, printing the token's
-  claims and the database's own answers.
-- Storage calls become `files` function calls returning presigned upload /
-  download links after the same checks the storage policies made
-  (own folder, fixed file names, size and type, banned users refused).
-- `supabase.functions.invoke(...)` becomes a call to the matching Neon
-  Function URL with the Clerk token.
+- Identity in SQL comes from `app.claims()` (compat.sql), which reads the
+  `request.jwt.claims` setting the Data API sets. Don't call `auth.user_id()`
+  or `auth.session()` first in a function: pg_session_jwt loads on its first
+  use in a connection, and loading it inside a SECURITY DEFINER function
+  drops the request's claims, so the first request on a new connection looks
+  signed out.
+- "Check sign-in" (Actions; the Release workflow needs it) signs in to the
+  live backend the way the app does (Clerk's Frontend API as a native
+  client, with a one-time sign-in token), checks the token's `role` claim
+  and opens the account five times with fresh tokens.
 
 ## Server functions
 

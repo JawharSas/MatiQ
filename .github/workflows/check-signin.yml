@@ -22,10 +22,6 @@ on:
         description: Clerk user ID (user_...); empty = CHECK_SIGNIN_USER_ID or the latest signed-in user
         required: false
         type: string
-      debug_identity:
-        description: Also call zz_debug_identity first in each round (temporary diagnostic)
-        required: false
-        type: boolean
   workflow_call:
     inputs:
       user_id:
@@ -45,7 +41,6 @@ jobs:
       DATA_API_URL: ${{ vars.EXPO_PUBLIC_DATA_API_URL || secrets.EXPO_PUBLIC_DATA_API_URL }}
       CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       USER_ID: ${{ inputs.user_id || vars.CHECK_SIGNIN_USER_ID }}
-      DEBUG_IDENTITY: ${{ inputs.debug_identity || false }}
     steps:
       - name: Sign in and open the account
         run: |
@@ -102,7 +97,6 @@ jobs:
               echo "::error::Clerk's session tokens have no \"role\": \"authenticated\" claim, so the Data API runs every request as anonymous (42501 after sign-in). Add it under Clerk Dashboard -> Sessions -> Customize session token."
               exit 1
             fi
-            [ "${DEBUG_IDENTITY:-}" = true ] && { keep=$failed; call zz_debug_identity POST "$jwt"; failed=$keep; }
             call register_user POST "$jwt"
             call am_i_owner GET "$jwt"
             [ "$round" = 5 ] || sleep 3

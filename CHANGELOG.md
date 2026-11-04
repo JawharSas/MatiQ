@@ -18,11 +18,22 @@ pre-release channels are named in the release title.
   - Clerk's session tokens had no `role` claim, so the Data API ran every
     request as `anonymous` (42501). Both Clerk instances now add
     `"role": "authenticated"` (session claims).
+  - The first request on every new database connection looked signed out
+    ("not signed in" from `register_user` right after sign-in, no user in
+    policies): pg_session_jwt loads on its first use in a connection, and
+    loading it inside a SECURITY DEFINER function makes Postgres drop the
+    request's `request.jwt.claims`. `app.claims()` (compat.sql) reads that
+    setting directly and only asks the extension when it is empty;
+    `app.uid()`, `app.jwt()`, `app.role()` and `register_user` (migration
+    `20261104000300_register_user_claims`) use it. Database test
+    `05_request_claims`.
 - New "Check sign-in" workflow: a real token from a user's live Clerk
   session through the app's first calls, printing the claims and the
   database's own answers.
 
 ### App
+- Opening the account after sign-in is tried three times (0.8 s and 1.6 s
+  apart, with a fresh token) before any error shows.
 - The "account didn't open" screen after sign-in says so, shows the error
   code and offers **Try again** (with a fresh Clerk token) next to Sign out.
   The app also tries again when you come back to it. A ban still shows only
@@ -34,7 +45,9 @@ pre-release channels are named in the release title.
   Frontend API as a native client, with a one-time sign-in token for
   `CHECK_SIGNIN_USER_ID` or the latest signed-in user), requires
   `"role": "authenticated"` in the session token and HTTP 200 from
-  `register_user` and `am_i_owner`, then revokes that session.
+  `register_user` and `am_i_owner` in five rounds with fresh tokens (the
+  first is usually on a new database connection), then revokes that
+  session.
 - Version 2.1.4 (from 1.8.6).
 
 ## [1.8.6] Alpha, 2026-11-04

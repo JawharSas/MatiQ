@@ -129,6 +129,33 @@ revoke all on app.sessions, app.audit_log_entries, app.mfa_factors from public, 
 
 -- The request -------------------------------------------------------------------
 
+-- The verified claims of the request's token. The Data API checks the token
+-- and puts its claims in `request.jwt.claims` for the request; Neon's
+-- pg_session_jwt (`auth.session()`, `auth.user_id()`) reads that setting.
+-- The setting is read here directly, and the extension is only asked when it
+-- is empty: pg_session_jwt loads on its first use in a database connection,
+-- and when that happens inside a SECURITY DEFINER function (every function
+-- here is one) Postgres drops the request's claims ("cannot set parameter
+-- request.jwt.claims within security-definer function"). The first request
+-- on every new connection then looked signed out: register_user answered
+-- "not signed in" right after sign-in, and policies saw no user.
+create or replace function app.claims()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  raw text := current_setting('request.jwt.claims', true);
+begin
+  if raw is not null and raw <> '' then
+    return raw::jsonb;
+  end if;
+  return coalesce(nullif(auth.session(), 'null'::jsonb), '{}'::jsonb);
+end;
+$$;
+
 -- Claims of the request's token (Clerk session token, verified by the Data
 -- API). `aal` is what the migrations check for two-factor; Clerk reports
 -- it as `fva` (minutes since each factor was verified, -1 when never).
@@ -144,7 +171,7 @@ as $$
     when claims ? 'aal' or jsonb_typeof(claims -> 'fva') is distinct from 'array' then claims
     else claims || jsonb_build_object('aal', case when (claims -> 'fva' ->> 1)::integer >= 0 then 'aal2' else 'aal1' end)
   end
-  from (select coalesce(nullif(auth.session(), 'null'::jsonb), '{}'::jsonb) as claims) c;
+  from (select app.claims() as claims) c;
 $$;
 
 -- Who is asking: a token's role claim when it has one, `authenticated` for a
@@ -160,7 +187,7 @@ as $$
   select coalesce(
     app.jwt() ->> 'role',
     case
-      when auth.user_id() is not null then 'authenticated'
+      when nullif(app.claims() ->> 'sub', '') is not null then 'authenticated'
       when session_user = (select pg_catalog.pg_get_userbyid(d.datdba) from pg_catalog.pg_database d where d.datname = current_database())
         then 'service_role'
       else 'anon'
@@ -185,7 +212,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  subject text := auth.user_id();
+  subject text := app.claims() ->> 'sub';
   method text := coalesce(current_setting('request.method', true), '');
   found_id uuid;
 begin
@@ -209,7 +236,7 @@ begin
 end;
 $$;
 
-grant execute on function app.jwt(), app.role(), app.uid() to anon, anonymous, authenticated, service_role;
+grant execute on function app.claims(), app.jwt(), app.role(), app.uid() to anon, anonymous, authenticated, service_role;
 
 -- Storage -------------------------------------------------------------------------
 -- Supabase Storage's tables, kept as the permission and metadata layer: the
