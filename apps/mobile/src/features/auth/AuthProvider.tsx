@@ -1,8 +1,9 @@
 import { useAuth as useClerkAuth, useUser } from '@clerk/expo';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, type ReactNode, use, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { backend, setTokenGetter } from '@/lib/backend';
-import { fromPostgrest } from '@/lib/errors';
+import { fromPostgrest, isBannedError } from '@/lib/errors';
 import { clearCache } from '@/lib/storage';
 import { authInitializing } from './init-state';
 
@@ -15,6 +16,8 @@ interface AuthState {
   email: string;
   /** Signing in worked but the MatIQ account couldn't be opened (shown on the sign-in screen). */
   accountError: Error | null;
+  /** Opens the MatIQ account again after `accountError`, with a fresh Clerk token. */
+  retryAccount(): void;
   /** UX hint only: every owner RPC re-checks the role server side. */
   isOwner: boolean;
   /** `everywhere` also ends this account's sessions on every other device. */
@@ -41,11 +44,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The MatIQ account and the Clerk user it was opened for.
   const [account, setAccount] = useState<{ clerkUserId: string; userId: string; isOwner: boolean } | null>(null);
   const [accountError, setAccountError] = useState<Error | null>(null);
+  // Bumped to open the account again (Try again, or coming back to the app).
+  const [attempt, setAttempt] = useState(0);
   const [clerkLoadTimedOut, setClerkLoadTimedOut] = useState(false);
+  const getTokenRef = useRef(getToken);
 
   useEffect(() => {
+    getTokenRef.current = getToken;
     setTokenGetter(() => getToken());
   }, [getToken]);
+
+  // An account that didn't open (no network, a server or sign-in setting
+  // fixed meanwhile) is tried again when the person comes back to the app.
+  // A ban is final, so it isn't.
+  useEffect(() => {
+    if (!accountError || isBannedError(accountError)) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setAttempt((count) => count + 1);
+    });
+    return () => subscription.remove();
+  }, [accountError]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -88,6 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setAccountError(null);
     void (async () => {
+      // A retry starts with a fresh token: Clerk keeps the last one for up to
+      // a minute, and one minted before a fix would fail the same way.
+      if (attempt > 0) await getTokenRef.current({ skipCache: true }).catch(() => null);
+      if (cancelled) return;
       const { data, error } = await backend.rpc('register_user', { p_username: username, p_display_name: displayName });
       if (cancelled) return;
       if (error || typeof data !== 'string') {
@@ -101,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clerkUserId, username, displayName]);
+  }, [clerkUserId, username, displayName, attempt]);
 
   const signOut = async ({ everywhere = false }: { everywhere?: boolean } = {}) => {
     if (everywhere && user) {
@@ -128,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         email: user?.primaryEmailAddress?.emailAddress ?? '',
         accountError,
+        retryAccount: () => setAttempt((count) => count + 1),
         isOwner: current?.isOwner ?? false,
         signOut,
       }}

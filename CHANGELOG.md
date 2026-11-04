@@ -3,6 +3,31 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [Unreleased]
+
+### Sign-in (fixed on the server for 1.8.6, 2026-11-04)
+- Every sign-in on 1.8.6 ended in "You don't have permission to do that."
+  right after Clerk's screen. Two server settings were wrong; neither needed
+  a new app:
+  - The Neon Data API still trusted only Clerk's development keys. "Deploy
+    Neon backend" now points the Data API at `CLERK_ISSUER`'s JWKS through
+    the Neon API (`scripts/neon-data-api-auth.sh`, old providers removed on
+    every branch) and fails unless 20 requests in a row accept that
+    instance's key. Neon's servers took about 50 minutes to drop the old
+    keys.
+  - Clerk's session tokens had no `role` claim, so the Data API ran every
+    request as `anonymous` (42501). Both Clerk instances now add
+    `"role": "authenticated"` (session claims).
+- New "Check sign-in" workflow: a real token from a user's live Clerk
+  session through the app's first calls, printing the claims and the
+  database's own answers.
+
+### App
+- The "account didn't open" screen after sign-in says so, shows the error
+  code and offers **Try again** (with a fresh Clerk token) next to Sign out.
+  The app also tries again when you come back to it. A ban still shows only
+  Sign out. Covered in the walkthrough (`sign-in-account-error`).
+
 ## [1.8.6] Alpha, 2026-11-04
 
 ### Comments

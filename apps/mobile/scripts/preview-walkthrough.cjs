@@ -463,9 +463,17 @@ async function main() {
       await button('Continue').click();
       await see('This account is banned from MatIQ');
       await shot('sign-in-banned');
+      // Signed in, but the account doesn't open the first time: Try again.
+      await page.evaluate(() => {
+        window.__PREVIEW_FAIL_REGISTER = 1;
+      });
       await page.getByLabel('Email').fill(EMAIL);
       await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
       await button('Continue').click();
+      await see("your MatIQ account didn't open");
+      await see('(error 42501)');
+      await shot('sign-in-account-error');
+      await button('Try again').click();
       // Sam's "Three takedowns" post was removed in the owner panel.
       await see('rear naked choke');
     });
