@@ -24,6 +24,9 @@ pre-release channels are named in the release title.
 ### Black and red
 - The app opens in Dark (black and red) instead of following the phone;
   Light, Midnight and System stay in Settings → Appearance.
+- Clerk's sign-in and account screens are black and red whatever the
+  phone's light or dark setting (`clerk-theme.json` uses the dark colours for
+  both), with the white-M logo.
 - Fighter 1's corner is white on black (near-black on white) instead of
   blue; Fighter 2 stays red. Trophies, WIN and result badges are red
   instead of gold.
