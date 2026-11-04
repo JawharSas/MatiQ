@@ -3,7 +3,7 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
-## [Unreleased]
+## [2.1.4] Alpha, 2026-11-04
 
 ### Sign-in (fixed on the server for 1.8.6, 2026-11-04)
 - Every sign-in on 1.8.6 ended in "You don't have permission to do that."
@@ -27,6 +27,15 @@ pre-release channels are named in the release title.
   code and offers **Try again** (with a fresh Clerk token) next to Sign out.
   The app also tries again when you come back to it. A ban still shows only
   Sign out. Covered in the walkthrough (`sign-in-account-error`).
+
+### Release
+- The Release workflow runs "Check sign-in" (now reusable) and publishes
+  only if it passes: it signs in to the live backend the app's way (Clerk's
+  Frontend API as a native client, with a one-time sign-in token for
+  `CHECK_SIGNIN_USER_ID` or the latest signed-in user), requires
+  `"role": "authenticated"` in the session token and HTTP 200 from
+  `register_user` and `am_i_owner`, then revokes that session.
+- Version 2.1.4 (from 1.8.6).
 
 ## [1.8.6] Alpha, 2026-11-04
 

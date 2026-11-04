@@ -1,6 +1,6 @@
 {
   "name": "@matiq/mobile",
-  "version": "1.8.6",
+  "version": "2.1.4",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {

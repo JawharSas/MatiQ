@@ -9,11 +9,11 @@ or upload a video, and MatIQ scores it for you: points, advantages, round
 scores, highlights and coaching notes. Then climb the ranked ladder against
 real opponents.
 
-> **Alpha V1.8.6** · Android · free
+> **Alpha V2.1.4** · Android · free
 >
-> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v1.8.6-alpha/MatIQ-1.8.6-android.apk)
+> ### [⬇ Download MatIQ for Android](https://github.com/JawharSas/MatiQ/releases/download/v2.1.4-alpha/MatIQ-2.1.4-android.apk)
 >
-> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v1.8.6-alpha) · iPhone: coming later
+> [Release page](https://github.com/JawharSas/MatiQ/releases/tag/v2.1.4-alpha) · iPhone: coming later
 
 ## What you can do
 
@@ -47,11 +47,11 @@ You need an Android phone with **Android 7.0 or newer** and about 250 MB of
 free space.
 
 1. **Download.** On your phone, open the
-   [download link](https://github.com/JawharSas/MatiQ/releases/download/v1.8.6-alpha/MatIQ-1.8.6-android.apk).
-   Your browser saves `MatIQ-1.8.6-android.apk`. If it warns that the file
+   [download link](https://github.com/JawharSas/MatiQ/releases/download/v2.1.4-alpha/MatIQ-2.1.4-android.apk).
+   Your browser saves `MatIQ-2.1.4-android.apk`. If it warns that the file
    might be harmful, tap **Download anyway**.
 2. **Open the file.** Tap the download notification, or open the **Files** /
-   **Downloads** app and tap `MatIQ-1.8.6-android.apk`.
+   **Downloads** app and tap `MatIQ-2.1.4-android.apk`.
 3. **Allow the install.** The first time, Android asks to allow installs from
    your browser or Files app: tap **Settings**, turn on **Allow from this
    source**, then go back.
