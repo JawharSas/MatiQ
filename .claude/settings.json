@@ -1,0 +1,18 @@
+{
+  "extraKnownMarketplaces": {
+    "anthropic-agent-skills": { "source": { "source": "github", "repo": "anthropics/skills" } },
+    "mattpocock": { "source": { "source": "github", "repo": "mattpocock/skills" } },
+    "ui-ux-pro-max-skill": { "source": { "source": "github", "repo": "nextlevelbuilder/ui-ux-pro-max-skill" } },
+    "superpowers-marketplace": { "source": { "source": "github", "repo": "obra/superpowers-marketplace" } },
+    "ponytail": { "source": { "source": "github", "repo": "DietrichGebert/ponytail" } },
+    "caveman": { "source": { "source": "github", "repo": "JuliusBrussee/caveman" } },
+    "impeccable": { "source": { "source": "github", "repo": "pbakaus/impeccable" } },
+    "headroom-marketplace": { "source": { "source": "github", "repo": "headroomlabs-ai/headroom" } }
+  },
+  "enabledPlugins": {
+    "document-skills@anthropic-agent-skills": true,
+    "example-skills@anthropic-agent-skills": true,
+    "mattpocock-skills@mattpocock": true,
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true
+  }
+}
