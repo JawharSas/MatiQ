@@ -293,6 +293,13 @@ async function main() {
       await tab('Profile').click();
       await see('Alex Rivera');
       await shot('profile', { tall: true });
+      // A reserved name answers like one that's in use.
+      await button('Edit profile').click();
+      await field('Display name').fill('Coach Max');
+      await button('Save').click();
+      await see('That is already taken.');
+      await button('Cancel').click();
+      await see('Alex Rivera');
       await button('Friends & requests').click();
       await see('Requests');
       await shot('friends');

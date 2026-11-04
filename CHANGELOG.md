@@ -28,6 +28,12 @@ pre-release channels are named in the release title.
   blue; Fighter 2 stays red. Trophies, WIN and result badges are red
   instead of gold.
 
+### Accounts
+- Names can be kept for one account (`private.reserved_names`, managed in
+  the database): anyone else changing to one gets the usual "already taken"
+  answer, and a new account that brings one gets a generated name.
+- The Owner badge on the profile is red.
+
 ### Account switching
 - Switching accounts in Clerk's profile screen clears the previous
   account's cached data, and the app shows no account until the new one
@@ -316,7 +322,7 @@ pre-release channels are named in the release title.
 - Privacy Policy: IP addresses (security logs only, never shown to other
   users) and the video metadata removal.
 
-### Account switching
+### Sign-in
 - Device lockout after 5 wrong passwords (30 seconds, doubling up to 15
   minutes); cleared by a successful sign-in.
 - Cloudflare Turnstile bot check on email sign-in and sign-up when
@@ -424,7 +430,7 @@ below ships in 1.4.1.
 
 ## [1.3.1] Pre-Beta, 2026-10-29
 
-### Account switching
+### Sign-in
 - **Continue with Google** on sign-in and sign-up: Supabase OAuth with PKCE
   in the system browser (`expo-web-browser`; Custom Tabs on Android,
   ASWebAuthenticationSession on iOS). The Google client secret stays in

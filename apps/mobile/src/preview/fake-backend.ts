@@ -250,6 +250,14 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
       case 'update': {
         const rows = this.matching(viewer).filter((row) => canWrite(this.table, row, viewer!));
         checkUpdate(this.table, this.values as Row);
+        if (this.table === 'profiles') {
+          for (const row of rows) {
+            for (const column of ['username', 'display_name']) {
+              const value = (this.values as Row)[column];
+              if (value !== undefined && value !== row[column] && reservedForOther(value, row.id)) fail('23505', 'duplicate key value');
+            }
+          }
+        }
         for (const row of rows) {
           Object.assign(row, this.values);
         }
@@ -335,6 +343,22 @@ const FILTERED_COLUMNS: Record<string, string[]> = {
   profiles: ['username', 'display_name', 'bio'],
   matches: ['title', 'athlete_a_label', 'athlete_b_label'],
 };
+
+// Names only one account may use (neon/migrations/20261104000200_reserved_names.sql):
+// anyone else is told the name is taken, like any name in use. The real list
+// lives only in the database; this is a sample for the preview.
+const RESERVED_NAMES: Record<string, string> = { coachmax: 'coach.max@example.com' };
+const LOOK_ALIKES: Record<string, string> = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's' };
+const nameKey = (name: unknown) =>
+  String(name ?? '')
+    .toLowerCase()
+    .replace(/[013457@$]/g, (c) => LOOK_ALIKES[c]!)
+    .replace(/[^a-z0-9]+/g, '');
+
+function reservedForOther(name: unknown, uid: string): boolean {
+  const owner = RESERVED_NAMES[nameKey(name)];
+  return owner !== undefined && String(db.users.find((u) => u.id === uid)?.email ?? '').toLowerCase() !== owner;
+}
 
 function checkUpdate(table: string, values: Row) {
   if ((FILTERED_COLUMNS[table] ?? []).some((column) => textViolation(values[column]))) fail('22023', 'content_not_allowed');

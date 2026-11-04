@@ -100,7 +100,7 @@ export default function ProfileScreen() {
                 icon={card.visibility === 'public' ? 'globe-outline' : 'lock-closed'}
                 tone={card.visibility === 'public' ? 'blue' : 'neutral'}
               />
-              {isOwner ? <Badge label="Owner" icon="shield-half" tone="warning" /> : null}
+              {isOwner ? <Badge label="Owner" icon="shield-half" tone="accent" /> : null}
             </View>
           </View>
           <View style={styles.tiles}>
