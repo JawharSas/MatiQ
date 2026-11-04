@@ -1,0 +1,55 @@
+name: Check sign-in
+
+# Sends a real Clerk session token through the Neon Data API the way the app
+# does after sign-in (register_user, then am_i_owner) and prints what comes
+# back, so a sign-in failure shows the database's own error instead of the
+# app's summary. Sign in on a phone or emulator first: it uses that user's
+# active session. The token is masked in the log and lasts about a minute.
+#
+# Actions -> Check sign-in -> Run workflow, with the Clerk user ID (user_...).
+# Reads secret CLERK_SECRET_KEY (the instance the app uses) and
+# EXPO_PUBLIC_DATA_API_URL (variable or secret).
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_id:
+        description: Clerk user ID (user_...) with an active session
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Real token through the Data API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      DATA_API_URL: ${{ vars.EXPO_PUBLIC_DATA_API_URL || secrets.EXPO_PUBLIC_DATA_API_URL }}
+      USER_ID: ${{ inputs.user_id }}
+    steps:
+      - name: Sign-in calls
+        run: |
+          set -euo pipefail
+          case "$USER_ID" in user_*) ;; *) echo "::error::user_id must be a Clerk user ID (user_...)."; exit 1 ;; esac
+          clerk() { curl -fsS -H "Authorization: Bearer $CLERK_SECRET_KEY" "$@"; }
+          sid=$(clerk "https://api.clerk.com/v1/sessions?user_id=$USER_ID&status=active&limit=1" | jq -r 'if type == "array" then .[0].id else .data[0].id end // empty')
+          if [ -z "$sid" ]; then echo "::error::That user has no active session. Sign in on a phone or emulator first."; exit 1; fi
+          jwt=$(clerk -X POST "https://api.clerk.com/v1/sessions/$sid/tokens" | jq -r '.jwt // empty')
+          if [ -z "$jwt" ]; then echo "::error::Clerk did not return a session token."; exit 1; fi
+          echo "::add-mask::$jwt"
+          echo "Token claims (sub hidden):"
+          JWT="$jwt" node -e 'const c = JSON.parse(Buffer.from(process.env.JWT.split(".")[1], "base64url")); console.log(JSON.stringify({ iss: c.iss, azp: c.azp, role: c.role ?? "(none)", sub: c.sub ? "(present)" : "(missing)", lifetime_s: c.exp - c.iat }));'
+          report() {
+            local name=$1 code=$2
+            echo "$name: HTTP $code $(jq -c 'if type == "object" and has("message") then {code, message, details, hint} else "ok" end' body.json 2>/dev/null || head -c 300 body.json)"
+          }
+          code=$(curl -sS -o body.json -w '%{http_code}' -X POST -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' -d '{}' "$DATA_API_URL/rpc/register_user")
+          report register_user "$code"
+          code=$(curl -sS -o body.json -w '%{http_code}' -H "Authorization: Bearer $jwt" "$DATA_API_URL/rpc/am_i_owner")
+          report am_i_owner "$code"
+          code=$(curl -sS -o body.json -w '%{http_code}' -H "Authorization: Bearer $jwt" "$DATA_API_URL/rpc/app_requirements")
+          report app_requirements "$code"
