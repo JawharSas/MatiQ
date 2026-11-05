@@ -3,6 +3,29 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## Unreleased (production redesign, toward 2.5.8)
+
+### New look: Fight Card
+- Typefaces: Barlow for text and Barlow Condensed for scores, numbers and
+  headings, bundled with the app (`src/ui/fonts.ts`) and loaded before the
+  splash screen hides. Styles keep using `fontWeight`; `typeface()`
+  (`src/ui/typography.ts`) picks the right font file, because Android selects
+  a custom font's weight by its family name. If the fonts can't load, the
+  phone's font is used.
+- Bottom bar: five icons, no labels (Feed, Matches, Record, Ranked, Profile).
+  The tab you're on has a filled icon in a soft pill, Record is the "+" in the
+  middle, Ranked shows a red dot when a challenge or result needs you, and
+  Profile shows your picture. Each tab still has a spoken name.
+- Settings moved behind the gear on Profile; Friends is the people icon on the
+  feed header, with a red dot for new requests.
+- Feed header: the octagon mark and "MatIQ" wordmark.
+- Posts are fight cards: both athletes' scores in big condensed numbers, the
+  winner marked with a red bar, the way it ended in a red pill (grey for a
+  draw), and a "Breakdown" link to the match. "Report post" is under the
+  "..." button.
+- Themes are named Black (default), Midnight (pure black) and White (snow
+  white, `#FFFAFA`), each with red, or Match my phone.
+
 ## [2.1.4] Alpha, 2026-11-04
 
 ### Sign-in (fixed on the server for 1.8.6, 2026-11-04)

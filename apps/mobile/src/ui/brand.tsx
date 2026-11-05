@@ -36,19 +36,19 @@ export function Wordmark({ size = 28 }: { size?: number }) {
   );
 }
 
-/** Mark and wordmark side by side, e.g. in the Feed header. */
-export function BrandLockup({ size = 22 }: { size?: number }) {
+/** Mark and wordmark side by side: the Feed header ("Logo 1"). */
+export function BrandLockup({ size = 24 }: { size?: number }) {
   useTheme();
   return (
     <View style={styles.lockup} accessibilityLabel="MatIQ">
-      <LogoMark size={Math.round(size * 1.35)} />
+      <LogoMark size={Math.round(size * 1.42)} />
       <Wordmark size={size} />
     </View>
   );
 }
 
 const styles = themedStyles(() => ({
-  wordmark: { color: colors.text, fontWeight: '800', letterSpacing: -0.5 },
+  wordmark: { color: colors.text, fontWeight: '700', letterSpacing: -0.3 },
   iq: { color: colors.accent },
-  lockup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  lockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 }));

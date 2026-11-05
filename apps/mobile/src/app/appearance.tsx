@@ -8,13 +8,13 @@ import { colors, font, PALETTES, radius, spacing, themedStyles, type ThemeName }
 import { type ThemePreference, useTheme } from '@/ui/ThemeProvider';
 
 const OPTIONS: { value: ThemePreference; title: string; description: string }[] = [
-  { value: 'system', title: 'System', description: "Light or Dark, following your phone's setting" },
-  { value: 'light', title: 'Light', description: 'Black text on white with red, easy to read in daylight' },
-  { value: 'dark', title: 'Dark', description: "Black with red, MatIQ's own look" },
-  { value: 'midnight', title: 'Midnight', description: 'True black, gentle at night and on OLED screens' },
+  { value: 'dark', title: 'Black', description: "Black with red, MatIQ's own look" },
+  { value: 'midnight', title: 'Midnight', description: 'Pure black, gentle at night and on OLED screens' },
+  { value: 'light', title: 'White', description: 'Snow white with red, easy to read in daylight' },
+  { value: 'system', title: 'Match my phone', description: "White or Black, following your phone's setting" },
 ];
 
-/** Theme: Light, Dark, Midnight or the phone's setting. Stored on this device. */
+/** Theme: Black, Midnight, White or the phone's setting. Stored on this device. */
 export default function AppearanceScreen() {
   const { preference, theme, setPreference } = useTheme();
   const pressStyle = usePressStyle();
@@ -52,7 +52,7 @@ export default function AppearanceScreen() {
         </View>
       </Card>
       <Caption>
-        {preference === 'system' ? `Your phone is set to ${theme === 'light' ? 'light' : 'dark'} mode. ` : ''}
+        {preference === 'system' ? `Your phone is set to ${theme === 'light' ? 'light' : 'dark'} mode, so MatIQ is ${theme === 'light' ? 'White' : 'Black'}. ` : ''}
         Text size, contrast and motion are in Accessibility.
       </Caption>
     </Screen>
