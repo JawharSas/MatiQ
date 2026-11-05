@@ -113,6 +113,7 @@ export default function SettingsScreen() {
 
       <SectionHeader title="Help" />
       <ListGroup>
+        <ListRow icon="school" title="Tutorial" subtitle="How recording, fight cards, ranked and sharing work" onPress={() => router.push('/tutorial')} />
         <ListRow
           icon="help-buoy"
           title="Help and support"
@@ -182,7 +183,7 @@ export default function SettingsScreen() {
       </Card>
       <Text style={styles.version}>
         MatIQ {Constants.expoConfig?.version ?? ''}
-        {typeof Constants.expoConfig?.extra?.releaseLabel === 'string' ? ` · ${Constants.expoConfig.extra.releaseLabel}` : ''}
+        {typeof Constants.expoConfig?.extra?.releaseLabel === 'string' && Constants.expoConfig.extra.releaseLabel ? ` · ${Constants.expoConfig.extra.releaseLabel}` : ''}
       </Text>
     </Screen>
   );

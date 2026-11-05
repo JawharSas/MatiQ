@@ -86,6 +86,9 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
     every table.
   - "Check sign-in" (Actions) proves sign-in against the live backend; the
     Release workflow won't publish without it.
+- **Tutorial.** `features/onboarding/Tutorial.tsx` shows once per device
+  after `ConsentGate`; Settings → Tutorial (`/tutorial`) shows it again.
+  Keep its steps in line with the tabs and screens they describe.
 - **Forced updates.** `public.app_requirements()` on Neon returns
   `min_version` and `download_url`.
   - The app reads it from the `api` function's `GET /app-requirements`.

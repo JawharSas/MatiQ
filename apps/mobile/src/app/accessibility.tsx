@@ -50,6 +50,14 @@ export default function AccessibilityScreen() {
         <Segmented options={MOTION_OPTIONS} value={a11y.motion} onChange={a11y.setMotion} />
       </Card>
       <Card>
+        <ToggleRow
+          label="Vibration"
+          description="A light tap when you switch tabs, like a post, or start and stop a recording."
+          value={a11y.haptics}
+          onValueChange={a11y.setHaptics}
+        />
+      </Card>
+      <Card>
         <Heading>Works with your phone</Heading>
         <Body>
           MatIQ supports TalkBack and VoiceOver, your phone's font and display size, colour correction, switch access and a

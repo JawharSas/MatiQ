@@ -129,6 +129,24 @@ async function main() {
       await page.getByRole('checkbox', { name: /^I agree/ }).click();
       await shot('consent-gate-filled', { tall: true });
       await button('Continue').click();
+      // The first time on this device: the tutorial. Buttons ignore a second
+      // tap within 350 ms (double-tap guard), so each tap waits that out.
+      const tutorialTap = async (label, title) => {
+        await page.waitForTimeout(400);
+        await button(label).click();
+        if (title) await see(title);
+      };
+      await see('Welcome to MatIQ');
+      await shot('tutorial-welcome');
+      await tutorialTap('Next', 'Record a round');
+      await tutorialTap('Next', 'See what decided it');
+      await shot('tutorial-fight-card');
+      await tutorialTap('Back', 'Record a round');
+      await tutorialTap('Next', 'See what decided it');
+      await tutorialTap('Next', 'Climb the ranks');
+      await shot('tutorial-ranked');
+      await tutorialTap('Next', 'Share it, or keep it');
+      await tutorialTap('Get started');
       // The owner role is looked up before the age check, while the server
       // refuses everything but reads: it must still show straight away.
       await tab('Profile').click();
@@ -344,6 +362,11 @@ async function main() {
     await step('settings and account', async () => {
       await openSettings();
       await shot('settings', { tall: true });
+      // The tutorial can be seen again, and skipped.
+      await button('Tutorial').click();
+      await see('Welcome to MatIQ');
+      await button('Skip').click();
+      await see('Delete account');
       // Clerk's UserProfileView (the preview's stand-in) with its own back button.
       await button('Account and security').click();
       await see('Email addresses');

@@ -1,5 +1,6 @@
 /**
- * In-app accessibility settings: text size, high contrast and reduced motion.
+ * In-app accessibility settings: text size, high contrast, reduced motion and
+ * vibration.
  *
  * They add to the phone's own settings, which MatIQ always follows (font size
  * and display size, TalkBack / VoiceOver, "Remove animations" / Reduce
@@ -9,6 +10,7 @@
 import { createContext, type ReactNode, use, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { readPreference, writePreference } from '@/lib/storage';
+import { setHapticsEnabled } from '@/ui/haptics';
 
 export const TEXT_SIZES = ['default', 'large', 'larger', 'largest'] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
@@ -28,9 +30,12 @@ export interface A11ySettings {
   motion: MotionPreference;
   /** True when animations should be avoided (phone setting or in-app choice). */
   reduceMotion: boolean;
+  /** Light vibrations on taps (on unless turned off). */
+  haptics: boolean;
   setTextSize(size: TextSize): void;
   setHighContrast(on: boolean): void;
   setMotion(motion: MotionPreference): void;
+  setHaptics(on: boolean): void;
 }
 
 const DEFAULTS: A11ySettings = {
@@ -39,9 +44,11 @@ const DEFAULTS: A11ySettings = {
   highContrast: false,
   motion: 'system',
   reduceMotion: false,
+  haptics: true,
   setTextSize: () => undefined,
   setHighContrast: () => undefined,
   setMotion: () => undefined,
+  setHaptics: () => undefined,
 };
 
 const A11yContext = createContext<A11ySettings>(DEFAULTS);
@@ -51,6 +58,9 @@ export function A11yProvider({ children }: { children: ReactNode }) {
   const [highContrast, setHighContrast] = useState(() => readPreference('a11y-high-contrast', ON_OFF, 'off') === 'on');
   const [motion, setMotion] = useState<MotionPreference>(() => readPreference('a11y-motion', MOTION_PREFERENCES, 'system'));
   const [systemReduceMotion, setSystemReduceMotion] = useState(false);
+  const [haptics, setHaptics] = useState(() => readPreference('a11y-haptics', ON_OFF, 'on') === 'on');
+
+  useEffect(() => setHapticsEnabled(haptics), [haptics]);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +81,7 @@ export function A11yProvider({ children }: { children: ReactNode }) {
       highContrast,
       motion,
       reduceMotion: motion === 'reduce' || (motion === 'system' && systemReduceMotion),
+      haptics,
       setTextSize: (size) => {
         writePreference('a11y-text-size', size);
         setTextSize(size);
@@ -83,8 +94,12 @@ export function A11yProvider({ children }: { children: ReactNode }) {
         writePreference('a11y-motion', next);
         setMotion(next);
       },
+      setHaptics: (on) => {
+        writePreference('a11y-haptics', on ? 'on' : 'off');
+        setHaptics(on);
+      },
     }),
-    [textSize, highContrast, motion, systemReduceMotion],
+    [textSize, highContrast, motion, systemReduceMotion, haptics],
   );
 
   return <A11yContext value={value}>{children}</A11yContext>;

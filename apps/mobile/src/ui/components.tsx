@@ -807,7 +807,7 @@ export const styles = themedStyles(() => ({
   listRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.md, paddingVertical: 10 },
   listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
   statTile: { flex: 1, backgroundColor: colors.surfaceRaised, borderRadius: radius.lg, padding: 14, gap: 4 },
-  statValue: { fontSize: 20, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+  statValue: { fontFamily: CONDENSED, fontSize: 26, lineHeight: 30, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceHigh, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
   empty: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xxl, paddingHorizontal: spacing.lg },

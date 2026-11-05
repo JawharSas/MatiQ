@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
+import { useState } from 'react';
 import { useA11y } from '@/features/accessibility/A11yProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ageCheckStatus } from '@/features/legal/age';
@@ -9,6 +10,7 @@ import { missingAcceptances } from '@/features/legal/consent';
 import { ConsentGate, NotEligible } from '@/features/legal/ConsentGate';
 import { LEGAL_VERSIONS, type LegalDocumentId } from '@/features/legal/documents';
 import { Banned } from '@/features/moderation/Banned';
+import { Tutorial, tutorialSeen } from '@/features/onboarding/Tutorial';
 import { isBannedError } from '@/lib/errors';
 import { Loading } from '@/ui/components';
 import { colors } from '@/ui/theme';
@@ -18,7 +20,8 @@ import { headerFont } from '@/ui/typography';
 /**
  * Signed-in area. Before anything else, the user must have answered the age
  * check once and accepted the current Terms and Privacy Policy versions
- * (re-prompted when they change). Banned accounts only see why.
+ * (re-prompted when they change). Banned accounts only see why. The first
+ * time on a device, the tutorial comes next.
  */
 // Deep links into a stack screen (a shared match, a ranked match) keep the
 // tabs underneath, so Back always has somewhere to go.
@@ -30,6 +33,7 @@ export default function AppLayout() {
   useTheme();
   const { email } = useAuth();
   const { reduceMotion } = useA11y();
+  const [tutorialDone, setTutorialDone] = useState(tutorialSeen);
   const age = useQuery({ queryKey: ['age-check'], queryFn: () => ageCheckStatus(email), staleTime: Infinity });
   // After the age check (even a failed lookup), which may save the consent
   // given on the sign-up form.
@@ -43,6 +47,7 @@ export default function AppLayout() {
   // Likewise, if acceptances cannot be read, ask (saving them again is harmless).
   const missing = consent.data ?? (consent.isError ? ALL_DOCUMENTS : []);
   if (needsAge || missing.length > 0) return <ConsentGate missing={missing} needsAge={needsAge} />;
+  if (!tutorialDone) return <Tutorial onDone={() => setTutorialDone(true)} />;
 
   return (
     <Stack
@@ -63,6 +68,7 @@ export default function AppLayout() {
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="tutorial" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/account" options={{ headerShown: false }} />

@@ -11,6 +11,7 @@ import { useFriends, useProfile } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
 import { BrandLockup } from '@/ui/brand';
 import { withPressFeedback } from '@/ui/components';
+import { tapFeedback } from '@/ui/haptics';
 import { colors, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 import { headerFont } from '@/ui/typography';
@@ -34,6 +35,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      screenListeners={{ tabPress: () => tapFeedback() }}
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,

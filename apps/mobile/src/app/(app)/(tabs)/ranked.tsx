@@ -31,6 +31,7 @@ import {
 } from '@/ui/components';
 import { colors, font, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
+import { CONDENSED } from '@/ui/typography';
 
 const DISCIPLINE_VALUES = DISCIPLINE_OPTIONS.map((option) => option.value);
 
@@ -242,7 +243,7 @@ const styles = themedStyles(() => ({
   fill: { flex: 1 },
   standing: { gap: 14 },
   standingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rating: { fontSize: 52, lineHeight: 58, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], letterSpacing: -1.5 },
+  rating: { fontFamily: CONDENSED, fontSize: 64, lineHeight: 68, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
   stats: { flexDirection: 'row', gap: spacing.sm },
   item: { gap: spacing.md, paddingHorizontal: 14, paddingVertical: 14 },
   itemHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },

@@ -3,7 +3,9 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
-## Unreleased (production redesign, toward 2.5.8)
+## [2.5.8] Release, 2026-11-05
+
+The first full (non-pre-release) version: the production redesign.
 
 ### New look: Fight Card
 - Typefaces: Barlow for text and Barlow Condensed for scores, numbers and
@@ -44,6 +46,25 @@ pre-release channels are named in the release title.
   friend, Accept or Remove friend, and Block.
 - Edit profile is its own screen: change or remove your picture, username,
   display name and bio, and the Public account switch (moved off Profile).
+
+### Tutorial
+- A five-step tutorial (`features/onboarding/Tutorial.tsx`) after the age
+  check and consent, once per device: Welcome, Record a round, See what
+  decided it (an example fight card), Climb the ranks (a belt badge) and
+  Share it, or keep it. Back, Next, Skip and Get started; each step fades in
+  unless motion is reduced, and screen readers hear the new step. Settings →
+  Help → Tutorial shows it again (`/tutorial`).
+
+### Polish
+- Feed: Community and Friends use the section tabs.
+- Ranked: the rating and the stat tiles use the condensed numbers.
+  `TierBadge` is a neutral chip with a belt swatch (white, blue, purple,
+  brown, black; the black belt's bar is red) instead of a coloured pill.
+- Vibration (`expo-haptics`, `src/ui/haptics.ts`): a tick on switching tabs
+  and tutorial steps, a light tap on Like, a firmer one on starting and
+  stopping a recording. Settings → Accessibility → Vibration turns it off.
+- Version 2.5.8 with no channel label: Settings shows "MatIQ 2.5.8", and the
+  tag `v2.5.8` publishes a full release.
 
 ## [2.1.4] Alpha, 2026-11-04
 
