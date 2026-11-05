@@ -25,6 +25,18 @@ pre-release channels are named in the release title.
   "..." button.
 - Themes are named Black (default), Midnight (pure black) and White (snow
   white, `#FFFAFA`), each with red, or Match my phone.
+- Match screen: the result at the top as a big fight card (each fighter's
+  score, the winner's red bar, how it ended and when), the result in words
+  and the ruleset. Below it, four tabs:
+  - Overview: the three most one-sided stats and who had the edge, the key
+    moments (points scored, and the finish), each one playable, and the
+    coach's notes;
+  - Moments: the timeline and every highlight, filtered by fighter;
+  - Stats: head-to-head stats, projected rounds and the technique breakdown;
+  - Log: the scoring log and notes about the analysis.
+  `keyStats()` and `keyMoments()` (`features/analysis/summary.ts`) choose
+  what Overview shows; the feed card and the match screen share
+  `FightScore`, and section tabs use the new `TabBar`.
 
 ## [2.1.4] Alpha, 2026-11-04
 

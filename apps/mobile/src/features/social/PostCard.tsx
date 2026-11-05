@@ -6,6 +6,7 @@ import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
+import { FightScore } from '@/features/analysis/FightScore';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { Badge, LinkPressable, withPressFeedback } from '@/ui/components';
 import { colors, font, spacing, themedStyles } from '@/ui/theme';
@@ -23,11 +24,6 @@ export function timeAgo(iso: string): string {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.round(hours / 24)}d`;
-}
-
-function methodLabel(method: string): string {
-  const words = method.replace(/_/g, ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /**
@@ -130,19 +126,14 @@ export function PostCard({ post }: { post: FeedItem }) {
       ) : null}
 
       {post.match_id && post.result && post.totals ? (
-        <View style={styles.score} accessible accessibilityLabel={scoreLabel(names, post.totals.A.points, post.totals.B.points, winner, post.result.method)}>
-          <Side name={names.A} points={post.totals.A.points} won={winner === 'A'} lost={winner === 'B'} />
-          <View style={styles.middle}>
-            <Text style={styles.vs}>VS</Text>
-            <View style={[styles.result, !winner && styles.resultDraw]}>
-              {winner ? <Ionicons name="trophy" size={13} color={colors.accentText} aria-hidden /> : null}
-              <Text style={[styles.resultText, !winner && { color: colors.textMuted }]} numberOfLines={1}>
-                {winner ? methodLabel(post.result.method) : 'Draw'}
-              </Text>
-            </View>
-            {post.result.at !== undefined ? <Text style={styles.at}>{formatClock(post.result.at)}</Text> : null}
-          </View>
-          <Side name={names.B} points={post.totals.B.points} won={winner === 'B'} lost={winner === 'A'} alignRight />
+        <View style={styles.score}>
+          <FightScore
+            names={names}
+            points={{ A: post.totals.A.points, B: post.totals.B.points }}
+            winner={winner}
+            method={post.result.method}
+            at={post.result.at}
+          />
         </View>
       ) : null}
 
@@ -179,31 +170,6 @@ export function PostCard({ post }: { post: FeedItem }) {
           </Link>
         ) : null}
       </View>
-    </View>
-  );
-}
-
-function scoreLabel(
-  names: { A: string; B: string },
-  a: number,
-  b: number,
-  winner: 'A' | 'B' | null,
-  method: string,
-): string {
-  const score = `${names.A} ${a}, ${names.B} ${b}`;
-  return winner ? `${score}. ${names[winner]} wins by ${methodLabel(method).toLowerCase()}.` : `${score}. Draw.`;
-}
-
-/** One fighter's side of the card: name, points and, for the winner, the red bar. */
-function Side({ name, points, won, lost, alignRight = false }: { name: string; points: number; won: boolean; lost: boolean; alignRight?: boolean }) {
-  useTheme();
-  return (
-    <View style={[styles.side, alignRight && styles.sideRight]}>
-      <Text style={[styles.sideName, lost && styles.muted]} numberOfLines={1}>
-        {name}
-      </Text>
-      <Text style={[styles.points, lost && styles.muted]}>{points}</Text>
-      <View style={[styles.winBar, !won && styles.winBarHidden]} />
     </View>
   );
 }
@@ -245,35 +211,12 @@ const styles = themedStyles(() => ({
   chipRight: { right: 12 },
   chipText: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.text },
   score: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  side: { flex: 1, alignItems: 'flex-start' },
-  sideRight: { alignItems: 'flex-end' },
-  sideName: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 16, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.text },
-  points: { fontFamily: CONDENSED, fontWeight: '800', fontSize: 56, lineHeight: 60, color: colors.text, fontVariant: ['tabular-nums'] },
-  muted: { color: colors.textMuted },
-  winBar: { width: 40, height: 4, borderRadius: 2, marginTop: 4, backgroundColor: colors.accentFill },
-  winBarHidden: { backgroundColor: 'transparent' },
-  middle: { alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm },
-  vs: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 14, letterSpacing: 1, color: colors.textMuted },
-  result: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: colors.accentFill,
-  },
-  resultDraw: { backgroundColor: colors.surfaceHigh },
-  resultText: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 14, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.accentText },
-  at: { fontSize: 13, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   actions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, minWidth: 44, paddingHorizontal: 8 },
   count: { fontSize: 15, fontWeight: '600', color: colors.text },

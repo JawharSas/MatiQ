@@ -22,7 +22,7 @@ import { useA11y } from '@/features/accessibility/A11yProvider';
 import { Text } from './text';
 import { colors, font, radius, spacing, themedStyles } from './theme';
 import { useTheme } from './ThemeProvider';
-import { typeface } from './typography';
+import { CONDENSED, typeface } from './typography';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -429,6 +429,44 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * Section tabs under a screen's header: condensed uppercase labels, the open
+ * one bright with a red underline. Labels wrap onto a second row at large
+ * text sizes instead of being cut.
+ */
+export function TabBar<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  /** What the tabs switch between, for screen readers ("Match sections"). */
+  label: string;
+}) {
+  useTheme();
+  return (
+    <View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel={label}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.value)}
+            style={withPressFeedback([styles.tab, selected && styles.tabSelected])}
+          >
+            <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 type Tone = 'accent' | 'success' | 'warning' | 'danger' | 'blue' | 'neutral';
 
 const tones = (): Record<Tone, { background: string; foreground: string }> => ({
@@ -741,6 +779,11 @@ export const styles = themedStyles(() => ({
   segmentSelected: { backgroundColor: colors.surfaceHigh, borderWidth: 1.5, borderColor: colors.textMuted },
   segmentLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted, textAlign: 'center' },
   segmentLabelSelected: { color: colors.text, fontWeight: '700' },
+  tabBar: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
+  tab: { minHeight: 44, justifyContent: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabSelected: { borderBottomColor: colors.accentFill },
+  tabLabel: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 17, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.textMuted },
+  tabLabelSelected: { color: colors.text },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',

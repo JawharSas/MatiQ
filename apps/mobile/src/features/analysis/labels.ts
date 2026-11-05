@@ -21,3 +21,25 @@ export function highlightText(label: string, athlete: 'A' | 'B' | null, names: F
   const named = withNames(trimmed, names);
   return named.charAt(0).toUpperCase() + named.slice(1);
 }
+
+const METHOD_LABELS: Record<string, string> = {
+  submission: 'Submission',
+  fall: 'Fall',
+  ko_tko: 'KO / TKO',
+  technical_superiority: 'Tech. superiority',
+  points: 'Points',
+  advantages: 'Advantages',
+  penalties: 'Penalties',
+  criteria: 'Criteria',
+  decision: 'Decision',
+  disqualification: 'Disqualification',
+  draw: 'Draw',
+};
+
+/** How a match ended, short enough for a result pill ("Submission", "KO / TKO"). */
+export function methodLabel(method: string): string {
+  const known = METHOD_LABELS[method];
+  if (known) return known;
+  const words = method.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
