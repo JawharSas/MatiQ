@@ -9,6 +9,7 @@ import { Text } from '@/ui/text';
 import { FightScore } from '@/features/analysis/FightScore';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { Badge, LinkPressable, withPressFeedback } from '@/ui/components';
+import { pressFeedback } from '@/ui/haptics';
 import { colors, font, spacing, themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 import { CONDENSED } from '@/ui/typography';
@@ -142,7 +143,10 @@ export function PostCard({ post }: { post: FeedItem }) {
           accessibilityRole="button"
           accessibilityState={{ selected: post.liked_by_me }}
           accessibilityLabel={`${post.liked_by_me ? 'Unlike' : 'Like'} post, ${post.like_count} ${post.like_count === 1 ? 'like' : 'likes'}`}
-          onPress={() => like.mutate({ postId: post.post_id, liked: post.liked_by_me })}
+          onPress={() => {
+            pressFeedback();
+            like.mutate({ postId: post.post_id, liked: post.liked_by_me });
+          }}
           style={withPressFeedback(styles.action)}
           hitSlop={4}
         >

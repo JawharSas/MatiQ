@@ -8,6 +8,7 @@ import { readPreference, writePreference } from '@/lib/storage';
 import { Body, Button, Card, Segmented, withPressFeedback } from '@/ui/components';
 import { onVideo, radius, spacing } from '@/ui/theme';
 import type { CapturePlan, FpsPreference } from './capture-plan';
+import { strongFeedback } from '@/ui/haptics';
 import { CaptureHud } from './CaptureHud';
 import type { SampledFrame } from './frame-processor';
 import { type LiveMatchInfo, LiveScoreboard } from './LiveScoreboard';
@@ -145,7 +146,11 @@ export function LiveRecorder(props: LiveRecorderProps) {
             accessibilityRole="button"
             accessibilityLabel={recording ? 'Stop recording' : 'Start recording'}
             disabled={capture.state === 'finishing' || capture.probing || !capture.plan}
-            onPress={recording ? () => void finish() : () => void begin()}
+            onPress={() => {
+              strongFeedback();
+              if (recording) void finish();
+              else void begin();
+            }}
             style={({ pressed }) => [styles.shutter, pressed && { transform: [{ scale: 0.94 }] }, (capture.probing || !capture.plan) && { opacity: 0.4 }]}
           >
             <View style={recording ? styles.stopIcon : styles.recordIcon} />

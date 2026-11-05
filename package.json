@@ -1,6 +1,6 @@
 {
   "name": "matiq",
-  "version": "2.1.4",
+  "version": "2.5.8",
   "private": true,
   "description": "MatIQ: AI Martial Arts Analyzer & Social Hub (monorepo)",
   "workspaces": [

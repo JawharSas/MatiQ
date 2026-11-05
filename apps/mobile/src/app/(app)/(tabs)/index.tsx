@@ -6,7 +6,7 @@ import { FlatList, RefreshControl, View } from 'react-native';
 import { useFeed } from '@/features/social/api';
 import { PostCard } from '@/features/social/PostCard';
 import { errorMessage } from '@/lib/errors';
-import { Button, EmptyState, ErrorText, Loading, Segmented } from '@/ui/components';
+import { Button, EmptyState, ErrorText, Loading, TabBar } from '@/ui/components';
 import { colors, spacing } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
@@ -26,13 +26,14 @@ export default function FeedScreen() {
       renderItem={({ item }) => <PostCard post={item} />}
       ListHeaderComponent={
         <View style={{ gap: spacing.md }}>
-          <Segmented
+          <TabBar
             options={[
               { value: 'community', label: 'Community' },
               { value: 'friends', label: 'Friends' },
             ]}
             value={scope}
             onChange={setScope}
+            label="Which posts to show"
           />
           {feed.error ? <ErrorText>{errorMessage(feed.error)}</ErrorText> : null}
         </View>

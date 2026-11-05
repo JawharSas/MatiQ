@@ -17,26 +17,34 @@ export const DISCIPLINE_OPTIONS = [
   { value: 'mma', label: 'MMA' },
 ] as const;
 
-/** Belt colour per tier (White, Blue, Purple, Brown, Black). */
-const BELT_COLORS: Record<TierId, { fill: string; text: string }> = {
-  bronze: { fill: '#E5E7EB', text: '#111827' },
-  silver: { fill: '#2563EB', text: '#FFFFFF' },
-  gold: { fill: '#7C3AED', text: '#FFFFFF' },
-  platinum: { fill: '#7C4A1E', text: '#FFFFFF' },
-  grandmaster: { fill: '#0B0B0B', text: '#F87171' },
+/** Belt colour per tier (White, Blue, Purple, Brown, Black), shown as a small belt swatch. */
+const BELT_COLORS: Record<TierId, string> = {
+  bronze: '#F5F5F5',
+  silver: '#2563EB',
+  gold: '#7C3AED',
+  platinum: '#7C4A1E',
+  grandmaster: '#0B0B0B',
 };
 
+/**
+ * The tier as a neutral chip with the belt's colour as a swatch, so the
+ * screen stays black, white and red while the belt still reads at a glance.
+ * Grandmaster (black belt) gets a red outline.
+ */
 export function TierBadge({ rating, games, compact = false }: { rating: number; games: number; compact?: boolean }) {
   useTheme();
   const standing = tierFor(rating, games);
-  const palette = BELT_COLORS[standing.tier];
   const text = standing.placement ? `Placement ${5 - standing.placementRemaining}/5` : compact ? standing.label : `${standing.label} · ${standing.belt}`;
   return (
     <View
-      style={[styles.badge, { backgroundColor: palette.fill }, standing.tier === 'grandmaster' && styles.grandmasterBorder]}
+      style={[styles.badge, standing.tier === 'grandmaster' && styles.grandmasterBorder]}
       accessibilityLabel={`${standing.label}, ${standing.belt}${standing.placement ? ', in placement' : ''}`}
     >
-      <Text style={[styles.badgeText, { color: palette.text }]}>{text}</Text>
+      {standing.placement ? null : (
+        // A black belt's bar is red, like the real one.
+        <View style={[styles.belt, { backgroundColor: BELT_COLORS[standing.tier] }, standing.tier === 'grandmaster' && styles.blackBelt]} aria-hidden />
+      )}
+      <Text style={styles.badgeText}>{text}</Text>
     </View>
   );
 }
@@ -111,9 +119,23 @@ export function RankedSummary({ userId, emptyText }: { userId: string; emptyText
 }
 
 const styles = themedStyles(() => ({
-  badge: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  grandmasterBorder: { borderWidth: 1, borderColor: colors.accent },
-  badgeText: { fontSize: 12, fontWeight: '800' },
+  badge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    backgroundColor: colors.surfaceHigh,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  grandmasterBorder: { borderColor: colors.accent },
+  // A belt: the colour with a dark bar at the end, outlined so white and black belts show on any theme.
+  belt: { width: 18, height: 8, borderRadius: 2, borderWidth: 1, borderColor: colors.control, borderRightWidth: 5, borderRightColor: '#111111' },
+  blackBelt: { borderRightColor: colors.accentFill },
+  badgeText: { fontSize: 12, fontWeight: '800', color: colors.text },
   track: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceRaised, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 2 },
