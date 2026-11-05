@@ -37,6 +37,13 @@ pre-release channels are named in the release title.
   `keyStats()` and `keyMoments()` (`features/analysis/summary.ts`) choose
   what Overview shows; the feed card and the match screen share
   `FightScore`, and section tabs use the new `TabBar`.
+- Profile: your picture with your matches, record and friends beside it,
+  then your name, @username, Public or Private, and your bio, with "Edit
+  profile" and "Friends" buttons (the Friends button counts new requests).
+  Other people's profiles use the same header (`AthleteHeader`) with Add
+  friend, Accept or Remove friend, and Block.
+- Edit profile is its own screen: change or remove your picture, username,
+  display name and bio, and the Public account switch (moved off Profile).
 
 ## [2.1.4] Alpha, 2026-11-04
 

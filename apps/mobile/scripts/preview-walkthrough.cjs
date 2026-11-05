@@ -316,12 +316,20 @@ async function main() {
       await shot('profile', { tall: true });
       // A reserved name answers like one that's in use.
       await button('Edit profile').click();
+      await see(/Change picture|Add a picture/);
+      await shot('edit-profile', { tall: true });
       await field('Display name').fill('Coach Max');
       await button('Save').click();
       await see('That is already taken.');
-      await button('Cancel').click();
+      // Privacy is on Edit profile now: private, then public again.
+      const privacy = page.getByRole('switch', { name: 'Public account' });
+      await privacy.click();
+      await see('Only friends you approve');
+      await privacy.click();
+      await see('Anyone signed in to MatIQ');
+      await page.goBack();
       await see('Alex Rivera');
-      await button('Friends & requests').click();
+      await button('Friends (1 new)').click();
       await see('Requests');
       await shot('friends');
       await button('Accept').click();

@@ -1,14 +1,16 @@
+'use no memo'; // Reads the theme, which changes in place (src/ui/theme.ts); React Compiler would keep old colours.
+
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Alert, View } from 'react-native';
 import { z } from 'zod';
 import { useUserId } from '@/features/auth/AuthProvider';
 import { useFeed, useFriendAction, useProfile } from '@/features/social/api';
-import { Avatar } from '@/features/social/Avatar';
+import { AthleteHeader } from '@/features/social/AthleteHeader';
 import { PostCard } from '@/features/social/PostCard';
 import { RankedSummary } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
-import { Body, Button, Caption, Card, ErrorText, Loading, Screen, Title } from '@/ui/components';
-import { spacing } from '@/ui/theme';
+import { Body, Button, Caption, Card, ErrorText, Loading, Screen } from '@/ui/components';
+import { themedStyles } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
 
 const paramsSchema = z.object({ id: z.string().uuid() });
@@ -53,39 +55,51 @@ function UserProfile({ id }: { id: string }) {
   return (
     <Screen>
       <Stack.Screen options={{ title: `@${card.username}` }} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-        <Avatar path={card.avatar_path} name={card.display_name} size={72} />
-        <View style={{ flex: 1 }}>
-          <Title>{card.display_name}</Title>
-          <Caption>
-            @{card.username} · {card.friend_count} {card.friend_count === 1 ? 'friend' : 'friends'} · {card.visibility === 'public' ? 'Public' : 'Private'}
-          </Caption>
-        </View>
-      </View>
-      {card.bio ? <Body>{card.bio}</Body> : null}
-      <RankedSummary userId={id} />
-
-      {id !== me ? (
-        <Card>
-          {card.relationship === 'none' ? (
-            <Button label="Add friend" onPress={() => action.mutate({ action: 'request', userId: id })} loading={action.isPending} />
-          ) : null}
-          {card.relationship === 'outgoing' ? (
-            <Button label="Cancel request" variant="secondary" onPress={() => action.mutate({ action: 'remove', userId: id })} />
-          ) : null}
-          {card.relationship === 'incoming' ? (
-            <View style={{ gap: spacing.sm }}>
-              <Button label="Accept friend request" onPress={() => action.mutate({ action: 'accept', userId: id })} />
-              <Button label="Decline" variant="secondary" onPress={() => action.mutate({ action: 'decline', userId: id })} />
+      <AthleteHeader
+        avatarPath={card.avatar_path}
+        displayName={card.display_name}
+        username={card.username}
+        tags={[
+          { label: `${card.friend_count} ${card.friend_count === 1 ? 'friend' : 'friends'}`, icon: 'people-outline' },
+          card.visibility === 'public' ? { label: 'Public', icon: 'globe-outline' } : { label: 'Private', icon: 'lock-closed' },
+        ]}
+        bio={card.bio}
+      >
+        {id !== me ? (
+          <>
+            {card.relationship === 'none' ? (
+              <View style={styles.action}>
+                <Button label="Add friend" size="sm" icon="person-add-outline" onPress={() => action.mutate({ action: 'request', userId: id })} loading={action.isPending} />
+              </View>
+            ) : null}
+            {card.relationship === 'outgoing' ? (
+              <View style={styles.action}>
+                <Button label="Cancel request" variant="secondary" size="sm" onPress={() => action.mutate({ action: 'remove', userId: id })} />
+              </View>
+            ) : null}
+            {card.relationship === 'incoming' ? (
+              <>
+                <View style={styles.action}>
+                  <Button label="Accept friend request" size="sm" onPress={() => action.mutate({ action: 'accept', userId: id })} />
+                </View>
+                <View style={styles.action}>
+                  <Button label="Decline" variant="secondary" size="sm" onPress={() => action.mutate({ action: 'decline', userId: id })} />
+                </View>
+              </>
+            ) : null}
+            {card.relationship === 'friend' ? (
+              <View style={styles.action}>
+                <Button label="Remove friend" variant="secondary" size="sm" onPress={() => action.mutate({ action: 'remove', userId: id })} />
+              </View>
+            ) : null}
+            <View style={styles.action}>
+              <Button label="Block" variant="danger" size="sm" onPress={confirmBlock} />
             </View>
-          ) : null}
-          {card.relationship === 'friend' ? (
-            <Button label="Remove friend" variant="secondary" onPress={() => action.mutate({ action: 'remove', userId: id })} />
-          ) : null}
-          <Button label="Block" variant="danger" onPress={confirmBlock} />
-          {action.error ? <ErrorText>{errorMessage(action.error)}</ErrorText> : null}
-        </Card>
-      ) : null}
+          </>
+        ) : null}
+      </AthleteHeader>
+      {action.error ? <ErrorText>{errorMessage(action.error)}</ErrorText> : null}
+      <RankedSummary userId={id} />
 
       {card.can_view_content ? (
         (posts.data?.pages.flat() ?? []).map((post) => <PostCard key={post.post_id} post={post} />)
@@ -98,3 +112,7 @@ function UserProfile({ id }: { id: string }) {
     </Screen>
   );
 }
+
+const styles = themedStyles(() => ({
+  action: { flexGrow: 1, flexBasis: 120 },
+}));
