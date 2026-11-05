@@ -447,6 +447,7 @@ export function TabBar<T extends string>({
   label: string;
 }) {
   useTheme();
+  const pressStyle = usePressStyle();
   return (
     <View style={styles.tabBar} accessibilityRole="tablist" accessibilityLabel={label}>
       {options.map((option) => {
@@ -457,7 +458,7 @@ export function TabBar<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
-            style={withPressFeedback([styles.tab, selected && styles.tabSelected])}
+            style={(state) => [styles.tab, selected && styles.tabSelected, ...pressStyle(state)]}
           >
             <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>{option.label}</Text>
           </Pressable>

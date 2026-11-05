@@ -14,13 +14,19 @@ export interface KeyStat {
 }
 
 /**
+ * Stats where having more is not an edge: penalties count against you, and
+ * time playing guard is time on the bottom.
+ */
+const NOT_AN_EDGE = new Set(['Penalties', 'Guard time']);
+
+/**
  * Up to `max` stats with the clearest edge, most one-sided first. Even stats,
- * and stats neither fighter scored, are left out.
+ * stats neither fighter scored, and stats where more is not better are left out.
  */
 export function keyStats(scorecard: Scorecard, max = 3): KeyStat[] {
   return statRows(scorecard)
     .map((row, index) => ({ row, index, edge: Math.abs(row.share - 0.5) }))
-    .filter(({ edge }) => edge > 0)
+    .filter(({ row, edge }) => edge > 0 && !NOT_AN_EDGE.has(row.label))
     .sort((x, y) => y.edge - x.edge || x.index - y.index)
     .slice(0, max)
     .map(({ row }) => {

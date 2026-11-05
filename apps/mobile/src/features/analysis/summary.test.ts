@@ -35,6 +35,26 @@ describe('keyStats', () => {
     assert.ok(!labels.includes('Reversals'));
     assert.ok(!labels.includes('Escapes'));
   });
+
+  it('never credits more guard time (time on the bottom) as an edge', () => {
+    // B played guard for 27s, A none: one-sided, but not B's edge.
+    assert.ok(!keyStats(card, 20).some((stat) => stat.label === 'Guard time'));
+  });
+
+  it('never credits more penalties as an edge', () => {
+    const wrestling = analyzeMatch(
+      'wrestling',
+      [
+        { type: 'takedown', athlete: 'A', t: s(10), confidence: 0.9 },
+        { type: 'penalty', athlete: 'B', t: s(20), kind: 'stalling', confidence: 0.9 },
+        { type: 'penalty', athlete: 'B', t: s(40), kind: 'stalling', confidence: 0.9 },
+      ],
+      { durationMs: s(360), variant: 'freestyle' },
+    );
+    const labels = keyStats(wrestling, 20).map((stat) => stat.label);
+    assert.ok(labels.includes('Takedowns'));
+    assert.ok(!labels.includes('Penalties'));
+  });
 });
 
 describe('keyMoments', () => {
