@@ -1,6 +1,7 @@
 /**
- * The app's theme: Light, Dark or Midnight, or System (the default), which
- * follows the phone's light or dark setting. Stored on this device only, like
+ * The app's theme: Black ('dark', the default), Midnight or White ('light'),
+ * or Match my phone ('system'), which follows the phone's light or dark
+ * setting. Stored on this device only, like
  * the accessibility settings.
  */
 

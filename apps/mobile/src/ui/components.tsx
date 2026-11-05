@@ -22,6 +22,7 @@ import { useA11y } from '@/features/accessibility/A11yProvider';
 import { Text } from './text';
 import { colors, font, radius, spacing, themedStyles } from './theme';
 import { useTheme } from './ThemeProvider';
+import { typeface } from './typography';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -272,6 +273,7 @@ export function TextField({ label, error, ...props }: TextInputProps & { label: 
         }}
         style={[
           styles.input,
+          typeface({}),
           { fontSize: 16 * textScale },
           props.multiline && styles.inputMultiline,
           focused && { borderColor: colors.accent, borderWidth: 2 },

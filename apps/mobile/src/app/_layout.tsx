@@ -3,6 +3,7 @@
 import { ClerkProvider } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Font from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -18,8 +19,10 @@ import { enableCertificatePinning } from '@/lib/ssl-pinning';
 import { openSecureStorage, writeCache } from '@/lib/storage';
 import '@/preview/setup';
 import { Body, Caption, Loading, Screen, Title } from '@/ui/components';
+import { FONT_FILES } from '@/ui/fonts';
 import { colors, isDarkTheme } from '@/ui/theme';
 import { ThemeProvider, useTheme } from '@/ui/ThemeProvider';
+import { headerFont, markFontsLoaded } from '@/ui/typography';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -61,6 +64,10 @@ async function boot(): Promise<void> {
   if (envError) throw new Error(__DEV__ ? `Invalid configuration:\n${envError}` : 'This build is misconfigured.');
   await enableCertificatePinning();
   await openSecureStorage();
+  // The app's typefaces, from the app bundle. Without them the phone's font is used.
+  await Font.loadAsync(FONT_FILES)
+    .then(markFontsLoaded)
+    .catch(() => undefined);
 }
 
 export default function RootLayout() {
@@ -127,6 +134,9 @@ function RootNavigator() {
         contentStyle: { backgroundColor: colors.background },
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
+        headerTitleStyle: headerFont(22),
+        // No bright hairline under the header on a dark screen.
+        headerShadowVisible: false,
       }}
     >
       {/* Explicit redirects: the root stack has no anchor, so without them a

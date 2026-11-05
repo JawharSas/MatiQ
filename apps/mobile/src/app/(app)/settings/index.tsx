@@ -15,7 +15,7 @@ import { Button, Caption, Card, ErrorText, Heading, ListGroup, ListRow, Screen, 
 import { font, themedStyles } from '@/ui/theme';
 import { type ThemePreference, useTheme } from '@/ui/ThemeProvider';
 
-const THEME_LABELS: Record<ThemePreference, string> = { system: 'System', light: 'Light', dark: 'Dark', midnight: 'Midnight' };
+const THEME_LABELS: Record<ThemePreference, string> = { system: 'Match my phone', light: 'White', dark: 'Black', midnight: 'Midnight' };
 
 /** Everything essential in one place: account and sign-in, appearance, AI, data, help and legal. */
 export default function SettingsScreen() {
@@ -89,7 +89,7 @@ export default function SettingsScreen() {
         <ListRow
           icon="contrast"
           title="Theme"
-          subtitle="Light, Dark, Midnight or your phone's setting"
+          subtitle="Black, Midnight, White or your phone's setting"
           value={THEME_LABELS[preference]}
           onPress={() => router.push('/appearance')}
         />

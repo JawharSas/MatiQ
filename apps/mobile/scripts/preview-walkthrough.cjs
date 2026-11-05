@@ -81,6 +81,12 @@ async function main() {
   // A list row's name is its title plus its subtitle (WCAG 2.5.3), so match the title and an optional capitalised subtitle.
   const button = (name) => page.getByRole('button', { name: new RegExp(`^${escape(name)}(?:\\s*[A-Z].*)?$`) }).first();
   const tab = (name) => page.getByRole('tab', { name }).first();
+  // Settings is behind the gear on Profile, above the tabs.
+  const openSettings = async () => {
+    await tab('Profile').click();
+    await button('Settings').click();
+    await see('Delete account');
+  };
   // Screens further down the stack keep their fields in the DOM: only fill visible ones.
   const field = (label) => page.getByLabel(label).locator('visible=true').first();
   const matchLink = (title) => page.getByRole('link', { name: new RegExp(`^${escape(title)}`) }).first();
@@ -139,6 +145,7 @@ async function main() {
       await page.waitForTimeout(500);
       await shot('feed-friends');
       await tab('Community').click();
+      await button('More options for this post').click();
       await page.getByRole('link', { name: 'Report post', exact: true }).first().click();
       await see('What is wrong with this post?');
       reportedPostId = (await page.getByText(/^[0-9a-f]{8}-[0-9a-f-]{27}$/).locator('visible=true').first().textContent()).trim();
@@ -170,7 +177,7 @@ async function main() {
     });
 
     await step('record and analyse', async () => {
-      await tab('Analyze').click();
+      await tab('Record a round').click();
       await see('Match setup');
       await shot('analyze-setup', { tall: true });
       await page.getByRole('tab', { name: 'Upload video' }).click();
@@ -313,8 +320,7 @@ async function main() {
     });
 
     await step('settings and account', async () => {
-      await tab('Settings').click();
-      await see('Delete account');
+      await openSettings();
       await shot('settings', { tall: true });
       // Clerk's UserProfileView (the preview's stand-in) with its own back button.
       await button('Account and security').click();
@@ -361,13 +367,14 @@ async function main() {
 
     await step('themes: light and midnight', async () => {
       await button('Theme').click();
-      await see('True black');
+      await see('Pure black');
       await shot('appearance');
-      await page.getByRole('radio', { name: /^Light/ }).click();
+      await page.getByRole('radio', { name: /^White/ }).click();
       await shot('appearance-light');
       await page.goBack();
       await see('Delete account');
       await shot('settings-light', { tall: true });
+      await page.goBack();
       await tab('Feed').click();
       await shot('feed-light', { tall: true });
       await tab('Matches').click();
@@ -379,11 +386,12 @@ async function main() {
       await shot('ranked-light', { tall: true });
       await tab('Profile').click();
       await shot('profile-light', { tall: true });
-      await tab('Settings').click();
+      await openSettings();
       await button('Theme').click();
       await page.getByRole('radio', { name: /^Midnight/ }).click();
       await page.goBack();
       await shot('settings-midnight', { tall: true });
+      await page.goBack();
       await tab('Feed').click();
       await shot('feed-midnight', { tall: true });
       await tab('Matches').click();
@@ -392,9 +400,10 @@ async function main() {
       await shot('dashboard-midnight', { tall: true });
       await page.goBack();
       // Back to the phone's setting (dark in this browser).
-      await tab('Settings').click();
+      await openSettings();
       await button('Theme').click();
-      await page.getByRole('radio', { name: /^System/ }).click();
+      await page.getByRole('radio', { name: /^Match my phone/ }).click();
+      await page.goBack();
       await page.goBack();
     });
 
@@ -451,7 +460,7 @@ async function main() {
     await step('sign out from Clerk, banned sign-in, sign in again', async () => {
       // Signing out inside Clerk's account screen ends the session: the app
       // goes back to sign-in and clears this device's data.
-      await tab('Settings').click();
+      await openSettings();
       await button('Account and security').click();
       await see('Email addresses');
       // Settings' own Sign out row stays in the page under this screen, before it.
@@ -490,7 +499,7 @@ async function main() {
     });
 
     await step('three strikes ban an account', async () => {
-      await tab('Settings').click();
+      await openSettings();
       await button('Sign out').click();
       // One failed attempt to open the account is retried without showing an error.
       await page.evaluate(() => {

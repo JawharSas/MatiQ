@@ -13,6 +13,7 @@ import { isBannedError } from '@/lib/errors';
 import { Loading } from '@/ui/components';
 import { colors } from '@/ui/theme';
 import { useTheme } from '@/ui/ThemeProvider';
+import { headerFont } from '@/ui/typography';
 
 /**
  * Signed-in area. Before anything else, the user must have answered the age
@@ -50,7 +51,7 @@ export default function AppLayout() {
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.text,
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700' },
+        headerTitleStyle: headerFont(22),
         contentStyle: { backgroundColor: colors.background },
       }}
     >
@@ -62,6 +63,7 @@ export default function AppLayout() {
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
+      <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/account" options={{ headerShown: false }} />
       <Stack.Screen name="settings/api-keys" options={{ title: 'AI provider' }} />
       <Stack.Screen name="admin" options={{ title: 'Owner panel' }} />

@@ -82,7 +82,8 @@ const midnight: Palette = {
 
 /** White with red: neutral greys, near-black text. */
 const light: Palette = {
-  background: '#F5F5F5',
+  // "White": snow white behind white cards.
+  background: '#FFFAFA',
   surface: '#FFFFFF',
   surfaceRaised: '#FAFAFA',
   surfaceHigh: '#E5E5E5',

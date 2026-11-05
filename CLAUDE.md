@@ -63,6 +63,12 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
     red accent; no orange, no gradients. `accent` is red for text and icons;
     `accentFill` is the brand red behind filled controls (white labels).
     `palettes.test.ts` checks every contrast and that both stay red.
+  - Players see the themes as Black (`dark`), Midnight, White (`light`, snow
+    white) and Match my phone (`system`).
+- **Type.** Barlow for text, Barlow Condensed for scores, numbers and
+  headings (`src/ui/fonts.ts`). Use the app's `Text` and set `fontWeight`;
+  ask for the condensed face with `fontFamily: CONDENSED`
+  (`src/ui/typography.ts`). Navigation headers use `headerFont(size)`.
 - **Accessibility.**
   - Every text colour must pass WCAG AA in every theme.
   - Interactive elements need labels and roles; radios need `aria-checked`.

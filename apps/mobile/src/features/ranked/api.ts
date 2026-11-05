@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppError, fromFunctionError, fromPostgrest } from '@/lib/errors';
 import { backend } from '@/lib/backend';
 import { cleanText } from '@/lib/validation';
-import type { RankedMatchRow } from './ranked-state';
+import { describeRanked, type RankedMatchRow } from './ranked-state';
 
 export interface RatingRow {
   user_id: string;
@@ -83,6 +83,12 @@ export function useRankedMatches() {
     },
     refetchInterval: 60_000,
   });
+}
+
+/** How many ranked matches need something from you: the red dot on the Ranked tab. */
+export function useRankedNeedsMe(userId: string): number {
+  const matches = useRankedMatches();
+  return (matches.data ?? []).filter((row) => describeRanked(row, userId).actionNeeded).length;
 }
 
 export function useRankedMatch(id: string) {
