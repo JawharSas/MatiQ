@@ -8,27 +8,27 @@ import { useRef, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import { Text } from '@/ui/text';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Badge, Body, Caption, Card, Heading, Segmented } from '@/ui/components';
+import { VARIANT_LABELS } from '@/features/capture/MatchSetupForm';
+import { Body, Caption, Card, Heading, Segmented, TabBar } from '@/ui/components';
 import { athleteColor, colors, font, radius, spacing, themedStyles } from '@/ui/theme';
+import { CONDENSED } from '@/ui/typography';
 import { useTheme } from '@/ui/ThemeProvider';
+import { FightScore } from './FightScore';
 import { highlightText, withNames } from './labels';
+import { keyMoments, keyStats } from './summary';
 import { statRows } from './stat-rows';
-import { type AthleteFilter, type BreakdownSection, type Clip, filterByAthlete, techniqueBreakdown } from './technique-breakdown';
+import { type AthleteFilter, type BreakdownSection, type Clip, filterByAthlete, techniqueBreakdown, techniqueName } from './technique-breakdown';
 import type { MatchDetail } from './useMatch';
 
-const METHOD_LABELS: Record<string, string> = {
-  submission: 'Submission',
-  fall: 'Fall',
-  ko_tko: 'KO / TKO',
-  technical_superiority: 'Technical superiority',
-  points: 'Points',
-  advantages: 'Advantages',
-  penalties: 'Penalties',
-  criteria: 'Criteria',
-  decision: 'Projected decision',
-  disqualification: 'Disqualification',
-  draw: 'Draw',
-};
+const DISCIPLINE_LABELS: Record<string, string> = { bjj: 'BJJ', wrestling: 'Wrestling', mma: 'MMA' };
+
+type Section = 'overview' | 'moments' | 'stats' | 'log';
+const SECTIONS = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'moments', label: 'Moments' },
+  { value: 'stats', label: 'Stats' },
+  { value: 'log', label: 'Log' },
+] as const;
 
 interface MatchDashboardProps {
   match: MatchDetail;
@@ -42,6 +42,7 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
   const { reduceMotion } = useA11y();
   const scorecard = match.analysis?.scorecard;
   const [filter, setFilter] = useState<AthleteFilter>('both');
+  const [section, setSection] = useState<Section>('overview');
   const [clip, setClip] = useState<Clip | null>(null);
   // Played once, when the player first becomes ready.
   const pendingClip = useRef(initialClip ?? null);
@@ -94,37 +95,55 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
           Playing highlight {formatClock(clip.start)}–{formatClock(clip.end)}
         </Caption>
       ) : null}
-      <ScoreHeader scorecard={scorecard} names={names} />
-      <Segmented options={filterOptions} value={filter} onChange={setFilter} />
-      <PhaseTimeline
-        phases={scorecard.phases}
-        highlights={highlights}
-        names={names}
-        durationMs={scorecard.durationMs}
-        onSeek={seek}
-        onPlay={playHighlight}
-      />
-      <HighlightList highlights={highlights} names={names} onPlay={playHighlight} />
-      {scorecard.rounds ? <RoundsTable scorecard={scorecard} names={names} /> : null}
-      <StatsPanel scorecard={scorecard} names={names} />
-      <TechniqueBreakdown sections={techniqueBreakdown(scorecard)} names={names} filter={filter} />
-      {match.analysis?.coaching_summary ? (
-        <Card>
-          <Heading>Coach's notes</Heading>
-          <Body>{match.analysis.coaching_summary}</Body>
-        </Card>
+      <ResultHero scorecard={scorecard} names={names} />
+      <TabBar options={SECTIONS} value={section} onChange={setSection} label="Match sections" />
+      {section === 'overview' ? (
+        <>
+          <KeyStatTiles scorecard={scorecard} names={names} />
+          <KeyMoments scorecard={scorecard} names={names} onPlay={playHighlight} />
+          {match.analysis?.coaching_summary ? (
+            <Card>
+              <Heading>Coach's notes</Heading>
+              <Body>{match.analysis.coaching_summary}</Body>
+            </Card>
+          ) : null}
+        </>
       ) : null}
-      <ScoreLog scorecard={scorecard} names={names} filter={filter} onSeek={seek} />
-      {scorecard.warnings.length > 0 ? (
-        <Card>
-          <Heading>About this analysis</Heading>
-          {scorecard.warnings.map((warning) => (
-            <Caption key={warning}>• {warning}</Caption>
-          ))}
-          <Caption>
-            Ruleset {scorecard.rulesetVersion} ({scorecard.variant}). AI-detected events can be wrong; treat scores as a training aid.
-          </Caption>
-        </Card>
+      {section === 'moments' ? (
+        <>
+          <Segmented options={filterOptions} value={filter} onChange={setFilter} />
+          <PhaseTimeline
+            phases={scorecard.phases}
+            highlights={highlights}
+            names={names}
+            durationMs={scorecard.durationMs}
+            onSeek={seek}
+            onPlay={playHighlight}
+          />
+          <HighlightList highlights={highlights} names={names} onPlay={playHighlight} />
+        </>
+      ) : null}
+      {section === 'stats' ? (
+        <>
+          <StatsPanel scorecard={scorecard} names={names} />
+          {scorecard.rounds ? <RoundsTable scorecard={scorecard} names={names} /> : null}
+          <TechniqueBreakdown sections={techniqueBreakdown(scorecard)} names={names} filter="both" />
+        </>
+      ) : null}
+      {section === 'log' ? (
+        <>
+          <Segmented options={filterOptions} value={filter} onChange={setFilter} />
+          <ScoreLog scorecard={scorecard} names={names} filter={filter} onSeek={seek} />
+          <Card>
+            <Heading>About this analysis</Heading>
+            {scorecard.warnings.map((warning) => (
+              <Caption key={warning}>• {warning}</Caption>
+            ))}
+            <Caption>
+              Ruleset {scorecard.rulesetVersion} ({scorecard.variant}). AI-detected events can be wrong; treat scores as a training aid.
+            </Caption>
+          </Card>
+        </>
       ) : null}
     </View>
   );
@@ -132,37 +151,83 @@ export function MatchDashboard({ match, videoUrl, initialClip }: MatchDashboardP
 
 type Names = { A: string; B: string };
 
-function ScoreHeader({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
+/** The result at the top: the score as a fight card, how it ended in words, and the ruleset. */
+function ResultHero({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
   useTheme();
   const { result, totals } = scorecard;
-  const winner = result.winner ? names[result.winner] : null;
-  const method = `${METHOD_LABELS[result.method] ?? result.method}${result.at !== undefined ? ` · ${formatClock(result.at)}` : ''}`;
+  const note = (athlete: 'A' | 'B') =>
+    scorecard.discipline === 'bjj'
+      ? `Adv ${totals[athlete].advantages} · Pen ${totals[athlete].penalties}`
+      : `Penalties ${totals[athlete].penalties}`;
   return (
-    <Card style={styles.scoreCard}>
-      <Badge label={method} tone={winner ? 'accent' : 'neutral'} icon={result.method === 'submission' ? 'flash' : 'stopwatch-outline'} />
-      <View style={styles.resultRow}>
-        {winner ? <Ionicons name="trophy" size={22} color={colors.accent} /> : null}
-        <Text style={font.title}>{winner ? `${winner} wins` : 'Draw'}</Text>
-      </View>
-      <View style={styles.scoreRow}>
-        {(['A', 'B'] as const).map((athlete, index) => {
-          const lost = result.winner !== null && result.winner !== undefined && result.winner !== athlete;
-          return (
-            <View key={athlete} style={[styles.scoreCell, index === 1 && { alignItems: 'flex-end' }]}>
-              <View style={[styles.cornerBar, { backgroundColor: athleteColor(athlete) }, lost && { opacity: 0.35 }]} />
-              <Text style={[styles.athleteName, lost && { color: colors.textMuted }]} numberOfLines={1}>
-                {names[athlete]}
-              </Text>
-              <Text style={[styles.points, { color: lost ? colors.textMuted : athleteColor(athlete) }]}>{totals[athlete].points}</Text>
-              <Text style={font.caption}>
-                {scorecard.discipline === 'bjj'
-                  ? `Adv ${totals[athlete].advantages} · Pen ${totals[athlete].penalties}`
-                  : `Penalties ${totals[athlete].penalties}`}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
+    <View style={styles.hero}>
+      <FightScore
+        size="hero"
+        names={names}
+        points={{ A: totals.A.points, B: totals.B.points }}
+        winner={result.winner}
+        method={result.method}
+        at={result.at}
+        notes={{ A: note('A'), B: note('B') }}
+      />
+      <Text style={styles.summary}>{withNames(result.summary, names)}</Text>
+      <Text style={font.caption}>
+        {DISCIPLINE_LABELS[scorecard.discipline] ?? scorecard.discipline} · {VARIANT_LABELS[scorecard.variant] ?? scorecard.variant}
+      </Text>
+    </View>
+  );
+}
+
+/** The few stats where one fighter clearly had the edge. */
+function KeyStatTiles({ scorecard, names }: { scorecard: Scorecard; names: Names }) {
+  useTheme();
+  const stats = keyStats(scorecard);
+  if (stats.length === 0) return null;
+  return (
+    <View style={styles.tiles}>
+      {stats.map((stat) => (
+        <View key={stat.label} style={styles.tile} accessible accessibilityLabel={`${stat.label}: ${names[stat.leader]}, ${stat.value}`}>
+          <Text style={styles.tileValue}>{stat.value}</Text>
+          <Text style={styles.tileLabel}>{stat.label}</Text>
+          <Text style={styles.tileName} numberOfLines={1}>
+            {names[stat.leader]}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** The moments that decided the match, each one playable. */
+function KeyMoments({ scorecard, names, onPlay }: { scorecard: Scorecard; names: Names; onPlay?: (highlight: Highlight) => void }) {
+  useTheme();
+  const moments = keyMoments(scorecard);
+  return (
+    <Card>
+      <Heading>Key moments</Heading>
+      {moments.length === 0 ? <Body muted>No scoring moments were picked up in this round.</Body> : null}
+      {moments.map(({ highlight, tag, finish }, index) => {
+        const who = highlight.athlete ? names[highlight.athlete] : null;
+        const what = techniqueName(highlightText(highlight.label, highlight.athlete, names));
+        return (
+          <Pressable
+            key={`moment-${highlight.t}`}
+            disabled={!onPlay}
+            onPress={() => onPlay?.(highlight)}
+            accessibilityRole={onPlay ? 'button' : 'text'}
+            accessibilityLabel={`${formatClock(highlight.t)}, ${who ? `${who}, ` : ''}${what}${tag ? `, ${tag}` : ''}`}
+            accessibilityHint={onPlay ? 'Plays this moment' : undefined}
+            style={({ pressed }) => [styles.momentRow, index > 0 && styles.momentDivider, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.momentTime}>{formatClock(highlight.t)}</Text>
+            <Text style={[font.body, styles.fill, finish && styles.momentFinish]} numberOfLines={2}>
+              {who ? <Text style={styles.momentWho}>{who} </Text> : null}
+              {what}
+            </Text>
+            {tag ? <Text style={[styles.momentTag, finish && { color: colors.accent }]}>{tag}</Text> : null}
+          </Pressable>
+        );
+      })}
     </Card>
   );
 }
@@ -397,13 +462,19 @@ const styles = themedStyles(() => ({
   stack: { gap: spacing.lg },
   fill: { flex: 1 },
   video: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.lg, backgroundColor: '#000' },
-  scoreCard: { gap: 14 },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  scoreRow: { flexDirection: 'row', gap: spacing.lg, backgroundColor: colors.surfaceRaised, borderRadius: 16, padding: 14 },
-  scoreCell: { flex: 1, gap: 4 },
-  cornerBar: { width: 28, height: 4, borderRadius: 2 },
-  athleteName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  points: { fontSize: 48, lineHeight: 54, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'], letterSpacing: -1 },
+  hero: { gap: spacing.sm, paddingTop: spacing.xs },
+  summary: { ...font.body, color: colors.textMuted, marginTop: spacing.xs },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tile: { flexGrow: 1, flexBasis: 96, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 2 },
+  tileValue: { fontFamily: CONDENSED, fontWeight: '800', fontSize: 32, lineHeight: 36, color: colors.text, fontVariant: ['tabular-nums'] },
+  tileLabel: { fontSize: 13, lineHeight: 17, color: colors.textMuted },
+  tileName: { fontSize: 13, lineHeight: 17, fontWeight: '600', color: colors.text },
+  momentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 48 },
+  momentDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  momentTime: { width: 44, fontFamily: CONDENSED, fontWeight: '700', fontSize: 16, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  momentWho: { fontWeight: '700' },
+  momentFinish: { fontWeight: '700' },
+  momentTag: { fontFamily: CONDENSED, fontWeight: '700', fontSize: 17, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.text },
   timeline: { height: 28, borderRadius: radius.sm, backgroundColor: colors.surfaceRaised, overflow: 'hidden' },
   phase: { position: 'absolute', top: 6, bottom: 6, opacity: 0.85 },
   marker: { position: 'absolute', top: 0, bottom: 0, width: 3, marginLeft: -1, backgroundColor: colors.accent },

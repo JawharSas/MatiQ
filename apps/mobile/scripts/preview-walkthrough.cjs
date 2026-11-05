@@ -191,9 +191,9 @@ async function main() {
       await page.waitForTimeout(2200);
       await shot('recorder-recording');
       await page.getByRole('button', { name: 'Stop recording' }).click();
-      await page.getByText(/Queued for analysis|Analysing your round|Technique breakdown/).first().waitFor({ timeout: 20_000 });
+      await page.getByText(/Queued for analysis|Analysing your round|Key moments/).first().waitFor({ timeout: 20_000 });
       await shot('analysis-in-progress');
-      await see('Technique breakdown', 20_000);
+      await see('Key moments', 20_000);
       await shot('new-match-dashboard', { tall: true });
     });
 
@@ -206,11 +206,22 @@ async function main() {
       await see('Analysis failed');
       await shot('match-failed');
       await button('Retry analysis').click();
-      await see('Technique breakdown', 20_000);
+      await see('Key moments', 20_000);
       await page.goBack();
       await matchLink('Tuesday open mat').click();
-      await see('Technique breakdown');
+      await see('Key moments');
       await shot('bjj-dashboard', { tall: true });
+      // The match screen's sections.
+      await tab('Moments').click();
+      await see('Timeline');
+      await shot('bjj-dashboard-moments', { tall: true });
+      await tab('Stats').click();
+      await see('Technique breakdown');
+      await shot('bjj-dashboard-stats', { tall: true });
+      await tab('Log').click();
+      await see('About this analysis');
+      await shot('bjj-dashboard-log', { tall: true });
+      await tab('Overview').click();
       await button('Share to feed').click();
       await see('Share your scorecard');
       await page.getByRole('radio', { name: /^0:25/ }).first().click();
@@ -224,16 +235,19 @@ async function main() {
       await page.getByLabel('Caption').fill('Back takes are finally clicking.');
       await page.getByRole('switch', { name: 'Allow comments' }).click();
       await button('Post').click();
-      await see('Technique breakdown');
+      await see('Key moments');
+      await tab('Moments').click();
       await page.getByRole('tab', { name: 'Alex', exact: true }).click();
       await shot('bjj-dashboard-filtered', { tall: true });
       await page.goBack();
       await matchLink('Sparring: 3 x 5').click();
+      await see('Key moments');
+      await tab('Stats').click();
       await see('Rounds (projected)');
       await shot('mma-dashboard', { tall: true });
       await page.goBack();
       await matchLink('Live goes with Sam').click();
-      await see('Technique breakdown');
+      await see('Key moments');
       await shot('wrestling-dashboard', { tall: true });
       await page.goBack();
       // The post went out with comments off; its author can turn them on.
@@ -302,12 +316,20 @@ async function main() {
       await shot('profile', { tall: true });
       // A reserved name answers like one that's in use.
       await button('Edit profile').click();
+      await see(/Change picture|Add a picture/);
+      await shot('edit-profile', { tall: true });
       await field('Display name').fill('Coach Max');
       await button('Save').click();
       await see('That is already taken.');
-      await button('Cancel').click();
+      // Privacy is on Edit profile now: private, then public again.
+      const privacy = page.getByRole('switch', { name: 'Public account' });
+      await privacy.click();
+      await see('Only friends you approve');
+      await privacy.click();
+      await see('Anyone signed in to MatIQ');
+      await page.goBack();
       await see('Alex Rivera');
-      await button('Friends & requests').click();
+      await button('Friends (1 new)').click();
       await see('Requests');
       await shot('friends');
       await button('Accept').click();
@@ -379,7 +401,7 @@ async function main() {
       await shot('feed-light', { tall: true });
       await tab('Matches').click();
       await matchLink('Tuesday open mat').click();
-      await see('Technique breakdown');
+      await see('Key moments');
       await shot('dashboard-light', { tall: true });
       await page.goBack();
       await tab('Ranked').click();
@@ -396,7 +418,7 @@ async function main() {
       await shot('feed-midnight', { tall: true });
       await tab('Matches').click();
       await matchLink('Tuesday open mat').click();
-      await see('Technique breakdown');
+      await see('Key moments');
       await shot('dashboard-midnight', { tall: true });
       await page.goBack();
       // Back to the phone's setting (dark in this browser).

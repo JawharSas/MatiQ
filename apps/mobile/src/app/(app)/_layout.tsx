@@ -62,6 +62,7 @@ export default function AppLayout() {
       <Stack.Screen name="comments/[postId]" options={{ title: 'Comments' }} />
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
+      <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       <Stack.Screen name="settings/account" options={{ headerShown: false }} />
