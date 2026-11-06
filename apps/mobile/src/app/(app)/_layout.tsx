@@ -10,6 +10,7 @@ import { missingAcceptances } from '@/features/legal/consent';
 import { ConsentGate, NotEligible } from '@/features/legal/ConsentGate';
 import { LEGAL_VERSIONS, type LegalDocumentId } from '@/features/legal/documents';
 import { Banned } from '@/features/moderation/Banned';
+import { PushBridge } from '@/features/notifications/PushBridge';
 import { Tutorial, tutorialSeen } from '@/features/onboarding/Tutorial';
 import { isBannedError } from '@/lib/errors';
 import { Loading } from '@/ui/components';
@@ -50,6 +51,8 @@ export default function AppLayout() {
   if (!tutorialDone) return <Tutorial onDone={() => setTutorialDone(true)} />;
 
   return (
+    <>
+    <PushBridge />
     <Stack
       screenOptions={{
         animation: reduceMotion ? 'none' : 'default',
@@ -68,6 +71,11 @@ export default function AppLayout() {
       <Stack.Screen name="user/[id]" options={{ title: '' }} />
       <Stack.Screen name="friends" options={{ title: 'Friends' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="goals" options={{ title: 'Weekly goals' }} />
+      <Stack.Screen name="activity" options={{ title: 'Activity' }} />
+      <Stack.Screen name="gym" options={{ title: 'Gym' }} />
+      <Stack.Screen name="gym-join" options={{ title: 'Join a gym' }} />
+      <Stack.Screen name="settings/notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="tutorial" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
       <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
@@ -79,5 +87,6 @@ export default function AppLayout() {
       <Stack.Screen name="ranked/titles" options={{ title: 'Titles' }} />
       <Stack.Screen name="ranked/match/[id]" options={{ title: 'Ranked match' }} />
     </Stack>
+    </>
   );
 }

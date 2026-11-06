@@ -70,6 +70,10 @@ async function exportData(ctx: RequestContext): Promise<Response> {
     rankedAsChallenger,
     rankedAsOpponent,
     ageCheck,
+    trainingGoals,
+    notifications,
+    notificationSettings,
+    gymMemberships,
   ] = await Promise.all([
       query('profiles', 'id'),
       query('user_entitlements', 'user_id'),
@@ -90,6 +94,10 @@ async function exportData(ctx: RequestContext): Promise<Response> {
       query('ranked_matches', 'challenger_id'),
       query('ranked_matches', 'opponent_id'),
       db.rpc('svc_export_age_check', { p_user_id: uid }).then(({ data }) => data?.[0] ?? null),
+      query('training_goals', 'user_id'),
+      query('notifications', 'user_id'),
+      query('notification_settings', 'user_id'),
+      query('gym_members', 'user_id'),
     ]);
 
   const { rows } = await database().query<{ email: string | null; created_at: string }>(
@@ -127,6 +135,10 @@ async function exportData(ctx: RequestContext): Promise<Response> {
         titles,
         matches: [...(rankedAsChallenger ?? []), ...(rankedAsOpponent ?? [])],
       },
+      trainingGoals,
+      notifications,
+      notificationSettings: notificationSettings?.[0] ?? null,
+      gym: gymMemberships?.[0] ?? null,
     },
     200,
     { 'Content-Disposition': 'attachment; filename="matiq-export.json"' },

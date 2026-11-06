@@ -145,7 +145,7 @@ async function main() {
       await tutorialTap('Next', 'See what decided it');
       await tutorialTap('Next', 'Climb the ranks');
       await shot('tutorial-ranked');
-      await tutorialTap('Next', 'Share it, or keep it');
+      await tutorialTap('Next', 'Train together');
       await tutorialTap('Get started');
       // The owner role is looked up before the age check, while the server
       // refuses everything but reads: it must still show straight away.
@@ -194,6 +194,28 @@ async function main() {
       await see('Three takedowns');
     });
 
+    await step('activity and notification settings', async () => {
+      await tab('Feed').click();
+      // The bell says how many are new; opening Activity marks them read.
+      await page.getByRole('button', { name: 'Activity, 2 new' }).click();
+      await see('challenged you to a ranked match.');
+      await see('liked your post.');
+      await shot('activity', { tall: true });
+      await page.getByRole('link', { name: /Sam Okafor commented on your post/ }).click();
+      await see('That back take was clean');
+      await page.goBack();
+      await page.goBack();
+      await page.getByRole('button', { name: 'Activity', exact: true }).waitFor();
+      await openSettings();
+      await button('Notifications').click();
+      await see("Push notifications aren't available");
+      await page.getByRole('switch', { name: 'Likes' }).click();
+      await shot('notification-settings', { tall: true });
+      await page.goBack();
+      await page.goBack();
+      await tab('Feed').click();
+    });
+
     await step('record and analyse', async () => {
       await tab('Record a round').click();
       await see('Match setup');
@@ -220,6 +242,15 @@ async function main() {
       await tab('Matches').click();
       await see('Tuesday open mat');
       await shot('matches-list');
+      // Progress by month: points, then control time, then win rate.
+      await see('Average points per round');
+      await shot('progress-points', { tall: true });
+      await tab('Control').click();
+      await see('Average time in control');
+      await tab('Win rate').click();
+      await page.getByRole('img', { name: /^Win rate, BJJ, by month/ }).waitFor();
+      await shot('progress-win-rate', { tall: true });
+      await tab('Points').click();
       await matchLink('Comp prep round').click();
       await see('Analysis failed');
       await shot('match-failed');
@@ -332,6 +363,38 @@ async function main() {
       await tab('Profile').click();
       await see('Alex Rivera');
       await shot('profile', { tall: true });
+      // Weekly goals: none yet, then rounds and takedowns.
+      await see('Weekly goals');
+      await button('Set goals').click();
+      await see('Targets for each week');
+      for (let i = 0; i < 3; i++) await button('More rounds').click();
+      for (let i = 0; i < 4; i++) await button('More takedowns').click();
+      await button('Fewer takedowns').click();
+      await shot('goals', { tall: true });
+      await button('Save goals').click();
+      await see('This week');
+      await see(/^\d+ \/ 3$/);
+      await shot('profile-goals', { tall: true });
+      // Gyms: a wrong code, then the right one (any case).
+      await button('Join or start a gym').click();
+      await field('Gym code').fill('ZZZZZZZZ');
+      await button('Join gym').click();
+      await see('No gym has that code');
+      await shot('gym-join', { tall: true });
+      await field('Gym code').fill('k7mrt4qx');
+      await button('Join gym').click();
+      await see('Austin Grappling Co');
+      await see('Three takedowns and a 4-count near fall');
+      await shot('gym-feed', { tall: true });
+      await tab('Leaderboard').click();
+      await see('Ivy');
+      await shot('gym-leaderboard', { tall: true });
+      await tab('Members').click();
+      await see('Invite teammates');
+      await see('K7MRT4QX');
+      await shot('gym-members', { tall: true });
+      await page.goBack();
+      await button('Open gym').waitFor();
       // A reserved name answers like one that's in use.
       await button('Edit profile').click();
       await see(/Change picture|Add a picture/);

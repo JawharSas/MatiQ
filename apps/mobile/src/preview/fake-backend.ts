@@ -127,7 +127,13 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
     case 'rating_history':
     case 'legal_acceptances':
     case 'usage_ledger':
+    case 'training_goals':
+    case 'notification_settings':
       return row.user_id === viewer;
+    case 'notifications':
+    case 'push_tokens':
+      // Read only through get_notifications(); tokens are never readable.
+      return false;
     case 'match_live_batches':
       return row.owner_id === viewer;
     default:
@@ -139,6 +145,18 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
 
 type Filter = (row: Row) => boolean;
 type TableName = Exclude<keyof typeof db, 'storage'>;
+const gymMembershipOf = (uid: string) => db.gym_members.find((m) => m.user_id === uid) ?? null;
+
+function newGymCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  for (;;) {
+    const code = Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+    if (!db.gyms.some((g) => g.invite_code === code)) return code;
+  }
+}
+
+const GOAL_KINDS = ['rounds', 'wins', 'takedowns', 'submission_attempts', 'guard_passes', 'sweeps'];
+
 const tableRows = (table: string): Row[] => (db as unknown as Record<string, Row[] | undefined>)[table] ?? fail('42P01', `relation ${table} does not exist`);
 
 class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count?: number | null }> {
@@ -289,7 +307,11 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
         const analyses = db.match_analyses.filter((analysis) => analysis.match_id === row.id);
         // Like PostgREST's JSON paths: `match_analyses(result:scorecard->result, totals:scorecard->totals)`.
         copy.match_analyses = this.columns.includes('result:scorecard->result')
-          ? analyses.map((analysis) => ({ result: structuredClone(analysis.scorecard?.result ?? null), totals: structuredClone(analysis.scorecard?.totals ?? null) }))
+          ? analyses.map((analysis) => ({
+              result: structuredClone(analysis.scorecard?.result ?? null),
+              totals: structuredClone(analysis.scorecard?.totals ?? null),
+              ...(this.columns.includes('stats:scorecard->stats') ? { stats: structuredClone(analysis.scorecard?.stats ?? null) } : null),
+            }))
           : analyses.map((analysis) => structuredClone(analysis));
       }
       return copy;
@@ -309,6 +331,8 @@ function canWrite(table: string, row: Row, viewer: string): boolean {
     case 'posts':
       return row.author_id === viewer;
     case 'post_likes':
+    case 'training_goals':
+    case 'notification_settings':
       return row.user_id === viewer;
     case 'blocks':
       return row.blocker_id === viewer;
@@ -411,6 +435,32 @@ function insertRow(table: string, value: Row, upsert: boolean): Row | null {
       if (rows.some((r) => r.post_id === value.post_id && r.user_id === viewer)) fail('23505', 'duplicate key value');
       row = { ...value, user_id: viewer, created_at: now() };
       break;
+    case 'training_goals': {
+      // Mirrors neon/migrations/20261106000100_training_goals.sql: one target per kind.
+      if (!GOAL_KINDS.includes(value.kind)) fail('23514', 'goal_kind');
+      if (!Number.isInteger(value.target) || value.target < 1 || value.target > 100) fail('23514', 'goal_target');
+      const existing = rows.find((r) => r.user_id === viewer && r.kind === value.kind);
+      if (existing) {
+        if (!upsert) fail('23505', 'duplicate key value');
+        Object.assign(existing, { target: value.target, updated_at: now() });
+        return existing;
+      }
+      row = { kind: value.kind, target: value.target, user_id: viewer, updated_at: now() };
+      break;
+    }
+    case 'notification_settings': {
+      const existing = rows.find((r) => r.user_id === viewer);
+      const switches = Object.fromEntries(
+        ['friend_requests', 'ranked', 'likes', 'comments'].filter((key) => typeof value[key] === 'boolean').map((key) => [key, value[key]]),
+      );
+      if (existing) {
+        if (!upsert) fail('23505', 'duplicate key value');
+        Object.assign(existing, switches, { updated_at: now() });
+        return existing;
+      }
+      row = { friend_requests: true, ranked: true, likes: true, comments: true, ...switches, user_id: viewer, updated_at: now() };
+      break;
+    }
     case 'blocks':
       row = { ...value, blocker_id: viewer, created_at: now() };
       db.friendships = db.friendships.filter((f) => !(pairKey(viewer, value.blocked_id).join() === [f.user_low, f.user_high].join()));
@@ -673,6 +723,141 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
       .slice(0, p_limit)
       .map((post) => feedItem(post, viewer)),
+
+  // Gyms: mirrors neon/migrations/20261106000300_gyms.sql.
+  get_my_gym: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer);
+    if (!membership) return null;
+    const gym = db.gyms.find((g) => g.id === membership.gym_id)!;
+    const members = db.gym_members.filter((m) => m.gym_id === gym.id && !isBanned(m.user_id)).length;
+    return { id: gym.id, name: gym.name, city: gym.city, invite_code: gym.invite_code, role: membership.role, member_count: members, created_at: gym.created_at };
+  },
+  get_gym_members: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    return db.gym_members
+      .filter((m) => m.gym_id === membership.gym_id && !isBanned(m.user_id) && !blocked(viewer, m.user_id))
+      .map((m) => {
+        const profile = db.profiles.find((p) => p.id === m.user_id)!;
+        return { user_id: m.user_id, username: profile.username, display_name: profile.display_name, avatar_path: profile.avatar_path, role: m.role, joined_at: m.joined_at };
+      })
+      .sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner') || a.display_name.localeCompare(b.display_name));
+  },
+  get_gym_leaderboard: ({ p_discipline }, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    return db.gym_members
+      .filter((m) => m.gym_id === membership.gym_id && !isBanned(m.user_id) && !blocked(viewer, m.user_id))
+      .flatMap((m) => {
+        const r = db.ranked_ratings.find((row) => row.user_id === m.user_id && row.discipline === p_discipline && row.games > 0);
+        const profile = db.profiles.find((p) => p.id === m.user_id)!;
+        return r
+          ? [{ user_id: m.user_id, username: profile.username, display_name: profile.display_name, avatar_path: profile.avatar_path, rating: r.rating, games: r.games, wins: r.wins, losses: r.losses, draws: r.draws }]
+          : [];
+      })
+      .sort((a, b) => b.rating - a.rating || b.games - a.games);
+  },
+  get_gym_feed: ({ p_before, p_limit = 20 }, viewer) => {
+    const membership = gymMembershipOf(viewer);
+    if (!membership) return [];
+    const team = new Set(db.gym_members.filter((m) => m.gym_id === membership.gym_id).map((m) => m.user_id));
+    return db.posts
+      .filter((post) => (post.moderation == null || post.author_id === viewer) && canViewAuthor(viewer, post.author_id, post.friends_only))
+      .filter((post) => team.has(post.author_id) && (!p_before || post.created_at < p_before))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, p_limit)
+      .map((post) => feedItem(post, viewer));
+  },
+  create_gym: ({ p_name, p_city }, viewer) => {
+    if (gymMembershipOf(viewer)) fail('23505', 'already_in_gym');
+    const name = String(p_name ?? '').trim();
+    const city = String(p_city ?? '').trim() || null;
+    if (name.length < 3 || name.length > 60) fail('23514', 'gym_name_length');
+    if (textViolation(name) || (city && textViolation(city))) fail('22023', 'content_not_allowed');
+    const gym = { id: uuid(), name, city, invite_code: newGymCode(), created_by: viewer, created_at: now() };
+    db.gyms.push(gym);
+    db.gym_members.push({ gym_id: gym.id, user_id: viewer, role: 'owner', joined_at: now() });
+    return gym.id;
+  },
+  join_gym: ({ p_code }, viewer) => {
+    if (gymMembershipOf(viewer)) fail('23505', 'already_in_gym');
+    const code = String(p_code ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const gym = db.gyms.find((g) => g.invite_code === code) ?? fail('P0002', 'gym_not_found');
+    db.gym_members.push({ gym_id: gym.id, user_id: viewer, role: 'member', joined_at: now() });
+    return gym.id;
+  },
+  leave_gym: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    db.gym_members = db.gym_members.filter((m) => m.user_id !== viewer);
+    if (membership.role === 'owner') {
+      const successor = db.gym_members.filter((m) => m.gym_id === membership.gym_id).sort((a, b) => (a.joined_at < b.joined_at ? -1 : 1))[0];
+      if (successor) successor.role = 'owner';
+      else db.gyms = db.gyms.filter((g) => g.id !== membership.gym_id);
+    }
+    return true;
+  },
+  remove_gym_member: ({ p_user }, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    if (membership.role !== 'owner') fail('42501', 'only the gym owner can remove members');
+    if (p_user === viewer) fail('22023', 'leave the gym instead');
+    const before = db.gym_members.length;
+    db.gym_members = db.gym_members.filter((m) => !(m.gym_id === membership.gym_id && m.user_id === p_user));
+    return db.gym_members.length < before;
+  },
+  rotate_gym_code: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    if (membership.role !== 'owner') fail('42501', 'only the gym owner can change the code');
+    const gym = db.gyms.find((g) => g.id === membership.gym_id)!;
+    gym.invite_code = newGymCode();
+    return gym.invite_code;
+  },
+
+  // Mirrors neon/migrations/20261106000200_notifications.sql.
+  get_notifications: ({ p_limit = 50 }, viewer) =>
+    db.notifications
+      .filter(
+        (n) =>
+          n.user_id === viewer &&
+          !isBanned(n.actor_id) &&
+          !blocked(viewer, n.actor_id) &&
+          (!['post_like', 'post_comment'].includes(n.kind) || db.posts.some((post) => post.id === n.subject_id)) &&
+          (!String(n.kind).startsWith('ranked_') || db.ranked_matches.some((r) => r.id === n.subject_id)),
+      )
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, Math.min(Math.max(Number(p_limit) || 50, 1), 100))
+      .map((n) => {
+        const actor = db.profiles.find((profile) => profile.id === n.actor_id);
+        return {
+          id: n.id,
+          kind: n.kind,
+          actor_id: n.actor_id,
+          actor_username: actor?.username ?? '',
+          actor_display_name: actor?.display_name ?? 'Someone',
+          actor_avatar_path: actor?.avatar_path ?? null,
+          subject_id: n.subject_id,
+          created_at: n.created_at,
+          read_at: n.read_at,
+        };
+      }),
+  mark_notifications_read: (_args, viewer) => {
+    let marked = 0;
+    for (const n of db.notifications) {
+      if (n.user_id === viewer && !n.read_at) {
+        n.read_at = now();
+        marked++;
+      }
+    }
+    return marked;
+  },
+  register_push_token: ({ p_token, p_platform }, viewer) => {
+    if (!['android', 'ios'].includes(p_platform) || typeof p_token !== 'string' || p_token.length < 16) fail('22023', 'invalid push token');
+    db.push_tokens = db.push_tokens.filter((t) => t.token !== p_token);
+    db.push_tokens.push({ token: p_token, user_id: viewer, platform: p_platform, created_at: now(), last_seen_at: now() });
+    return null;
+  },
+  unregister_push_token: ({ p_token }, viewer) => {
+    const before = db.push_tokens.length;
+    db.push_tokens = db.push_tokens.filter((t) => !(t.token === p_token && t.user_id === viewer));
+    return db.push_tokens.length < before;
+  },
 
   get_post_comments: ({ p_post_id, p_limit = 100 }, viewer) => {
     const post = visiblePost(p_post_id, viewer);

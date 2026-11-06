@@ -51,6 +51,8 @@ const MESSAGES: Record<string, string> = {
   banned: 'This account is banned from MatIQ for breaking the community rules.',
   content_not_allowed: "That includes words MatIQ doesn't allow. Please change it.",
   comments_off: 'The author turned off comments on this post.',
+  already_in_gym: "You're already in a gym. Leave it first to join or start another.",
+  gym_not_found: 'No gym has that code. Check it with your gym and try again.',
   avatar_requires_review: 'Profile pictures are checked before anyone sees them. Pick the picture again.',
   image_rejected: "This picture can't be used. Pick a different one.",
   moderation_unavailable: "Profile pictures can't be checked right now, so they can't be changed yet.",
@@ -68,7 +70,16 @@ export function messageFor(code: string | undefined, fallback = 'Something went 
   return (code && MESSAGES[code]) || fallback;
 }
 
-const SPECIFIC_MESSAGES = new Set(['mfa_required', 'age_check_required', 'banned', 'content_not_allowed', 'avatar_requires_review', 'comments_off']);
+const SPECIFIC_MESSAGES = new Set([
+  'mfa_required',
+  'age_check_required',
+  'banned',
+  'content_not_allowed',
+  'avatar_requires_review',
+  'comments_off',
+  'already_in_gym',
+  'gym_not_found',
+]);
 
 /** True for the error every request gets once an account (or its network) is banned. */
 export function isBannedError(error: unknown): boolean {

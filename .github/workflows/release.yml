@@ -102,6 +102,21 @@ jobs:
             echo "::warning::Contact details not set: ${missing[*]}. Add them under Settings -> Secrets and variables -> Actions -> Variables (see docs/SECURITY_AND_DEPLOYMENT.md)."
             { echo '### Contact details not set'; echo; printf -- '- `%s`\n' "${missing[@]}"; } >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Firebase for push notifications (optional)
+        # The google-services.json from the Firebase console, as the secret
+        # GOOGLE_SERVICES_JSON. Without it the app builds without push: the
+        # notifications still show in Activity.
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > "$RUNNER_TEMP/google-services.json"
+            node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$RUNNER_TEMP/google-services.json"
+            echo "GOOGLE_SERVICES_FILE=$RUNNER_TEMP/google-services.json" >> "$GITHUB_ENV"
+            echo "Push notifications: on (Firebase configured)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Push notifications: off (no GOOGLE_SERVICES_JSON secret)." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Generate the native Android project
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --no-install

@@ -65,6 +65,13 @@ const NOT_COPIED = new Set([
   'app.schema_migrations', // scripts/neon-db.mjs's record of applied migrations
   'public.post_comments', // comments started on Neon (1.8.6), after the move
   'private.reserved_names', // kept in the Neon database only (1.8.6)
+  // Started on Neon (2.6.0), after the move.
+  'public.training_goals',
+  'public.notifications',
+  'public.notification_settings',
+  'public.push_tokens',
+  'public.gyms',
+  'public.gym_members',
   'storage.buckets',
 ]);
 /** Neon table -> where its rows are on Supabase, and which of them move. */

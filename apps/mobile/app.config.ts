@@ -14,7 +14,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 const IS_PRODUCTION = process.env.APP_VARIANT === 'production' || process.env.EAS_BUILD_PROFILE === 'production';
 
 /** Marketing version and release channel ("Pre-Beta V1.3.0"). */
-const APP_VERSION = '2.5.8';
+const APP_VERSION = '2.6.0';
 // Empty for a full release; a channel name ("Alpha") for pre-releases.
 const RELEASE_LABEL = '';
 /** Monotonic build number for local / CI builds: 1.3.0 -> 10300 (EAS manages its own remotely). */
@@ -59,6 +59,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#0A0A0A',
     },
     allowBackup: false,
+    // Firebase for push notifications, when the release build has it (secret GOOGLE_SERVICES_JSON, release.yml).
+    ...(process.env.GOOGLE_SERVICES_FILE ? { googleServicesFile: process.env.GOOGLE_SERVICES_FILE } : {}),
     permissions: ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO'],
     blockedPermissions: ['android.permission.READ_PHONE_STATE', 'android.permission.SYSTEM_ALERT_WINDOW'],
   },
@@ -77,6 +79,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Clerk's native sign-in and account screens (AuthView, UserProfileView), in MatIQ's colours.
     ['@clerk/expo-native-components', { theme: './clerk-theme.json' }],
     'expo-video',
+    // Push notifications: a white MatIQ mark in the status bar, red in the shade.
+    ['expo-notifications', { icon: './assets/brand/adaptive-icon-monochrome.png', color: '#DC2626' }],
     ['expo-local-authentication', { faceIDPermission: 'MatIQ uses Face ID to protect sensitive settings.' }],
     [
       'expo-image-picker',

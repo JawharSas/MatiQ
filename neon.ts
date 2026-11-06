@@ -33,6 +33,7 @@ const OPTIONAL = [
   'ANALYSIS_FRAMES_PER_REQUEST',
   'ANALYSIS_CONCURRENCY',
   'ALLOWED_ORIGINS',
+  'FCM_SERVICE_ACCOUNT',
 ] as const;
 
 const present = (names: readonly string[]) =>
@@ -67,5 +68,7 @@ export default defineConfig({
   triggers: {
     // Bans, unbans and deletions decided in MatIQ reach Clerk within minutes.
     'clerk-sync': { type: 'schedule', function: 'api', cron: '*/5 * * * *', functionPath: '/jobs/clerk-sync' },
+    // New notifications reach phones within a minute (when FCM is set up).
+    push: { type: 'schedule', function: 'api', cron: '* * * * *', functionPath: '/jobs/push' },
   },
 });

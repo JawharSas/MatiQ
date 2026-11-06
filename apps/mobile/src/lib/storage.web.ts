@@ -46,6 +46,12 @@ export function readPreference<T extends string>(key: string, allowed: readonly 
   return value !== undefined && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
+/** A free-form device-local value (e.g. this phone's push token), or undefined. */
+export function readDeviceValue(key: string): string | undefined {
+  const value = instance.getString(PREFERENCE_PREFIX + key);
+  return value ? value : undefined;
+}
+
 export function writePreference(key: string, value: string): void {
   instance.set(PREFERENCE_PREFIX + key, value);
 }

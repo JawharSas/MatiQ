@@ -31,6 +31,12 @@ export interface PreviewDb {
   posts: Row[];
   post_likes: Row[];
   post_comments: Row[];
+  training_goals: Row[];
+  notifications: Row[];
+  notification_settings: Row[];
+  push_tokens: Row[];
+  gyms: Row[];
+  gym_members: Row[];
   usage_ledger: Row[];
   ranked_matches: Row[];
   ranked_ratings: Row[];
@@ -194,6 +200,12 @@ export function createFixtures(): PreviewDb {
     posts: [],
     post_likes: [],
     post_comments: [],
+    training_goals: [],
+    notifications: [],
+    notification_settings: [],
+    push_tokens: [],
+    gyms: [],
+    gym_members: [],
     usage_ledger: [],
     ranked_matches: [],
     ranked_ratings: [],
@@ -506,6 +518,33 @@ export function createFixtures(): PreviewDb {
 
   // One post the word filter held back (the owner sees it under Moderation).
   db.moderation_strikes.push({ user_id: USERS.tomas, kind: 'post:sexual', detail: 'check my onlyfans', created_at: daysAgo(2) });
+
+  // A gym the demo account can join with its code (the walkthrough does).
+  const gymId = id('6e000000', 1);
+  db.gyms.push({ id: gymId, name: 'Austin Grappling Co', city: 'Austin', invite_code: 'K7MRT4QX', created_by: USERS.jordan, created_at: daysAgo(90) });
+  db.gym_members.push(
+    { gym_id: gymId, user_id: USERS.jordan, role: 'owner', joined_at: daysAgo(90) },
+    { gym_id: gymId, user_id: USERS.sam, role: 'member', joined_at: daysAgo(60) },
+    { gym_id: gymId, user_id: USERS.maya, role: 'member', joined_at: daysAgo(30) },
+    { gym_id: gymId, user_id: USERS.ivy, role: 'member', joined_at: daysAgo(20) },
+  );
+
+  // Activity for the demo account, matching the requests, challenges, likes and comments above.
+  const notify = (kind: string, actor: string, subject: string | null, minutes: number, read: boolean) =>
+    db.notifications.push({
+      id: id('a0710000', db.notifications.length + 1),
+      user_id: USERS.alex,
+      kind,
+      actor_id: actor,
+      subject_id: subject,
+      created_at: minutesAgo(minutes),
+      read_at: read ? minutesAgo(minutes - 5) : null,
+    });
+  notify('ranked_challenge', USERS.diego, id('0a0ced00', 1), 40, false);
+  notify('post_like', USERS.sam, alexPost, 200, false);
+  notify('post_comment', USERS.sam, alexPost, 240, true);
+  notify('ranked_accepted', USERS.sam, id('0a0ced00', 2), 300, true);
+  notify('friend_request', USERS.diego, null, 1440, true);
 
   return db;
 }

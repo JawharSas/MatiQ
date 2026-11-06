@@ -8,6 +8,7 @@ import { FlatList, RefreshControl, View } from 'react-native';
 import { Text } from '@/ui/text';
 import { byMonth, type Outcome, outcomeOf, recordText, summarize } from '@/features/analysis/match-record';
 import type { MatchStatus } from '@/features/analysis/useMatch';
+import { ProgressCard } from '@/features/analysis/ProgressCard';
 import { type MatchListItem, useMyMatches } from '@/features/analysis/useMyMatches';
 import { DISCIPLINE_LABELS } from '@/features/ranked/components';
 import { errorMessage } from '@/lib/errors';
@@ -66,6 +67,7 @@ export default function MatchesScreen() {
                 <StatTile label="Analysed" value={summary.analysed} />
               </View>
               <Caption>Record is wins, losses and draws for Fighter 1: you.</Caption>
+              {summary.analysed > 0 ? <ProgressCard matches={list} /> : null}
             </>
           ) : null}
         </View>

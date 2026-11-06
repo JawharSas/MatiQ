@@ -6,6 +6,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUserId } from '@/features/auth/AuthProvider';
+import { useUnreadCount } from '@/features/notifications/api';
 import { useRankedNeedsMe } from '@/features/ranked/api';
 import { useFriends, useProfile } from '@/features/social/api';
 import { Avatar } from '@/features/social/Avatar';
@@ -32,6 +33,7 @@ export default function TabsLayout() {
   const needsMe = useRankedNeedsMe(userId);
   const requests = (useFriends().data ?? []).filter((entry) => entry.direction === 'incoming').length;
   const profile = useProfile(userId).data;
+  const unread = useUnreadCount();
 
   return (
     <Tabs
@@ -61,7 +63,10 @@ export default function TabsLayout() {
           tabBarAccessibilityLabel: 'Feed',
           headerTitle: () => <BrandLockup />,
           headerRight: () => (
-            <HeaderButton icon="people-outline" label={requests > 0 ? `Friends, ${requests} new requests` : 'Friends'} href="/friends" dot={requests > 0} />
+            <View style={styles.headerButtons}>
+              <HeaderButton icon="notifications-outline" label={unread > 0 ? `Activity, ${unread} new` : 'Activity'} href="/activity" dot={unread > 0} />
+              <HeaderButton icon="people-outline" label={requests > 0 ? `Friends, ${requests} new requests` : 'Friends'} href="/friends" dot={requests > 0} />
+            </View>
           ),
           tabBarIcon: ({ focused }) => <TabIcon name="home-outline" focusedName="home" focused={focused} />,
         }}
@@ -151,7 +156,7 @@ function RecordIcon({ focused }: { focused: boolean }) {
   );
 }
 
-function HeaderButton({ icon, label, href, dot = false }: { icon: IconName; label: string; href: '/friends' | '/settings'; dot?: boolean }) {
+function HeaderButton({ icon, label, href, dot = false }: { icon: IconName; label: string; href: '/friends' | '/settings' | '/activity'; dot?: boolean }) {
   useTheme();
   const router = useRouter();
   return (
@@ -195,4 +200,5 @@ const styles = themedStyles(() => ({
   avatarRing: { padding: 2, borderRadius: 17, borderWidth: 1.5, borderColor: colors.control },
   avatarRingFocused: { borderColor: colors.text },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  headerButtons: { flexDirection: 'row', alignItems: 'center' },
 }));
