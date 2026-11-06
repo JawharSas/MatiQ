@@ -18,24 +18,25 @@ export interface MatchListItem {
   /** From the analysis, when there is one. */
   result: MatchResultSummary | null;
   totals: { A: { points: number }; B: { points: number } } | null;
+  /** The scorecard's stats (discipline-specific), for goals and progress charts. */
+  stats: unknown;
 }
 
-// Only the result and totals of each scorecard, not the whole thing.
+// Only the result, totals and stats of each scorecard, not the events or highlights.
 const COLUMNS =
-  'id, discipline, title, status, duration_ms, recorded_at, athlete_a_label, athlete_b_label, match_analyses(result:scorecard->result, totals:scorecard->totals)';
+  'id, discipline, title, status, duration_ms, recorded_at, athlete_a_label, athlete_b_label, match_analyses(result:scorecard->result, totals:scorecard->totals, stats:scorecard->stats)';
 
-type Row = Omit<MatchListItem, 'result' | 'totals'> & {
-  match_analyses: Pick<MatchListItem, 'result' | 'totals'> | Pick<MatchListItem, 'result' | 'totals'>[] | null;
-};
+type Analysis = Pick<MatchListItem, 'result' | 'totals' | 'stats'>;
+type Row = Omit<MatchListItem, 'result' | 'totals' | 'stats'> & { match_analyses: Analysis | Analysis[] | null };
 
 /** The signed-in person's matches, newest first (shared by Matches and Profile). */
 export function useMyMatches() {
   const userId = useUserId();
-  const cacheKey = `matches:v2:${userId}`;
+  const cacheKey = `matches:v3:${userId}`;
   return useQuery({
     queryKey: ['my-matches'],
     placeholderData: readCache<MatchListItem[]>(cacheKey),
-    queryFn: async () => {
+    queryFn: async (): Promise<MatchListItem[]> => {
       const { data, error } = await backend
         .from('matches')
         .select(COLUMNS)
@@ -45,7 +46,7 @@ export function useMyMatches() {
       if (error) throw fromPostgrest(error);
       const matches = ((data ?? []) as Row[]).map(({ match_analyses: analyses, ...match }) => {
         const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
-        return { ...match, result: analysis?.result ?? null, totals: analysis?.totals ?? null };
+        return { ...match, result: analysis?.result ?? null, totals: analysis?.totals ?? null, stats: analysis?.stats ?? null };
       });
       writeCache(cacheKey, matches);
       return matches;

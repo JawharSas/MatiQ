@@ -31,6 +31,7 @@ export interface PreviewDb {
   posts: Row[];
   post_likes: Row[];
   post_comments: Row[];
+  training_goals: Row[];
   usage_ledger: Row[];
   ranked_matches: Row[];
   ranked_ratings: Row[];
@@ -194,6 +195,7 @@ export function createFixtures(): PreviewDb {
     posts: [],
     post_likes: [],
     post_comments: [],
+    training_goals: [],
     usage_ledger: [],
     ranked_matches: [],
     ranked_ratings: [],

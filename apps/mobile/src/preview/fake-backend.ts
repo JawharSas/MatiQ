@@ -127,6 +127,7 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
     case 'rating_history':
     case 'legal_acceptances':
     case 'usage_ledger':
+    case 'training_goals':
       return row.user_id === viewer;
     case 'match_live_batches':
       return row.owner_id === viewer;
@@ -139,6 +140,8 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
 
 type Filter = (row: Row) => boolean;
 type TableName = Exclude<keyof typeof db, 'storage'>;
+const GOAL_KINDS = ['rounds', 'wins', 'takedowns', 'submission_attempts', 'guard_passes', 'sweeps'];
+
 const tableRows = (table: string): Row[] => (db as unknown as Record<string, Row[] | undefined>)[table] ?? fail('42P01', `relation ${table} does not exist`);
 
 class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count?: number | null }> {
@@ -289,7 +292,11 @@ class QueryBuilder implements PromiseLike<{ data: unknown; error: unknown; count
         const analyses = db.match_analyses.filter((analysis) => analysis.match_id === row.id);
         // Like PostgREST's JSON paths: `match_analyses(result:scorecard->result, totals:scorecard->totals)`.
         copy.match_analyses = this.columns.includes('result:scorecard->result')
-          ? analyses.map((analysis) => ({ result: structuredClone(analysis.scorecard?.result ?? null), totals: structuredClone(analysis.scorecard?.totals ?? null) }))
+          ? analyses.map((analysis) => ({
+              result: structuredClone(analysis.scorecard?.result ?? null),
+              totals: structuredClone(analysis.scorecard?.totals ?? null),
+              ...(this.columns.includes('stats:scorecard->stats') ? { stats: structuredClone(analysis.scorecard?.stats ?? null) } : null),
+            }))
           : analyses.map((analysis) => structuredClone(analysis));
       }
       return copy;
@@ -309,6 +316,7 @@ function canWrite(table: string, row: Row, viewer: string): boolean {
     case 'posts':
       return row.author_id === viewer;
     case 'post_likes':
+    case 'training_goals':
       return row.user_id === viewer;
     case 'blocks':
       return row.blocker_id === viewer;
@@ -411,6 +419,19 @@ function insertRow(table: string, value: Row, upsert: boolean): Row | null {
       if (rows.some((r) => r.post_id === value.post_id && r.user_id === viewer)) fail('23505', 'duplicate key value');
       row = { ...value, user_id: viewer, created_at: now() };
       break;
+    case 'training_goals': {
+      // Mirrors neon/migrations/20261106000100_training_goals.sql: one target per kind.
+      if (!GOAL_KINDS.includes(value.kind)) fail('23514', 'goal_kind');
+      if (!Number.isInteger(value.target) || value.target < 1 || value.target > 100) fail('23514', 'goal_target');
+      const existing = rows.find((r) => r.user_id === viewer && r.kind === value.kind);
+      if (existing) {
+        if (!upsert) fail('23505', 'duplicate key value');
+        Object.assign(existing, { target: value.target, updated_at: now() });
+        return existing;
+      }
+      row = { kind: value.kind, target: value.target, user_id: viewer, updated_at: now() };
+      break;
+    }
     case 'blocks':
       row = { ...value, blocker_id: viewer, created_at: now() };
       db.friendships = db.friendships.filter((f) => !(pairKey(viewer, value.blocked_id).join() === [f.user_low, f.user_high].join()));

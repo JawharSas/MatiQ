@@ -332,6 +332,18 @@ async function main() {
       await tab('Profile').click();
       await see('Alex Rivera');
       await shot('profile', { tall: true });
+      // Weekly goals: none yet, then rounds and takedowns.
+      await see('Weekly goals');
+      await button('Set goals').click();
+      await see('Targets for each week');
+      for (let i = 0; i < 3; i++) await button('More rounds').click();
+      for (let i = 0; i < 4; i++) await button('More takedowns').click();
+      await button('Fewer takedowns').click();
+      await shot('goals', { tall: true });
+      await button('Save goals').click();
+      await see('This week');
+      await see(/^\d+ \/ 3$/);
+      await shot('profile-goals', { tall: true });
       // A reserved name answers like one that's in use.
       await button('Edit profile').click();
       await see(/Change picture|Add a picture/);
