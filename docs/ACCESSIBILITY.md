@@ -2,7 +2,7 @@
 
 MatIQ targets **WCAG 2.2 Level AA** for the Android and iOS app (one React
 Native code base). This page records how each success criterion is met, how
-it is tested, and the known limitations. Last reviewed for version 1.4.0.
+it is tested, and the known limitations. Last reviewed for version 2.5.8.
 
 ## How it is tested
 
@@ -29,7 +29,10 @@ before signing in):
   buttons get visible outlines.
 - **Motion**: follow the phone (Remove animations / Reduce Motion), always
   reduce, or full. Reduced motion turns off screen transitions, press
-  animations and highlight autoplay.
+  animations, the tutorial's fades and highlight autoplay.
+- **Vibration**: on by default; a light tap on switching tabs, liking a post
+  and starting or stopping a recording. Turn it off here. Nothing depends on
+  the vibration alone.
 - Shortcuts to the phone's accessibility settings and to accessibility
   feedback.
 
@@ -39,7 +42,7 @@ These are real settings that change the app; there is no overlay widget.
 
 | Criterion | Level | Status | How |
 |---|---|---|---|
-| 1.1.1 Non-text content | A | Supports | Icon-only controls have labels (e.g. "Report post", "Like post, 2 likes"); decorative icons, icon tiles and the Google "G" are hidden from screen readers; avatars are decorative next to the visible name; the timeline has a text phase legend and a highlight list; the 2FA QR code has the secret as text. |
+| 1.1.1 Non-text content | A | Supports | Icon-only controls have labels (e.g. "More options for this post", "Like post, 2 likes"); the icon-only bottom bar names every tab ("Feed", "Record a round", "Ranked, 2 need you") and the gear and people icons ("Settings", "Friends, 1 new requests"); belt swatches on rank badges are decorative, the badge says the belt; decorative icons, icon tiles and the Google "G" are hidden from screen readers; avatars are decorative next to the visible name; the timeline has a text phase legend and a highlight list; the 2FA QR code has the secret as text. |
 | 1.2.1 Audio-only and video-only | A | Partially supports | Sparring videos are user content without meaningful audio. Every analysed video has a text alternative: the scorecard, score log, timeline legend and highlight list. |
 | 1.2.2 Captions (prerecorded) | A | Not applicable / limitation | User-recorded sparring has no spoken content to caption. Speech in uploaded videos is not captioned. |
 | 1.2.3 Audio description or media alternative | A | Supports | The analysis (events, scores, coaching notes) is a text alternative for the video. |
@@ -63,7 +66,7 @@ These are real settings that change the app; there is no overlay widget.
 | 2.1.2 No keyboard trap | A | Supports | No traps; modals close with Back / Cancel. |
 | 2.1.4 Character key shortcuts | A | Not applicable | None. |
 | 2.2.1 Timing adjustable | A | Supports | No time limits on reading or input; sessions refresh automatically; ranked confirmation windows are days long. |
-| 2.2.2 Pause, stop, hide | A | Supports | The only moving content is video (user-started, pausable) and the live score while the person records (stops with the recording). |
+| 2.2.2 Pause, stop, hide | A | Supports | The only moving content is video (user-started, pausable) and the live score while the person records (stops with the recording). The tutorial's 0.2 s fades are not moving content. |
 | 2.3.1 Three flashes | A | Supports | No flashing content. |
 | 2.4.1 Bypass blocks | A | Supports | Tab bar navigation; no repeated blocks within screens. |
 | 2.4.2 Page titled | A | Supports | Every screen has a title in its header (document title on the web). |
@@ -93,7 +96,7 @@ These are real settings that change the app; there is no overlay widget.
 | 3.3.7 Redundant entry | A | Supports | Nothing is asked twice (no password confirmation field; the birth month is asked once). |
 | 3.3.8 Accessible authentication (minimum) | AA | Supports | Password managers and paste work (autocomplete set); the 2FA code supports one-time-code autofill and paste; Google sign-in needs no password. No puzzles or memory tests. |
 | 4.1.2 Name, role, value | A | Supports | Roles and states on every control (checked, selected, disabled, busy, progress values). Checked by axe and the TalkBack label check. |
-| 4.1.3 Status messages | AA | Supports | Analysis status, processing steps and errors are announced without moving focus. |
+| 4.1.3 Status messages | AA | Supports | Analysis status, processing steps and errors are announced without moving focus; the tutorial announces each new step ("Step 2 of 5: Record a round"). |
 
 ## Known limitations
 
