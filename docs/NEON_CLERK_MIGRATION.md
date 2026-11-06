@@ -243,6 +243,26 @@ and backup codes, new-device email check. On the production instance,
 also add `matiq://auth/callback` under Native applications → allowlist
 for mobile SSO redirect (Google sign-in returns there).
 
+## Push notifications (optional)
+
+Notifications are written by the database (`neon/migrations/20261106000200_notifications.sql`)
+and always show in the app's **Activity**. Pushes to phones go through
+Firebase Cloud Messaging, and stay off until Firebase is set up:
+
+1. In the [Firebase console](https://console.firebase.google.com), create a
+   project and add an Android app with the package name `app.matiq.mobile`.
+2. Download its `google-services.json` and save its contents as the GitHub
+   Actions secret **GOOGLE_SERVICES_JSON**. The Release workflow builds the
+   APK with it (its summary says "Push notifications: on").
+3. In Project settings -> Service accounts, generate a new private key and
+   save the JSON file's contents as the GitHub Actions secret
+   **FCM_SERVICE_ACCOUNT**, then run **Deploy Neon backend** from `main`. The
+   `push` trigger (every minute, `jobs/push`) then sends new notifications,
+   honouring each person's switches in Settings -> Notifications.
+
+Without them nothing is sent: the job marks notifications `skipped`, and
+the app's Settings -> Notifications says pushes aren't available yet.
+
 ## Stages
 
 1. **Done.** Database for Neon: `app.users`, `app.uid()`, the Supabase

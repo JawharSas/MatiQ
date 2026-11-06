@@ -25,6 +25,9 @@ name: Deploy Neon backend
 #   variable AI_MODEL
 #   variable AI_BASE_URL
 #   variable ALLOWED_ORIGINS     optional: browser origins allowed by CORS
+#   secret   FCM_SERVICE_ACCOUNT optional: a Firebase service account key (the JSON
+#                                file) for push notifications; without it they
+#                                only show in the app's Activity
 #   variable CLERK_AUTHORIZED_PARTIES  optional: origins of browser sessions
 
 on:
@@ -73,6 +76,7 @@ jobs:
       AI_MODEL: ${{ vars.AI_MODEL }}
       AI_BASE_URL: ${{ vars.AI_BASE_URL }}
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
     steps:
       - name: Check configuration
         run: |

@@ -12,6 +12,7 @@ import analyzeMatch from './analyze-match/index.ts';
 import apiKeys from './api-keys/index.ts';
 import { filesRead, filesWrite } from './files/index.ts';
 import { clerkSync } from './jobs/clerk-sync.ts';
+import { pushJob } from './jobs/push.ts';
 import moderation from './moderation/index.ts';
 import ranked from './ranked/index.ts';
 import { rpc } from './shared/db.ts';
@@ -27,6 +28,7 @@ app.all('/ranked', (c) => ranked(c.req.raw));
 app.all('/files/:action{upload|sign-upload}', (c) => filesWrite(c.req.raw));
 app.all('/files/:action{sign-download|list|remove}', (c) => filesRead(c.req.raw));
 app.post('/jobs/clerk-sync', (c) => clerkSync(c.req.raw));
+app.post('/jobs/push', (c) => pushJob(c.req.raw));
 app.get('/health', () => Response.json({ ok: true }, { headers: SECURITY_HEADERS }));
 // The oldest app version still allowed. Read before signing in, which the
 // Data API can't serve: it wants a token on every request.

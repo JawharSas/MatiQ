@@ -194,6 +194,28 @@ async function main() {
       await see('Three takedowns');
     });
 
+    await step('activity and notification settings', async () => {
+      await tab('Feed').click();
+      // The bell says how many are new; opening Activity marks them read.
+      await page.getByRole('button', { name: 'Activity, 2 new' }).click();
+      await see('challenged you to a ranked match.');
+      await see('liked your post.');
+      await shot('activity', { tall: true });
+      await page.getByRole('link', { name: /Sam Okafor commented on your post/ }).click();
+      await see('That back take was clean');
+      await page.goBack();
+      await page.goBack();
+      await page.getByRole('button', { name: 'Activity', exact: true }).waitFor();
+      await openSettings();
+      await button('Notifications').click();
+      await see("Push notifications aren't available");
+      await page.getByRole('switch', { name: 'Likes' }).click();
+      await shot('notification-settings', { tall: true });
+      await page.goBack();
+      await page.goBack();
+      await tab('Feed').click();
+    });
+
     await step('record and analyse', async () => {
       await tab('Record a round').click();
       await see('Match setup');

@@ -32,6 +32,9 @@ export interface PreviewDb {
   post_likes: Row[];
   post_comments: Row[];
   training_goals: Row[];
+  notifications: Row[];
+  notification_settings: Row[];
+  push_tokens: Row[];
   usage_ledger: Row[];
   ranked_matches: Row[];
   ranked_ratings: Row[];
@@ -196,6 +199,9 @@ export function createFixtures(): PreviewDb {
     post_likes: [],
     post_comments: [],
     training_goals: [],
+    notifications: [],
+    notification_settings: [],
+    push_tokens: [],
     usage_ledger: [],
     ranked_matches: [],
     ranked_ratings: [],
@@ -508,6 +514,23 @@ export function createFixtures(): PreviewDb {
 
   // One post the word filter held back (the owner sees it under Moderation).
   db.moderation_strikes.push({ user_id: USERS.tomas, kind: 'post:sexual', detail: 'check my onlyfans', created_at: daysAgo(2) });
+
+  // Activity for the demo account, matching the requests, challenges, likes and comments above.
+  const notify = (kind: string, actor: string, subject: string | null, minutes: number, read: boolean) =>
+    db.notifications.push({
+      id: id('a0710000', db.notifications.length + 1),
+      user_id: USERS.alex,
+      kind,
+      actor_id: actor,
+      subject_id: subject,
+      created_at: minutesAgo(minutes),
+      read_at: read ? minutesAgo(minutes - 5) : null,
+    });
+  notify('ranked_challenge', USERS.diego, id('0a0ced00', 1), 40, false);
+  notify('post_like', USERS.sam, alexPost, 200, false);
+  notify('post_comment', USERS.sam, alexPost, 240, true);
+  notify('ranked_accepted', USERS.sam, id('0a0ced00', 2), 300, true);
+  notify('friend_request', USERS.diego, null, 1440, true);
 
   return db;
 }

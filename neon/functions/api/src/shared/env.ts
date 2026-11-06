@@ -70,6 +70,13 @@ export const env = {
   kekCurrentVersion: () => intEnv('MATIQ_KEK_CURRENT', 1, 1, 32767),
   kek: (version: number) => requireEnv(`MATIQ_KEK_V${version}`),
 
+  /**
+   * Firebase service account (the JSON file's contents) for push
+   * notifications through FCM. Optional: without it notifications stay in
+   * the app's Activity and no pushes are sent.
+   */
+  fcmServiceAccount: () => read('FCM_SERVICE_ACCOUNT'),
+
   /** Comma-separated browser origins allowed by CORS (empty = native app only). */
   allowedOrigins: (): string[] =>
     (read('ALLOWED_ORIGINS') ?? '')

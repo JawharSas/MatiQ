@@ -128,7 +128,12 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
     case 'legal_acceptances':
     case 'usage_ledger':
     case 'training_goals':
+    case 'notification_settings':
       return row.user_id === viewer;
+    case 'notifications':
+    case 'push_tokens':
+      // Read only through get_notifications(); tokens are never readable.
+      return false;
     case 'match_live_batches':
       return row.owner_id === viewer;
     default:
@@ -317,6 +322,7 @@ function canWrite(table: string, row: Row, viewer: string): boolean {
       return row.author_id === viewer;
     case 'post_likes':
     case 'training_goals':
+    case 'notification_settings':
       return row.user_id === viewer;
     case 'blocks':
       return row.blocker_id === viewer;
@@ -430,6 +436,19 @@ function insertRow(table: string, value: Row, upsert: boolean): Row | null {
         return existing;
       }
       row = { kind: value.kind, target: value.target, user_id: viewer, updated_at: now() };
+      break;
+    }
+    case 'notification_settings': {
+      const existing = rows.find((r) => r.user_id === viewer);
+      const switches = Object.fromEntries(
+        ['friend_requests', 'ranked', 'likes', 'comments'].filter((key) => typeof value[key] === 'boolean').map((key) => [key, value[key]]),
+      );
+      if (existing) {
+        if (!upsert) fail('23505', 'duplicate key value');
+        Object.assign(existing, switches, { updated_at: now() });
+        return existing;
+      }
+      row = { friend_requests: true, ranked: true, likes: true, comments: true, ...switches, user_id: viewer, updated_at: now() };
       break;
     }
     case 'blocks':
@@ -694,6 +713,55 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
       .slice(0, p_limit)
       .map((post) => feedItem(post, viewer)),
+
+  // Mirrors neon/migrations/20261106000200_notifications.sql.
+  get_notifications: ({ p_limit = 50 }, viewer) =>
+    db.notifications
+      .filter(
+        (n) =>
+          n.user_id === viewer &&
+          !isBanned(n.actor_id) &&
+          !blocked(viewer, n.actor_id) &&
+          (!['post_like', 'post_comment'].includes(n.kind) || db.posts.some((post) => post.id === n.subject_id)) &&
+          (!String(n.kind).startsWith('ranked_') || db.ranked_matches.some((r) => r.id === n.subject_id)),
+      )
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, Math.min(Math.max(Number(p_limit) || 50, 1), 100))
+      .map((n) => {
+        const actor = db.profiles.find((profile) => profile.id === n.actor_id);
+        return {
+          id: n.id,
+          kind: n.kind,
+          actor_id: n.actor_id,
+          actor_username: actor?.username ?? '',
+          actor_display_name: actor?.display_name ?? 'Someone',
+          actor_avatar_path: actor?.avatar_path ?? null,
+          subject_id: n.subject_id,
+          created_at: n.created_at,
+          read_at: n.read_at,
+        };
+      }),
+  mark_notifications_read: (_args, viewer) => {
+    let marked = 0;
+    for (const n of db.notifications) {
+      if (n.user_id === viewer && !n.read_at) {
+        n.read_at = now();
+        marked++;
+      }
+    }
+    return marked;
+  },
+  register_push_token: ({ p_token, p_platform }, viewer) => {
+    if (!['android', 'ios'].includes(p_platform) || typeof p_token !== 'string' || p_token.length < 16) fail('22023', 'invalid push token');
+    db.push_tokens = db.push_tokens.filter((t) => t.token !== p_token);
+    db.push_tokens.push({ token: p_token, user_id: viewer, platform: p_platform, created_at: now(), last_seen_at: now() });
+    return null;
+  },
+  unregister_push_token: ({ p_token }, viewer) => {
+    const before = db.push_tokens.length;
+    db.push_tokens = db.push_tokens.filter((t) => !(t.token === p_token && t.user_id === viewer));
+    return db.push_tokens.length < before;
+  },
 
   get_post_comments: ({ p_post_id, p_limit = 100 }, viewer) => {
     const post = visiblePost(p_post_id, viewer);

@@ -94,6 +94,12 @@ export default function SettingsScreen() {
           onPress={() => router.push('/appearance')}
         />
         <ListRow
+          icon="notifications"
+          title="Notifications"
+          subtitle="Pushes for friends, ranked, likes and comments"
+          onPress={() => router.push('/settings/notifications')}
+        />
+        <ListRow
           icon="accessibility"
           title="Accessibility"
           subtitle="Text size, high contrast and motion"

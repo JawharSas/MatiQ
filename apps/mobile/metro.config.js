@@ -21,6 +21,7 @@ const WEB_STUBS = {
   '@clerk/expo/token-cache': 'src/preview/stubs/clerk.tsx',
   '@clerk/expo/native': 'src/preview/stubs/clerk-native.tsx',
   'expo-web-browser': 'src/preview/stubs/web-browser.ts',
+  'expo-notifications': 'src/preview/stubs/notifications.ts',
 };
 
 const upstream = config.resolver.resolveRequest;

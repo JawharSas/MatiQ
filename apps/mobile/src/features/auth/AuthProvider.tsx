@@ -4,6 +4,7 @@ import { createContext, type ReactNode, use, useEffect, useRef, useState } from 
 import { AppState } from 'react-native';
 import { backend, setTokenGetter } from '@/lib/backend';
 import { fromPostgrest, isBannedError } from '@/lib/errors';
+import { disablePush } from '@/features/notifications/push';
 import { clearCache } from '@/lib/storage';
 import { authInitializing } from './init-state';
 
@@ -141,6 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessions = await user.getSessions();
       await Promise.allSettled(sessions.map((session) => session.revoke()));
     }
+    // This phone stops getting the account's pushes (while the session still works).
+    await disablePush().catch(() => undefined);
     await clerkSignOut();
     clearCache();
     queryClient.clear();
