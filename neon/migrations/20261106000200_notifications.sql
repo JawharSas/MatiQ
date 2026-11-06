@@ -187,6 +187,28 @@ create trigger post_comments_notify
   for each row execute function private.notify_post_comment();
 
 -- -----------------------------------------------------------------------------
+-- Whether a notification may still be shown or pushed: not from someone
+-- banned or blocked since, and about a post or ranked match that still
+-- exists. Activity and the push job (jobs/push) both ask this, right before
+-- showing or sending.
+-- -----------------------------------------------------------------------------
+create or replace function private.notification_visible(p_user uuid, p_kind text, p_actor uuid, p_subject uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select not private.is_banned(p_actor)
+    and not private.is_blocked_between(p_user, p_actor)
+    and (p_kind not in ('post_like', 'post_comment') or exists (select 1 from public.posts p where p.id = p_subject))
+    and (p_kind not like 'ranked\_%' or exists (select 1 from public.ranked_matches r where r.id = p_subject));
+$$;
+
+revoke all on function private.notification_visible(uuid, text, uuid, uuid) from public;
+grant execute on function private.notification_visible(uuid, text, uuid, uuid) to service_role;
+
+-- -----------------------------------------------------------------------------
 -- Reading them (Activity) and marking them read.
 -- -----------------------------------------------------------------------------
 create or replace function public.get_notifications(p_limit integer default 50)
@@ -217,12 +239,8 @@ begin
     from public.notifications n
     join public.profiles pr on pr.id = n.actor_id
     where n.user_id = me
-      -- Someone blocked or banned since then drops out of your Activity.
-      and not private.is_banned(n.actor_id)
-      and not private.is_blocked_between(me, n.actor_id)
-      -- A deleted post or ranked match takes its notifications with it.
-      and (n.kind not in ('post_like', 'post_comment') or exists (select 1 from public.posts p where p.id = n.subject_id))
-      and (n.kind not like 'ranked\_%' or exists (select 1 from public.ranked_matches r where r.id = n.subject_id))
+      -- Someone blocked or banned since, or a deleted post or ranked match, drops out.
+      and private.notification_visible(me, n.kind, n.actor_id, n.subject_id)
     order by n.created_at desc
     limit least(greatest(coalesce(p_limit, 50), 1), 100);
 end;

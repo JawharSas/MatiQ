@@ -4,7 +4,7 @@ import { createContext, type ReactNode, use, useEffect, useRef, useState } from 
 import { AppState } from 'react-native';
 import { backend, setTokenGetter } from '@/lib/backend';
 import { fromPostgrest, isBannedError } from '@/lib/errors';
-import { disablePush } from '@/features/notifications/push';
+import { disablePush, forgetPushToken } from '@/features/notifications/push';
 import { clearCache } from '@/lib/storage';
 import { authInitializing } from './init-state';
 
@@ -97,6 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (previous === null || previous === clerkUserId) return;
     clearCache();
     queryClient.clear();
+    // The previous account's pushes must stop on this phone too.
+    void forgetPushToken();
   }, [clerkUserId, queryClient]);
 
   useEffect(() => {

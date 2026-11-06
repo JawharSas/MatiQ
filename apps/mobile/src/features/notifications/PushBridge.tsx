@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
+import { useUserId } from '@/features/auth/AuthProvider';
 import { activityTarget, isNotificationKind } from './activity';
 import { enablePush } from './push';
 
@@ -11,12 +12,14 @@ import { enablePush } from './push';
  */
 export function PushBridge() {
   const router = useRouter();
+  const userId = useUserId();
   const last = Notifications.useLastNotificationResponse();
   const handled = useRef<string | null>(null);
 
+  // Again whenever the account changes (a switched account registers this phone anew).
   useEffect(() => {
     void enablePush({ ask: false }).catch(() => undefined);
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (!last) return;

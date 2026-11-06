@@ -71,13 +71,30 @@ export async function enablePush({ ask }: { ask: boolean }): Promise<PushStatus>
   return 'on';
 }
 
-/** Stops pushes to this phone for the signed-in account (sign-out, or switched off). */
+/**
+ * Stops pushes to this phone for the signed-in account (the app's Sign out,
+ * or switched off). Needs the session; when the server can't be told, the
+ * token is kept so forgetPushToken() can still retire it.
+ */
 export async function disablePush(): Promise<void> {
   const token = storedToken();
   if (!token) return;
-  await backend.rpc('unregister_push_token', { p_token: token }).then(
-    () => undefined,
-    () => undefined,
+  const { error } = await backend.rpc('unregister_push_token', { p_token: token }).then(
+    (result) => result,
+    (caught: unknown) => ({ error: caught }),
   );
+  if (!error) writePreference(TOKEN_KEY, '');
+}
+
+/**
+ * The session ended or switched outside the app's Sign out (Clerk's account
+ * screen, a revoked session): the server can't be asked any more, so this
+ * phone's token is retired instead. Firebase then reports it as unknown and
+ * the push job deletes it; the next sign-in registers a new one.
+ */
+export async function forgetPushToken(): Promise<void> {
+  if (!storedToken()) return;
   writePreference(TOKEN_KEY, '');
+  if (Platform.OS === 'web') return;
+  await Notifications.unregisterForNotificationsAsync().catch(() => undefined);
 }

@@ -5,8 +5,10 @@
  * - Only deliveries from Neon's trigger are accepted (as jobs/clerk-sync).
  * - Each notification is pushed at most once: it is claimed (push_state set)
  *   in the same statement that reads it, so overlapping runs never send twice.
- * - Kinds a person switched off, and people without a phone, are 'skipped';
- *   notifications older than an hour are skipped rather than sent late.
+ * - Kinds a person switched off, people without a phone, and notifications
+ *   Activity would hide (sender blocked or banned since, post or match
+ *   deleted) are 'skipped'; ones older than an hour are skipped rather than
+ *   sent late.
  * - Without FCM_SERVICE_ACCOUNT nothing is sent and everything is skipped:
  *   the notifications still show in the app's Activity.
  * - Phones Firebase no longer knows are removed.
@@ -30,6 +32,8 @@ interface Claimed {
   actor_name: string | null;
   settings: Partial<Record<NotificationSwitch, boolean>> | null;
   tokens: string[] | null;
+  /** False when the sender was blocked or banned since, or the post or match is gone. */
+  visible: boolean;
 }
 
 const BATCH = 200;
@@ -79,7 +83,8 @@ export async function runPush(): Promise<{ sent: number; skipped: number; failed
      select c.id, c.user_id, c.kind, c.actor_id, c.subject_id,
             p.display_name as actor_name,
             to_jsonb(s) - 'user_id' - 'updated_at' as settings,
-            (select array_agg(t.token) from public.push_tokens t where t.user_id = c.user_id) as tokens
+            (select array_agg(t.token) from public.push_tokens t where t.user_id = c.user_id) as tokens,
+            private.notification_visible(c.user_id, c.kind, c.actor_id, c.subject_id) as visible
      from claimed c
      left join public.profiles p on p.id = c.actor_id
      left join public.notification_settings s on s.user_id = c.user_id`,
@@ -91,7 +96,8 @@ export async function runPush(): Promise<{ sent: number; skipped: number; failed
   let failed = 0;
   const invalid = new Set<string>();
   for (const row of rows) {
-    if (!account || !row.tokens?.length || !allowed(row.kind, row.settings)) {
+    // Checked at sending time, like Activity: nothing hidden in the app is pushed.
+    if (!account || !row.visible || !row.tokens?.length || !allowed(row.kind, row.settings)) {
       skipped++;
       continue;
     }

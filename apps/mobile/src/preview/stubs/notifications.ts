@@ -28,3 +28,5 @@ export function useLastNotificationResponse() {
 export function addNotificationResponseReceivedListener() {
   return { remove() {} };
 }
+
+export async function unregisterForNotificationsAsync(): Promise<void> {}

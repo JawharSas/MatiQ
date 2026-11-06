@@ -5,7 +5,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(26);
+select plan(29);
 
 create function pg_temp.as_clerk(sub text, method text default 'POST') returns void language plpgsql as $$
 begin
@@ -153,6 +153,24 @@ select is(
   0,
   'blocking someone hides their notifications'
 );
+-- The push job asks the same question right before sending.
+select pg_temp.as_backend();
+select is(
+  private.notification_visible(pg_temp.uid('user_alice'), 'post_like', pg_temp.uid('user_carol'), (select id from post)),
+  false,
+  'and nothing from them is pushed either'
+);
+select is(
+  private.notification_visible(pg_temp.uid('user_alice'), 'post_like', pg_temp.uid('user_bob'), (select id from post)),
+  true,
+  'while others still are'
+);
+select is(
+  private.notification_visible(pg_temp.uid('user_bob'), 'ranked_challenge', pg_temp.uid('user_alice'), gen_random_uuid()),
+  false,
+  'a ranked match that no longer exists is not pushed'
+);
+select pg_temp.as_clerk('user_alice');
 select pg_temp.as_backend();
 insert into private.bans (user_id, reason, category, source) values (pg_temp.uid('user_bob'), 'Spam', 'other', 'owner');
 select pg_temp.as_clerk('user_alice');
