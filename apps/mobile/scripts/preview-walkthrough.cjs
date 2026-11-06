@@ -242,6 +242,15 @@ async function main() {
       await tab('Matches').click();
       await see('Tuesday open mat');
       await shot('matches-list');
+      // Progress by month: points, then control time, then win rate.
+      await see('Average points per round');
+      await shot('progress-points', { tall: true });
+      await tab('Control').click();
+      await see('Average time in control');
+      await tab('Win rate').click();
+      await page.getByRole('img', { name: /^Win rate, BJJ, by month/ }).waitFor();
+      await shot('progress-win-rate', { tall: true });
+      await tab('Points').click();
       await matchLink('Comp prep round').click();
       await see('Analysis failed');
       await shot('match-failed');
