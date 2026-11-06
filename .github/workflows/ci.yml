@@ -136,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: New dependencies must not bring known vulnerabilities
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           # Build tool only; see .github/dependency-audit-allowlist.json.
