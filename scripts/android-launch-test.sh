@@ -173,12 +173,26 @@ if [ "$status" -eq 0 ]; then
   adb shell settings put system font_scale 1.0
   adb shell settings put system accelerometer_rotation 0
   adb shell settings put system user_rotation 1
-  sleep 4
-  if ui_dump && grep -q 'text="Continue with Google"' "$out/ui.xml"; then
+  # Resetting the font size recreates the activity and rotating redraws it:
+  # wait for the screen to come back, turned (rotation="1" in the dump),
+  # rather than reading it once after a fixed pause.
+  landscape=1
+  deadline=$((SECONDS + 60))
+  while [ $SECONDS -lt $deadline ]; do
+    if ui_dump && grep -q 'rotation="1"' "$out/ui.xml" && grep -q 'text="Continue with Google"' "$out/ui.xml"; then
+      landscape=0
+      break
+    fi
+    sleep 2
+  done
+  if [ "$landscape" -eq 0 ]; then
     echo "Sign-in screen in landscape:"
     shot sign-in-landscape
   else
     echo "::error::The sign-in screen did not render in landscape"
+    status_line
+    ui_dump && visible_text || true
+    shot landscape-stuck
     status=1
   fi
   adb shell settings put system user_rotation 0
