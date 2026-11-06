@@ -201,9 +201,13 @@ with the dry run off and the confirmation typed.
 6. Tag `v1.7.0-alpha`: the release builds the APK against Neon.
 
 Updating: 1.7 and later read a minimum version at start
-(`app.release_policy`, now 1.7.0) and show "Update MatIQ" with the download
-link when they are older. To make everyone update later:
-`update app.release_policy set min_version = '1.8.0', updated_at = now();`.
+(`app.release_policy`, now 2.5.8 since 2026-11-06, with
+`download_url` = `https://github.com/JawharSas/MatiQ/releases/latest`) and
+show "Update MatIQ" with the download link when they are older. To make
+everyone update later:
+`update app.release_policy set min_version = '2.6.0', updated_at = now();`.
+`releases/latest` only follows full releases: raise the minimum to a
+pre-release only with a `download_url` that names its tag.
 Versions 1.6 and older have no such check and show fixed messages, so
 they can't be told to update in the app; read-only Supabase keeps their
 data safe, and the release notes tell people to install the new one.
