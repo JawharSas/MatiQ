@@ -89,6 +89,11 @@ Run unit tests with `node --test --experimental-strip-types` (no Jest).
 - **Tutorial.** `features/onboarding/Tutorial.tsx` shows once per device
   after `ConsentGate`; Settings → Tutorial (`/tutorial`) shows it again.
   Keep its steps in line with the tabs and screens they describe.
+- **Notifications.** The database writes them (triggers in
+  `neon/migrations/20261106000200_notifications.sql`); a new kind needs the
+  trigger, its text in `features/notifications/activity.ts` and in the
+  `api` function's `shared/push-messages.ts`, and a switch if it is new.
+  Pushes go through FCM (`jobs/push`) and stay off without Firebase.
 - **Forced updates.** `public.app_requirements()` on Neon returns
   `min_version` and `download_url`.
   - The app reads it from the `api` function's `GET /app-requirements`.

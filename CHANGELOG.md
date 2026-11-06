@@ -3,6 +3,47 @@
 All notable changes to MatIQ. Versions follow [Semantic Versioning](https://semver.org);
 pre-release channels are named in the release title.
 
+## [2.6.0] Release, 2026-11-06
+
+### Training goals
+- Weekly targets (rounds, wins, takedowns, submission attempts, guard passes,
+  sweeps) set with - and + on /goals; Profile's "This week" card shows each
+  goal's progress, the days left and the streak of weeks with every goal
+  met. Progress comes from your own matches (Monday to Sunday, phone time).
+- Neon migration `20261106000100_training_goals` (private to each person);
+  database test `06_training_goals`.
+
+### Notifications
+- Activity (the bell on the feed, with a dot for new ones): friend requests
+  and acceptances, ranked challenges, acceptances and results to confirm,
+  likes and comments. Tapping one opens the post, match or profile.
+- Push notifications through Firebase Cloud Messaging, one switch per kind in
+  Settings -> Notifications, a channel and the MatIQ mark on Android; a
+  tapped push opens the right screen; sign-out removes the phone. They stay
+  off until Firebase is configured (`GOOGLE_SERVICES_JSON` for the build,
+  `FCM_SERVICE_ACCOUNT` for the `api` function; docs/NEON_CLERK_MIGRATION.md).
+- Neon migration `20261106000200_notifications` (written by the database;
+  none for your own actions, blocked or banned accounts; a like once);
+  `jobs/push` runs every minute; database test `07_notifications`.
+
+### Gyms and teams
+- Join your gym with its 8-character code, or start one. The gym has a feed
+  (teammates' posts, under the feed's usual visibility), a leaderboard per
+  sport and a member list with the invite code (Share, New code, Remove,
+  Leave). One gym per person; only members see it.
+- Neon migration `20261106000300_gyms`; database test `08_gyms`.
+
+### Progress charts
+- The Matches tab shows your average points per round, average time in
+  control or win rate by month (last six), per sport, with how the latest
+  month compares.
+
+### Also
+- The tutorial's last step is "Train together" (gyms and goals).
+- The data export includes goals, notifications, notification switches and
+  your gym.
+- `expo-notifications` 58.1.8. Version 2.6.0.
+
 ## [2.5.8] Release, 2026-11-05
 
 The first full (non-pre-release) version: the production redesign.

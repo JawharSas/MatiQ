@@ -145,7 +145,7 @@ async function main() {
       await tutorialTap('Next', 'See what decided it');
       await tutorialTap('Next', 'Climb the ranks');
       await shot('tutorial-ranked');
-      await tutorialTap('Next', 'Share it, or keep it');
+      await tutorialTap('Next', 'Train together');
       await tutorialTap('Get started');
       // The owner role is looked up before the age check, while the server
       // refuses everything but reads: it must still show straight away.

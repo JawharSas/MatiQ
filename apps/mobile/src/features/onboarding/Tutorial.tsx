@@ -56,8 +56,8 @@ export const TUTORIAL_STEPS: readonly Step[] = [
     art: 'ranked',
   },
   {
-    title: 'Share it, or keep it',
-    body: 'Your matches stay private until you share one. Post to everyone or to friends only, and follow your training partners on the feed.',
+    title: 'Train together',
+    body: 'Your matches stay private until you share one. Post to everyone or to friends only, join your gym, and set weekly goals on your profile.',
     art: 'people',
   },
 ];
