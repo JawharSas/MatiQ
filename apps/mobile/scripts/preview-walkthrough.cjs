@@ -366,6 +366,26 @@ async function main() {
       await see('This week');
       await see(/^\d+ \/ 3$/);
       await shot('profile-goals', { tall: true });
+      // Gyms: a wrong code, then the right one (any case).
+      await button('Join or start a gym').click();
+      await field('Gym code').fill('ZZZZZZZZ');
+      await button('Join gym').click();
+      await see('No gym has that code');
+      await shot('gym-join', { tall: true });
+      await field('Gym code').fill('k7mrt4qx');
+      await button('Join gym').click();
+      await see('Austin Grappling Co');
+      await see('Three takedowns and a 4-count near fall');
+      await shot('gym-feed', { tall: true });
+      await tab('Leaderboard').click();
+      await see('Ivy');
+      await shot('gym-leaderboard', { tall: true });
+      await tab('Members').click();
+      await see('Invite teammates');
+      await see('K7MRT4QX');
+      await shot('gym-members', { tall: true });
+      await page.goBack();
+      await button('Open gym').waitFor();
       // A reserved name answers like one that's in use.
       await button('Edit profile').click();
       await see(/Change picture|Add a picture/);

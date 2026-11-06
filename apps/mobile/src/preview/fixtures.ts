@@ -35,6 +35,8 @@ export interface PreviewDb {
   notifications: Row[];
   notification_settings: Row[];
   push_tokens: Row[];
+  gyms: Row[];
+  gym_members: Row[];
   usage_ledger: Row[];
   ranked_matches: Row[];
   ranked_ratings: Row[];
@@ -202,6 +204,8 @@ export function createFixtures(): PreviewDb {
     notifications: [],
     notification_settings: [],
     push_tokens: [],
+    gyms: [],
+    gym_members: [],
     usage_ledger: [],
     ranked_matches: [],
     ranked_ratings: [],
@@ -514,6 +518,16 @@ export function createFixtures(): PreviewDb {
 
   // One post the word filter held back (the owner sees it under Moderation).
   db.moderation_strikes.push({ user_id: USERS.tomas, kind: 'post:sexual', detail: 'check my onlyfans', created_at: daysAgo(2) });
+
+  // A gym the demo account can join with its code (the walkthrough does).
+  const gymId = id('6e000000', 1);
+  db.gyms.push({ id: gymId, name: 'Austin Grappling Co', city: 'Austin', invite_code: 'K7MRT4QX', created_by: USERS.jordan, created_at: daysAgo(90) });
+  db.gym_members.push(
+    { gym_id: gymId, user_id: USERS.jordan, role: 'owner', joined_at: daysAgo(90) },
+    { gym_id: gymId, user_id: USERS.sam, role: 'member', joined_at: daysAgo(60) },
+    { gym_id: gymId, user_id: USERS.maya, role: 'member', joined_at: daysAgo(30) },
+    { gym_id: gymId, user_id: USERS.ivy, role: 'member', joined_at: daysAgo(20) },
+  );
 
   // Activity for the demo account, matching the requests, challenges, likes and comments above.
   const notify = (kind: string, actor: string, subject: string | null, minutes: number, read: boolean) =>

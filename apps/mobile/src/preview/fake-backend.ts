@@ -145,6 +145,16 @@ function visible(table: string, row: Row, viewer: string | null): boolean {
 
 type Filter = (row: Row) => boolean;
 type TableName = Exclude<keyof typeof db, 'storage'>;
+const gymMembershipOf = (uid: string) => db.gym_members.find((m) => m.user_id === uid) ?? null;
+
+function newGymCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  for (;;) {
+    const code = Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+    if (!db.gyms.some((g) => g.invite_code === code)) return code;
+  }
+}
+
 const GOAL_KINDS = ['rounds', 'wins', 'takedowns', 'submission_attempts', 'guard_passes', 'sweeps'];
 
 const tableRows = (table: string): Row[] => (db as unknown as Record<string, Row[] | undefined>)[table] ?? fail('42P01', `relation ${table} does not exist`);
@@ -713,6 +723,92 @@ const RPCS: Record<string, (args: Row, viewer: string) => unknown> = {
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
       .slice(0, p_limit)
       .map((post) => feedItem(post, viewer)),
+
+  // Gyms: mirrors neon/migrations/20261106000300_gyms.sql.
+  get_my_gym: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer);
+    if (!membership) return null;
+    const gym = db.gyms.find((g) => g.id === membership.gym_id)!;
+    const members = db.gym_members.filter((m) => m.gym_id === gym.id && !isBanned(m.user_id)).length;
+    return { id: gym.id, name: gym.name, city: gym.city, invite_code: gym.invite_code, role: membership.role, member_count: members, created_at: gym.created_at };
+  },
+  get_gym_members: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    return db.gym_members
+      .filter((m) => m.gym_id === membership.gym_id && !isBanned(m.user_id) && !blocked(viewer, m.user_id))
+      .map((m) => {
+        const profile = db.profiles.find((p) => p.id === m.user_id)!;
+        return { user_id: m.user_id, username: profile.username, display_name: profile.display_name, avatar_path: profile.avatar_path, role: m.role, joined_at: m.joined_at };
+      })
+      .sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner') || a.display_name.localeCompare(b.display_name));
+  },
+  get_gym_leaderboard: ({ p_discipline }, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    return db.gym_members
+      .filter((m) => m.gym_id === membership.gym_id && !isBanned(m.user_id) && !blocked(viewer, m.user_id))
+      .flatMap((m) => {
+        const r = db.ranked_ratings.find((row) => row.user_id === m.user_id && row.discipline === p_discipline && row.games > 0);
+        const profile = db.profiles.find((p) => p.id === m.user_id)!;
+        return r
+          ? [{ user_id: m.user_id, username: profile.username, display_name: profile.display_name, avatar_path: profile.avatar_path, rating: r.rating, games: r.games, wins: r.wins, losses: r.losses, draws: r.draws }]
+          : [];
+      })
+      .sort((a, b) => b.rating - a.rating || b.games - a.games);
+  },
+  get_gym_feed: ({ p_before, p_limit = 20 }, viewer) => {
+    const membership = gymMembershipOf(viewer);
+    if (!membership) return [];
+    const team = new Set(db.gym_members.filter((m) => m.gym_id === membership.gym_id).map((m) => m.user_id));
+    return db.posts
+      .filter((post) => (post.moderation == null || post.author_id === viewer) && canViewAuthor(viewer, post.author_id, post.friends_only))
+      .filter((post) => team.has(post.author_id) && (!p_before || post.created_at < p_before))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+      .slice(0, p_limit)
+      .map((post) => feedItem(post, viewer));
+  },
+  create_gym: ({ p_name, p_city }, viewer) => {
+    if (gymMembershipOf(viewer)) fail('23505', 'already_in_gym');
+    const name = String(p_name ?? '').trim();
+    const city = String(p_city ?? '').trim() || null;
+    if (name.length < 3 || name.length > 60) fail('23514', 'gym_name_length');
+    if (textViolation(name) || (city && textViolation(city))) fail('22023', 'content_not_allowed');
+    const gym = { id: uuid(), name, city, invite_code: newGymCode(), created_by: viewer, created_at: now() };
+    db.gyms.push(gym);
+    db.gym_members.push({ gym_id: gym.id, user_id: viewer, role: 'owner', joined_at: now() });
+    return gym.id;
+  },
+  join_gym: ({ p_code }, viewer) => {
+    if (gymMembershipOf(viewer)) fail('23505', 'already_in_gym');
+    const code = String(p_code ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const gym = db.gyms.find((g) => g.invite_code === code) ?? fail('P0002', 'gym_not_found');
+    db.gym_members.push({ gym_id: gym.id, user_id: viewer, role: 'member', joined_at: now() });
+    return gym.id;
+  },
+  leave_gym: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    db.gym_members = db.gym_members.filter((m) => m.user_id !== viewer);
+    if (membership.role === 'owner') {
+      const successor = db.gym_members.filter((m) => m.gym_id === membership.gym_id).sort((a, b) => (a.joined_at < b.joined_at ? -1 : 1))[0];
+      if (successor) successor.role = 'owner';
+      else db.gyms = db.gyms.filter((g) => g.id !== membership.gym_id);
+    }
+    return true;
+  },
+  remove_gym_member: ({ p_user }, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    if (membership.role !== 'owner') fail('42501', 'only the gym owner can remove members');
+    if (p_user === viewer) fail('22023', 'leave the gym instead');
+    const before = db.gym_members.length;
+    db.gym_members = db.gym_members.filter((m) => !(m.gym_id === membership.gym_id && m.user_id === p_user));
+    return db.gym_members.length < before;
+  },
+  rotate_gym_code: (_args, viewer) => {
+    const membership = gymMembershipOf(viewer) ?? fail('P0002', 'not in a gym');
+    if (membership.role !== 'owner') fail('42501', 'only the gym owner can change the code');
+    const gym = db.gyms.find((g) => g.id === membership.gym_id)!;
+    gym.invite_code = newGymCode();
+    return gym.invite_code;
+  },
 
   // Mirrors neon/migrations/20261106000200_notifications.sql.
   get_notifications: ({ p_limit = 50 }, viewer) =>

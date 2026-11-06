@@ -7,6 +7,7 @@ import { recordText, summarize } from '@/features/analysis/match-record';
 import { useMyMatches } from '@/features/analysis/useMyMatches';
 import { RankedSummary } from '@/features/ranked/components';
 import { GoalsCard } from '@/features/goals/GoalsCard';
+import { GymCard } from '@/features/gyms/GymCard';
 import { useFriends, useProfile } from '@/features/social/api';
 import { AthleteHeader } from '@/features/social/AthleteHeader';
 import { errorMessage } from '@/lib/errors';
@@ -65,6 +66,8 @@ export default function ProfileScreen() {
       </AthleteHeader>
 
       <GoalsCard />
+
+      <GymCard />
 
       <RankedSummary userId={userId} emptyText="Challenge a training partner from the Ranked tab to earn a rating and titles." />
 

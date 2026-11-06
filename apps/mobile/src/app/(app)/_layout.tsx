@@ -73,6 +73,8 @@ export default function AppLayout() {
       <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
       <Stack.Screen name="goals" options={{ title: 'Weekly goals' }} />
       <Stack.Screen name="activity" options={{ title: 'Activity' }} />
+      <Stack.Screen name="gym" options={{ title: 'Gym' }} />
+      <Stack.Screen name="gym-join" options={{ title: 'Join a gym' }} />
       <Stack.Screen name="settings/notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="tutorial" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       {/* Clerk's profile screen brings its own header and back button. */}
